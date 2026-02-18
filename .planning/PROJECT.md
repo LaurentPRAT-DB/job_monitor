@@ -88,15 +88,18 @@ Platform team can proactively identify job failures, SLA breaches, and cost anom
 
 ## Constraints
 
-- **Tech stack:** Databricks-native (Delta tables, SQL, Databricks dashboards/alerts)
+- **Tech stack:** Databricks App (full-stack web application deployed on Databricks)
+- **App framework:** APX (FastAPI backend + React frontend) — https://github.com/databricks-solutions/apx
+- **Data layer:** Delta tables, Unity Catalog system tables
 - **Data access:** Unity Catalog system tables enabled
-- **Authentication:** Standard Databricks workspace auth
+- **Authentication:** Databricks workspace OAuth (via Databricks Apps)
 - **Alerting:** Slack webhooks + Email (no PagerDuty/OpsGenie for v1)
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
+| Databricks App vs SQL Dashboards | Full-stack app provides richer UX, custom interactions, better filtering/drill-down than SQL dashboards alone | — Pending |
 | Databricks-native vs external stack | Simplifies deployment, uses existing compute, no data export needed | — Pending |
 | System tables + API hybrid | System tables for standard metrics, API for gaps and real-time needs | — Pending |
 | Job Health as Phase 1 priority | Foundation for all other monitoring, highest immediate value | — Pending |
