@@ -1,0 +1,16 @@
+bundle:
+  name: job-monitor
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: ${DATABRICKS_HOST}
+
+resources:
+  apps:
+    job-monitor:
+      name: job-monitor
+      description: "Databricks Job Monitoring Framework"
+      source_code_path: .

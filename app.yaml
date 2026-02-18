@@ -1,0 +1,25 @@
+command:
+  - uvicorn
+  - job_monitor.backend.app:app
+  - --host
+  - "0.0.0.0"
+  - --port
+  - "8000"
+
+env:
+  - name: DATABRICKS_HOST
+    value: "${DATABRICKS_HOST}"
+  - name: WAREHOUSE_ID
+    description: "SQL warehouse ID for system table queries"
+    value: ""
+
+permissions:
+  - user_name: "${DATABRICKS_USER}"
+    level: CAN_MANAGE
+
+resources:
+  - name: oauth
+    oauth:
+      scopes:
+        - sql:*
+        - compute.clusters:read
