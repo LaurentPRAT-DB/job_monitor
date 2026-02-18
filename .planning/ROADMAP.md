@@ -34,7 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — APX scaffold with OAuth authentication and user identity display
+- [x] 01-01-PLAN.md — APX scaffold with OAuth authentication and user identity display
 - [ ] 01-02-PLAN.md — System tables ingestion (jobs, billing) with SCD2/RETRACTION handling
 - [ ] 01-03-PLAN.md — Jobs API integration for real-time data + deployment verification
 
@@ -127,7 +127,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Data Ingestion | 0/3 | Planned | - |
+| 1. Foundation & Data Ingestion | 1/3 | In Progress | - |
 | 2. Job Health Monitoring | 0/3 | Not started | - |
 | 3. SLA & Cost Visibility | 0/3 | Not started | - |
 | 4. Cluster & Pipeline Integrity | 0/2 | Not started | - |
@@ -136,4 +136,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 ---
 *Roadmap created: 2026-02-18*
-*Last updated: 2026-02-18*
+*Last updated: 2026-02-18 (01-01 complete)*
