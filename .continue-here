@@ -1,0 +1,74 @@
+# Continue Here: Databricks Job Monitoring
+
+**Session:** 2026-02-18
+**Project:** Databricks Job Health & Monitoring Framework
+**Status:** Phase 1 execution — checkpoint awaiting approval
+
+## Current Position
+
+- ✓ Project initialized with `/gsd:new-project`
+- ✓ Research completed (Stack, Features, Architecture, Pitfalls)
+- ✓ Requirements defined (27 v1 requirements)
+- ✓ Roadmap created (6 phases)
+- ✓ Phase 1 planned (3 plans in 2 waves)
+- ✓ Wave 1 executed (Plan 01-01: APX scaffold + OAuth)
+- ✓ Wave 2 Plan 01-02 executed (System tables ingestion)
+- ◆ Wave 2 Plan 01-03 at CHECKPOINT (human verification)
+
+## Next Action
+
+**Resume checkpoint verification:**
+
+1. Start the local server:
+   ```bash
+   cd /Users/laurent.prat/Documents/lpdev/databricks_job_monitoring
+   .venv/bin/uvicorn job_monitor.backend.app:app --reload
+   ```
+
+2. Open http://localhost:8000/docs — verify 9 endpoints show up
+
+3. Test:
+   ```bash
+   curl http://localhost:8000/api/health
+   curl http://localhost:8000/api/me
+   ```
+
+4. Then type "approved" to continue Phase 1 execution
+
+## What's Been Built
+
+- **FastAPI backend** with 9 API endpoints:
+  - /api/health, /api/me (auth)
+  - /api/jobs/runs, /api/jobs (system.lakeflow)
+  - /api/billing/usage, /api/billing/by-job (system.billing)
+  - /api/jobs-api/list, /api/jobs-api/runs/{job_id}, /api/jobs-api/active (Jobs API)
+
+- **React frontend** scaffold with dashboard
+
+- **Databricks config** (databricks.yml, app.yaml with OAuth scopes)
+
+## GitHub
+
+**Repo:** https://github.com/LaurentPRAT-DB/job_monitor
+**Branch:** main (all commits pushed)
+
+## Key Files
+
+- `.planning/PROJECT.md` — project context
+- `.planning/REQUIREMENTS.md` — 27 v1 requirements with REQ-IDs
+- `.planning/ROADMAP.md` — 6 phases with success criteria
+- `.planning/STATE.md` — project memory
+- `.planning/phases/01-foundation-data-ingestion/` — Phase 1 plans and summaries
+
+## Resume Commands
+
+In Claude Code, just type:
+```
+approved
+```
+to continue from the checkpoint, or describe any issues you found.
+
+Or to see full status:
+```
+/gsd:progress
+```
