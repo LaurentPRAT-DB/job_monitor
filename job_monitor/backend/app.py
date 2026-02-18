@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from job_monitor.backend.config import settings
-from job_monitor.backend.routers import auth, health
+from job_monitor.backend.routers import auth, health, jobs, jobs_api
 
 
 @asynccontextmanager
@@ -51,3 +51,5 @@ app.add_middleware(
 # Include routers
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(jobs.router)
+app.include_router(jobs_api.router)
