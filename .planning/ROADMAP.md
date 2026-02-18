@@ -31,12 +31,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. App queries system.billing and system.lakeflow tables and returns data
   4. App calls Jobs API and retrieves job metadata not available in system tables
   5. Data ingestion handles SCD2 semantics correctly (latest record per job)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
-- [ ] 01-03: TBD
+- [ ] 01-01-PLAN.md — APX scaffold with OAuth authentication and user identity display
+- [ ] 01-02-PLAN.md — System tables ingestion (jobs, billing) with SCD2/RETRACTION handling
+- [ ] 01-03-PLAN.md — Jobs API integration for real-time data + deployment verification
 
 ### Phase 2: Job Health Monitoring
 **Goal**: Platform team can view job success/failure rates, duration trends, and retry patterns for all monitored jobs
@@ -127,7 +127,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Data Ingestion | 0/3 | Not started | - |
+| 1. Foundation & Data Ingestion | 0/3 | Planned | - |
 | 2. Job Health Monitoring | 0/3 | Not started | - |
 | 3. SLA & Cost Visibility | 0/3 | Not started | - |
 | 4. Cluster & Pipeline Integrity | 0/2 | Not started | - |
