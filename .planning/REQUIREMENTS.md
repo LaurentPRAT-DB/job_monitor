@@ -52,7 +52,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **APP-02**: Authenticate users via Databricks workspace OAuth
 - [ ] **APP-03**: Support filtering/drill-down by team, job, time range
 - [ ] **APP-04**: Historical dashboard with 7/30/90-day views
-- [ ] **APP-05**: Ingest data from Unity Catalog system tables (billing, compute, workflow)
+- [x] **APP-05**: Ingest data from Unity Catalog system tables (billing, compute, workflow)
 - [ ] **APP-06**: Supplement with Jobs API for data not available in system tables
 
 ## v2 Requirements
@@ -127,7 +127,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | APP-02 | Phase 1 | Complete |
 | APP-03 | Phase 6 | Pending |
 | APP-04 | Phase 6 | Pending |
-| APP-05 | Phase 1 | Pending |
+| APP-05 | Phase 1 | Complete |
 | APP-06 | Phase 1 | Pending |
 
 **Coverage:**
