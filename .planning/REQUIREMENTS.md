@@ -35,7 +35,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Data Pipeline Integrity
 
-- [ ] **PIPE-01**: Check row count deltas vs historical baseline (±20% threshold triggers alert)
+- [ ] **PIPE-01**: Check row count deltas vs historical baseline (+-20% threshold triggers alert)
 - [ ] **PIPE-02**: Monitor for schema drift on source data and alert on detected changes
 
 ### Alerting & Delivery
@@ -63,7 +63,7 @@ Deferred to future release. Tracked but not in current roadmap.
 
 - **CLUST-V2-01**: Generate specific right-sizing recommendations (e.g., "reduce to 4 workers")
 - **CLUST-V2-02**: Flag jobs on all-purpose clusters that should use job clusters
-- **CLUST-V2-03**: Verify autoscaling is enabled and exercised (min ≠ max usage)
+- **CLUST-V2-03**: Verify autoscaling is enabled and exercised (min != max usage)
 - **CLUST-V2-04**: Detect jobs maxing out cluster ceiling (resize candidates)
 - **CLUST-V2-05**: Monitor spot/preemptible interruption rates (>10% = instability risk)
 - **CLUST-V2-06**: Identify Standard cluster jobs that could use Photon
@@ -102,39 +102,39 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| JOB-01 | — | Pending |
-| JOB-02 | — | Pending |
-| JOB-03 | — | Pending |
-| JOB-04 | — | Pending |
-| SLA-01 | — | Pending |
-| SLA-02 | — | Pending |
-| SLA-03 | — | Pending |
-| COST-01 | — | Pending |
-| COST-02 | — | Pending |
-| COST-03 | — | Pending |
-| COST-04 | — | Pending |
-| COST-05 | — | Pending |
-| CLUST-01 | — | Pending |
-| CLUST-02 | — | Pending |
-| PIPE-01 | — | Pending |
-| PIPE-02 | — | Pending |
-| ALERT-01 | — | Pending |
-| ALERT-02 | — | Pending |
-| ALERT-03 | — | Pending |
-| ALERT-04 | — | Pending |
-| ALERT-05 | — | Pending |
-| APP-01 | — | Pending |
-| APP-02 | — | Pending |
-| APP-03 | — | Pending |
-| APP-04 | — | Pending |
-| APP-05 | — | Pending |
-| APP-06 | — | Pending |
+| JOB-01 | Phase 2 | Pending |
+| JOB-02 | Phase 2 | Pending |
+| JOB-03 | Phase 2 | Pending |
+| JOB-04 | Phase 2 | Pending |
+| SLA-01 | Phase 3 | Pending |
+| SLA-02 | Phase 3 | Pending |
+| SLA-03 | Phase 5 | Pending |
+| COST-01 | Phase 3 | Pending |
+| COST-02 | Phase 3 | Pending |
+| COST-03 | Phase 5 | Pending |
+| COST-04 | Phase 3 | Pending |
+| COST-05 | Phase 3 | Pending |
+| CLUST-01 | Phase 4 | Pending |
+| CLUST-02 | Phase 4 | Pending |
+| PIPE-01 | Phase 4 | Pending |
+| PIPE-02 | Phase 4 | Pending |
+| ALERT-01 | Phase 5 | Pending |
+| ALERT-02 | Phase 5 | Pending |
+| ALERT-03 | Phase 6 | Pending |
+| ALERT-04 | Phase 6 | Pending |
+| ALERT-05 | Phase 6 | Pending |
+| APP-01 | Phase 1 | Pending |
+| APP-02 | Phase 1 | Pending |
+| APP-03 | Phase 6 | Pending |
+| APP-04 | Phase 6 | Pending |
+| APP-05 | Phase 1 | Pending |
+| APP-06 | Phase 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 27 total
-- Mapped to phases: 0
-- Unmapped: 27 ⚠️
+- Mapped to phases: 27
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-18*
-*Last updated: 2026-02-18 after initial definition*
+*Last updated: 2026-02-18 after roadmap creation*
