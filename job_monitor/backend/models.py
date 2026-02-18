@@ -85,3 +85,29 @@ class ActiveRunsOut(BaseModel):
 
     total_active: int
     runs: list[JobApiRunOut]
+
+
+# Billing models for system.billing.usage
+
+
+class BillingUsageOut(BaseModel):
+    """Billing usage from system.billing.usage with RETRACTION handling.
+
+    Note: usage_metadata.job_id is NULL for all-purpose compute clusters.
+    Only job compute and serverless workloads have job_id populated.
+    """
+
+    usage_date: str  # DATE type from SQL as string YYYY-MM-DD
+    job_id: str | None = None
+    cluster_id: str | None = None
+    sku_name: str
+    total_dbus: float
+
+
+class BillingByJobOut(BaseModel):
+    """Aggregated billing by job_id."""
+
+    job_id: str
+    sku_name: str
+    total_dbus: float
+    usage_days: int  # Number of days this job had usage
