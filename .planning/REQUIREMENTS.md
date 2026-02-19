@@ -53,7 +53,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **APP-03**: Support filtering/drill-down by team, job, time range
 - [ ] **APP-04**: Historical dashboard with 7/30/90-day views
 - [x] **APP-05**: Ingest data from Unity Catalog system tables (billing, compute, workflow)
-- [ ] **APP-06**: Supplement with Jobs API for data not available in system tables
+- [x] **APP-06**: Supplement with Jobs API for data not available in system tables
 
 ## v2 Requirements
 
@@ -128,7 +128,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | APP-03 | Phase 6 | Pending |
 | APP-04 | Phase 6 | Pending |
 | APP-05 | Phase 1 | Complete |
-| APP-06 | Phase 1 | Pending |
+| APP-06 | Phase 1 | Complete |
 
 **Coverage:**
 - v1 requirements: 27 total
