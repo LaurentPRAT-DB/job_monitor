@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StatusIndicator } from '@/components/status-indicator';
 import { PriorityBadge } from '@/components/priority-badge';
+import { OverProvisionedBadge } from '@/components/over-provisioned-badge';
 import { JobExpandedDetails } from '@/components/job-expanded-details';
 import { InlineSlaEdit } from '@/components/inline-sla-edit';
 import { SlaSparkline } from '@/components/sla-sparkline';
@@ -111,12 +112,17 @@ export function JobHealthRow({ job, onRefetch }: JobHealthRowProps) {
               </Badge>
             )}
           </TableCell>
+
+          {/* Over-provisioned badge */}
+          <TableCell onClick={() => setIsOpen(!isOpen)}>
+            <OverProvisionedBadge show={job.is_over_provisioned ?? false} />
+          </TableCell>
         </TableRow>
 
         {/* Expanded row - detailed view */}
         <CollapsibleContent asChild>
           <TableRow className="hover:bg-transparent">
-            <TableCell colSpan={8} className="p-0">
+            <TableCell colSpan={9} className="p-0">
               <JobExpandedDetails jobId={job.job_id} jobName={job.job_name} />
             </TableCell>
           </TableRow>

@@ -29,6 +29,8 @@ export interface JobWithSla {
   suggested_p90_minutes: number | null;
   breach_history: BreachDataPoint[];
   breach_count_30d: number;
+  // Cluster utilization fields
+  is_over_provisioned: boolean;
 }
 
 /**
