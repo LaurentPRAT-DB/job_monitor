@@ -292,3 +292,63 @@ class CostSummaryOut(BaseModel):
     total_dbus: float
     total_cost_dollars: float | None = None
     dbu_rate: float
+
+
+# Cluster Utilization models for Phase 4
+
+
+class ClusterUtilization(BaseModel):
+    """Cluster utilization metrics for a job.
+
+    Uses proxy calculation from billing data when direct metrics unavailable.
+    Inverted traffic light: Green = high utilization (efficient), Red = low (<40%).
+    """
+
+    job_id: str
+    driver_cpu_percent: float | None = None
+    driver_memory_percent: float | None = None
+    worker_cpu_percent: float | None = None
+    worker_memory_percent: float | None = None
+    is_over_provisioned: bool
+    recommendation: str | None = None
+    runs_analyzed: int
+
+
+# Pipeline Integrity models for Phase 4
+
+
+class RowCountDelta(BaseModel):
+    """Row count delta for pipeline integrity monitoring.
+
+    Flags anomaly if absolute delta exceeds 20% threshold.
+    """
+
+    table_name: str
+    current_row_count: int
+    baseline_row_count: int
+    delta_percent: float
+    is_anomaly: bool  # True if abs(delta_percent) > 20
+    trend: list[dict]  # Recent history: [{date, count}]
+
+
+class ColumnChange(BaseModel):
+    """Column change for schema drift detection."""
+
+    column_name: str
+    change_type: Literal["added", "removed", "type_changed"]
+    old_type: str | None = None
+    new_type: str | None = None
+
+
+class SchemaDrift(BaseModel):
+    """Schema drift detection for pipeline integrity.
+
+    Compares current schema to baseline and detects changes.
+    """
+
+    table_name: str
+    has_drift: bool
+    added_columns: list[str]
+    removed_columns: list[str]
+    type_changes: list[ColumnChange]
+    detected_at: str  # ISO timestamp
