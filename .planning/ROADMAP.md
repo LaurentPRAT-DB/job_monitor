@@ -13,7 +13,7 @@ This roadmap transforms requirements into a monitoring framework that shifts pla
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation & Data Ingestion** - Databricks App scaffold with APX, OAuth auth, system table access
-- [ ] **Phase 2: Job Health Monitoring** - Success/failure tracking, duration analysis, retry detection
+- [x] **Phase 2: Job Health Monitoring** - Success/failure tracking, duration analysis, retry detection
 - [ ] **Phase 3: SLA & Cost Visibility** - SLA target definition, breach history, cost per job, team attribution
 - [ ] **Phase 4: Cluster & Pipeline Integrity** - Resource utilization monitoring, row count validation, schema drift detection
 - [ ] **Phase 5: Alerting & Remediation** - In-app alerts with severity levels, actionable suggestions, proactive warnings
@@ -52,7 +52,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — Job health metrics API with success rates, priority flags, and retry counts
 - [x] 02-02-PLAN.md — Duration statistics and expanded details API endpoints
-- [ ] 02-03-PLAN.md — Job health dashboard UI with expandable rows and duration charts
+- [x] 02-03-PLAN.md — Job health dashboard UI with expandable rows and duration charts
 
 ### Phase 3: SLA & Cost Visibility
 **Goal**: Platform team can define SLA targets per job, track breach history, and see cost attribution by job and team
@@ -128,7 +128,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Data Ingestion | 3/3 | Complete    | 2026-02-24 |
-| 2. Job Health Monitoring | 2/3 | In Progress | - |
+| 2. Job Health Monitoring | 3/3 | Complete    | 2026-02-24 |
 | 3. SLA & Cost Visibility | 0/3 | Not started | - |
 | 4. Cluster & Pipeline Integrity | 0/2 | Not started | - |
 | 5. Alerting & Remediation | 0/3 | Not started | - |
@@ -136,4 +136,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 ---
 *Roadmap created: 2026-02-18*
-*Last updated: 2026-02-24 (02-02 complete)*
+*Last updated: 2026-02-24 (Phase 2 complete)*
