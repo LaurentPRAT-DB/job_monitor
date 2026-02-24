@@ -2,8 +2,9 @@
 
 from datetime import datetime
 from enum import Enum
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 
 class UserInfo(BaseModel):
@@ -111,3 +112,93 @@ class BillingByJobOut(BaseModel):
     sku_name: str
     total_dbus: float
     usage_days: int  # Number of days this job had usage
+
+
+# Job Health models for Phase 2
+
+
+class JobHealthOut(BaseModel):
+    """Job health summary for dashboard.
+
+    Status is computed from success_rate using thresholds:
+    - green: >= 90%
+    - yellow: 70-89%
+    - red: < 70%
+    """
+
+    job_id: str
+    job_name: str
+    total_runs: int
+    success_count: int
+    success_rate: float  # Percentage 0-100
+    last_run_time: datetime
+    last_duration_seconds: int | None = None
+    priority: Literal["P1", "P2", "P3"] | None = None
+    retry_count: int = 0
+
+    @computed_field
+    @property
+    def status(self) -> Literal["green", "yellow", "red"]:
+        """Compute status from success_rate thresholds."""
+        if self.success_rate >= 90:
+            return "green"
+        elif self.success_rate >= 70:
+            return "yellow"
+        else:
+            return "red"
+
+
+class JobHealthListOut(BaseModel):
+    """Wrapper for job health list response."""
+
+    jobs: list[JobHealthOut]
+    window_days: int  # 7 or 30
+    total_count: int
+
+
+# Duration and expanded details models for job row expansion
+
+
+class DurationStatsOut(BaseModel):
+    """Duration statistics for a job over a time period.
+
+    Used to show duration trends and identify anomalies.
+    """
+
+    job_id: str
+    median_duration_seconds: float | None = None  # None if insufficient data
+    p90_duration_seconds: float | None = None
+    avg_duration_seconds: float | None = None
+    max_duration_seconds: float | None = None
+    run_count: int
+    baseline_30d_median: float | None = None  # 30-day median baseline for comparison
+    has_sufficient_data: bool  # True if run_count >= 5
+
+
+class JobRunDetailOut(BaseModel):
+    """Detailed job run information for expanded view.
+
+    Includes anomaly flag for duration comparison.
+    """
+
+    run_id: str
+    job_id: str
+    start_time: datetime
+    end_time: datetime | None = None
+    duration_seconds: int | None = None
+    result_state: str | None = None
+    is_anomaly: bool  # True if duration > 2x baseline
+
+
+class JobExpandedOut(BaseModel):
+    """Expanded job details shown when row is clicked.
+
+    Combines recent runs, duration stats, and failure information.
+    """
+
+    job_id: str
+    job_name: str
+    recent_runs: list[JobRunDetailOut]  # Last 10 runs
+    duration_stats: DurationStatsOut
+    retry_count_7d: int  # Retry count in last 7 days
+    failure_reasons: list[str]  # Distinct error messages from failed runs
