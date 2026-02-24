@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from job_monitor.backend.config import settings
-from job_monitor.backend.routers import auth, billing, health, health_metrics, job_tags, jobs, jobs_api
+from job_monitor.backend.routers import auth, billing, cost, health, health_metrics, job_tags, jobs, jobs_api
 
 
 @asynccontextmanager
@@ -56,3 +56,4 @@ app.include_router(jobs_api.router)
 app.include_router(billing.router)
 app.include_router(health_metrics.router)
 app.include_router(job_tags.router)
+app.include_router(cost.router)

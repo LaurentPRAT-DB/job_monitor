@@ -232,3 +232,63 @@ class JobTagsOut(BaseModel):
     owner: str | None = None
     has_sla: bool = False
     has_team: bool = False
+
+
+# Cost models for Phase 3
+
+
+class CostBySkuOut(BaseModel):
+    """Cost breakdown by SKU category."""
+
+    sku_category: str
+    total_dbus: float
+    percentage: float
+
+
+class JobCostOut(BaseModel):
+    """Cost summary for a job."""
+
+    job_id: str
+    job_name: str
+    team: str | None = None
+    total_dbus_30d: float
+    total_cost_dollars: float | None = None
+    cost_by_sku: list[CostBySkuOut]
+    trend_7d_percent: float
+    is_anomaly: bool = False
+    baseline_p90_dbus: float | None = None
+
+
+class TeamCostOut(BaseModel):
+    """Cost rollup by team."""
+
+    team: str
+    total_dbus_30d: float
+    total_cost_dollars: float | None = None
+    job_count: int
+    trend_7d_percent: float
+
+
+class CostAnomalyOut(BaseModel):
+    """Cost anomaly for anomalies tab."""
+
+    job_id: str
+    job_name: str
+    team: str | None = None
+    anomaly_type: Literal["cost_spike", "zombie"]
+    reason: str
+    current_dbus: float
+    baseline_p90_dbus: float | None = None
+    multiplier: float | None = None
+    job_settings_url: str
+
+
+class CostSummaryOut(BaseModel):
+    """Complete cost summary response."""
+
+    jobs: list[JobCostOut]
+    teams: list[TeamCostOut]
+    anomalies: list[CostAnomalyOut]
+    total_dbus: float
+    total_cost_dollars: float | None = None
+    dbu_rate: float
