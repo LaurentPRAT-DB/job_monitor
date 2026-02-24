@@ -16,8 +16,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### SLA Monitoring
 
-- [ ] **SLA-01**: Define expected completion windows per job (SLA targets)
-- [ ] **SLA-02**: Track SLA breach history for optimization prioritization
+- [x] **SLA-01**: Define expected completion windows per job (SLA targets)
+- [x] **SLA-02**: Track SLA breach history for optimization prioritization
 - [ ] **SLA-03**: Alert on SLA breach risk when job exceeds 80% of allowed window (proactive prediction)
 
 ### Cost Attribution
@@ -106,8 +106,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | JOB-02 | Phase 2 | Complete |
 | JOB-03 | Phase 2 | Complete |
 | JOB-04 | Phase 2 | Complete |
-| SLA-01 | Phase 3 | Pending |
-| SLA-02 | Phase 3 | Pending |
+| SLA-01 | Phase 3 | Complete |
+| SLA-02 | Phase 3 | Complete |
 | SLA-03 | Phase 5 | Pending |
 | COST-01 | Phase 3 | Pending |
 | COST-02 | Phase 3 | Pending |

@@ -68,8 +68,8 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Backend APIs for job tags (SLA/team) and cost endpoints with anomaly detection
-- [ ] 03-02-PLAN.md — SLA UI integration with inline editing and breach sparkline in job health table
+- [x] 03-01-PLAN.md — Backend APIs for job tags (SLA/team) and cost endpoints with anomaly detection
+- [x] 03-02-PLAN.md — SLA UI integration with inline editing and breach sparkline in job health table
 - [ ] 03-03-PLAN.md — Costs dashboard page with team rollups and anomalies tab
 
 ### Phase 4: Cluster & Pipeline Integrity
@@ -129,11 +129,11 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 |-------|----------------|--------|-----------|
 | 1. Foundation & Data Ingestion | 3/3 | Complete    | 2026-02-24 |
 | 2. Job Health Monitoring | 3/3 | Complete    | 2026-02-24 |
-| 3. SLA & Cost Visibility | 0/3 | Planned | - |
+| 3. SLA & Cost Visibility | 2/3 | In Progress | - |
 | 4. Cluster & Pipeline Integrity | 0/2 | Not started | - |
 | 5. Alerting & Remediation | 0/3 | Not started | - |
 | 6. Dashboards & Reporting | 0/3 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-18*
-*Last updated: 2026-02-24 (Phase 3 planned)*
+*Last updated: 2026-02-24 (03-02 complete - SLA UI)*
