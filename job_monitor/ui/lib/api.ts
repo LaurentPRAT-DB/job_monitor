@@ -47,3 +47,34 @@ export async function getCurrentUser(): Promise<UserInfo> {
 export async function getHealth(): Promise<HealthResponse> {
   return fetchApi<HealthResponse>("/api/health");
 }
+
+/**
+ * Job tags update request.
+ */
+export interface TagUpdateRequest {
+  sla_minutes?: number;
+  team?: string;
+  owner?: string;
+}
+
+/**
+ * Job tags update response.
+ */
+export interface TagUpdateResponse {
+  job_id: string;
+  tags: Record<string, string>;
+}
+
+/**
+ * Update job tags (SLA, team, owner).
+ * Uses PATCH to merge with existing tags.
+ */
+export async function updateJobTags(
+  jobId: string,
+  tags: TagUpdateRequest
+): Promise<TagUpdateResponse> {
+  return fetchApi<TagUpdateResponse>(`/api/jobs/${jobId}/tags`, {
+    method: "PATCH",
+    body: JSON.stringify(tags),
+  });
+}
