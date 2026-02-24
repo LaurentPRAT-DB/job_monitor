@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 3 of 6 (SLA & Cost Visibility)
-Plan: 0 of 3 in current phase
-Status: Context gathered, ready for planning
-Last activity: 2026-02-24 -- Phase 3 context gathered
+Plan: 1 of 3 in current phase
+Status: Executing Wave 2
+Last activity: 2026-02-24 -- Plan 03-01 complete (backend APIs)
 
-Progress: [####......] 33%
+Progress: [####......] 39%
 
 ## Performance Metrics
 
@@ -59,6 +59,10 @@ Recent decisions affecting current work:
 - 02-03: 5-minute stale time for health metrics queries (matches system table latency)
 - 02-03: Problem-first sorting: P1 > P2 > P3 > healthy jobs
 - 02-03: Traffic light pattern: colored dot + percentage for status visualization
+- 03-01: SLA targets stored in Databricks job tags (native key-value on job settings)
+- 03-01: SKU categorization: Jobs Compute, All-Purpose, SQL Warehouse, Serverless, Other
+- 03-01: Cost spike threshold: >2x p90 baseline for anomaly flagging
+- 03-01: Zombie job detection: >10 DBUs with <100 rows over 30 days
 
 ### Pending Todos
 
