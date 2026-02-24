@@ -7,6 +7,7 @@ import { AlertTriangle, CheckCircle, XCircle, Clock, RefreshCw } from 'lucide-re
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DurationChart } from '@/components/duration-chart';
+import { ClusterUtilizationSection } from '@/components/cluster-gauges';
 import { PipelineIntegritySection } from '@/components/pipeline-integrity-section';
 import { cn } from '@/lib/utils';
 import {
@@ -260,6 +261,9 @@ export function JobExpandedDetails({ jobId }: JobExpandedDetailsProps) {
             />
           </div>
         </div>
+
+        {/* Cluster Utilization Section */}
+        <ClusterUtilizationSection jobId={jobId} />
 
         {/* Pipeline Integrity Section */}
         <PipelineIntegritySection jobId={jobId} />
