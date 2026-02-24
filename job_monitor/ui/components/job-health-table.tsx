@@ -10,27 +10,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { JobHealthRow } from '@/components/job-health-row';
-
-// Type matching backend JobHealthOut model
-interface JobHealth {
-  job_id: string;
-  job_name: string;
-  total_runs: number;
-  success_count: number;
-  success_rate: number;
-  last_run_time: string;
-  last_duration_seconds: number | null;
-  priority: 'P1' | 'P2' | 'P3' | null;
-  retry_count: number;
-  status: 'green' | 'yellow' | 'red';
-}
+import type { JobWithSla } from '@/lib/health-utils';
 
 interface JobHealthTableProps {
-  jobs: JobHealth[];
+  jobs: JobWithSla[];
   isLoading: boolean;
+  onRefetch?: () => void;
 }
 
-export function JobHealthTable({ jobs, isLoading }: JobHealthTableProps) {
+export function JobHealthTable({ jobs, isLoading, onRefetch }: JobHealthTableProps) {
   if (isLoading) {
     return (
       <Table>
@@ -40,6 +28,8 @@ export function JobHealthTable({ jobs, isLoading }: JobHealthTableProps) {
             <TableHead>Job Name</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Priority</TableHead>
+            <TableHead>SLA Target</TableHead>
+            <TableHead className="w-[140px] hidden md:table-cell">Breach History</TableHead>
             <TableHead>Last Run</TableHead>
             <TableHead>Retries</TableHead>
           </TableRow>
@@ -59,6 +49,12 @@ export function JobHealthTable({ jobs, isLoading }: JobHealthTableProps) {
               </td>
               <td className="p-4">
                 <div className="h-5 bg-gray-200 rounded w-10"></div>
+              </td>
+              <td className="p-4">
+                <div className="h-4 bg-gray-200 rounded w-16"></div>
+              </td>
+              <td className="p-4 hidden md:table-cell">
+                <div className="h-4 bg-gray-200 rounded w-24"></div>
               </td>
               <td className="p-4">
                 <div className="h-4 bg-gray-200 rounded w-24"></div>
@@ -92,13 +88,15 @@ export function JobHealthTable({ jobs, isLoading }: JobHealthTableProps) {
           <TableHead>Job Name</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Priority</TableHead>
+          <TableHead>SLA Target</TableHead>
+          <TableHead className="w-[140px] hidden md:table-cell">Breach History</TableHead>
           <TableHead>Last Run</TableHead>
           <TableHead>Retries</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {jobs.map((job) => (
-          <JobHealthRow key={job.job_id} job={job} />
+          <JobHealthRow key={job.job_id} job={job} onRefetch={onRefetch} />
         ))}
       </TableBody>
     </Table>

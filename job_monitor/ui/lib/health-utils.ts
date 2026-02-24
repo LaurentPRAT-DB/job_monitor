@@ -3,6 +3,35 @@
  */
 
 /**
+ * SLA breach data point for sparkline visualization.
+ */
+export interface BreachDataPoint {
+  date: string;
+  breached: boolean;
+}
+
+/**
+ * Extended job health data including SLA information.
+ */
+export interface JobWithSla {
+  job_id: string;
+  job_name: string;
+  total_runs: number;
+  success_count: number;
+  success_rate: number;
+  last_run_time: string;
+  last_duration_seconds: number | null;
+  priority: 'P1' | 'P2' | 'P3' | null;
+  retry_count: number;
+  status: 'green' | 'yellow' | 'red';
+  // SLA fields
+  sla_minutes: number | null;
+  suggested_p90_minutes: number | null;
+  breach_history: BreachDataPoint[];
+  breach_count_30d: number;
+}
+
+/**
  * Success rate thresholds for traffic light status.
  */
 export const STATUS_THRESHOLDS = {

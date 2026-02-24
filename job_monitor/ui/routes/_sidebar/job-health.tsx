@@ -1,7 +1,7 @@
 /**
  * Job Health Dashboard page.
  * Displays job health metrics with traffic light indicators, priority badges,
- * and expandable rows for detailed views.
+ * SLA targets with inline editing, and breach history sparklines.
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -9,23 +9,11 @@ import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { JobHealthTable } from '@/components/job-health-table';
+import type { JobWithSla } from '@/lib/health-utils';
 
-// Types matching backend models
-interface JobHealth {
-  job_id: string;
-  job_name: string;
-  total_runs: number;
-  success_count: number;
-  success_rate: number;
-  last_run_time: string;
-  last_duration_seconds: number | null;
-  priority: 'P1' | 'P2' | 'P3' | null;
-  retry_count: number;
-  status: 'green' | 'yellow' | 'red';
-}
-
+// Response type matching backend with SLA data
 interface JobHealthListResponse {
-  jobs: JobHealth[];
+  jobs: JobWithSla[];
   window_days: number;
   total_count: number;
 }
@@ -142,6 +130,7 @@ export default function JobHealthPage() {
         <JobHealthTable
           jobs={data?.jobs ?? []}
           isLoading={isLoading}
+          onRefetch={() => refetch()}
         />
       </div>
 

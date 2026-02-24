@@ -11,29 +11,25 @@ import { Button } from '@/components/ui/button';
 import { StatusIndicator } from '@/components/status-indicator';
 import { PriorityBadge } from '@/components/priority-badge';
 import { JobExpandedDetails } from '@/components/job-expanded-details';
+import { InlineSlaEdit } from '@/components/inline-sla-edit';
+import { SlaSparkline } from '@/components/sla-sparkline';
 import { cn } from '@/lib/utils';
 import { formatTimeAgo } from '@/lib/health-utils';
-
-// Type matching backend JobHealthOut model
-interface JobHealth {
-  job_id: string;
-  job_name: string;
-  total_runs: number;
-  success_count: number;
-  success_rate: number;
-  last_run_time: string;
-  last_duration_seconds: number | null;
-  priority: 'P1' | 'P2' | 'P3' | null;
-  retry_count: number;
-  status: 'green' | 'yellow' | 'red';
-}
+import type { JobWithSla } from '@/lib/health-utils';
 
 interface JobHealthRowProps {
-  job: JobHealth;
+  job: JobWithSla;
+  onRefetch?: () => void;
 }
 
-export function JobHealthRow({ job }: JobHealthRowProps) {
+export function JobHealthRow({ job, onRefetch }: JobHealthRowProps) {
   const [isOpen, setIsOpen] = useState(false);
+
+  // Check if last run breached SLA
+  const lastRunBreachedSla =
+    job.sla_minutes != null &&
+    job.last_duration_seconds != null &&
+    job.last_duration_seconds > job.sla_minutes * 60;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen} asChild>
@@ -72,6 +68,30 @@ export function JobHealthRow({ job }: JobHealthRowProps) {
             <PriorityBadge priority={job.priority} />
           </TableCell>
 
+          {/* SLA Target (inline edit) */}
+          <TableCell>
+            <div className="flex items-center gap-2">
+              <InlineSlaEdit
+                jobId={job.job_id}
+                currentSlaMinutes={job.sla_minutes}
+                suggestedP90Minutes={job.suggested_p90_minutes}
+                onUpdate={onRefetch}
+              />
+              {lastRunBreachedSla && (
+                <span className="inline-flex h-2 w-2 rounded-full bg-red-500" title="Last run breached SLA" />
+              )}
+            </div>
+          </TableCell>
+
+          {/* Breach history sparkline (hidden on mobile) */}
+          <TableCell className="w-[140px] hidden md:table-cell">
+            {job.breach_history && job.breach_history.length > 0 ? (
+              <SlaSparkline data={job.breach_history} />
+            ) : (
+              <span className="text-gray-400">--</span>
+            )}
+          </TableCell>
+
           {/* Last run time */}
           <TableCell
             className="text-gray-500 text-sm"
@@ -96,7 +116,7 @@ export function JobHealthRow({ job }: JobHealthRowProps) {
         {/* Expanded row - detailed view */}
         <CollapsibleContent asChild>
           <TableRow className="hover:bg-transparent">
-            <TableCell colSpan={6} className="p-0">
+            <TableCell colSpan={8} className="p-0">
               <JobExpandedDetails jobId={job.job_id} jobName={job.job_name} />
             </TableCell>
           </TableRow>
