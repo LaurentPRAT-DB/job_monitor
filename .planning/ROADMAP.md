@@ -47,12 +47,12 @@ Plans:
   2. Jobs with 2+ consecutive failures are flagged with P1 priority indicator
   3. Platform user can see job duration trend and identify sudden increases vs baseline
   4. Retry counts per job are visible, highlighting jobs with silent cost inflation
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
-- [ ] 02-03: TBD
+- [ ] 02-01-PLAN.md — Job health metrics API with success rates, priority flags, and retry counts
+- [ ] 02-02-PLAN.md — Duration statistics and expanded details API endpoints
+- [ ] 02-03-PLAN.md — Job health dashboard UI with expandable rows and duration charts
 
 ### Phase 3: SLA & Cost Visibility
 **Goal**: Platform team can define SLA targets per job, track breach history, and see cost attribution by job and team
@@ -136,4 +136,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 ---
 *Roadmap created: 2026-02-18*
-*Last updated: 2026-02-19 (Phase 1 complete)*
+*Last updated: 2026-02-24 (Phase 2 planned)*
