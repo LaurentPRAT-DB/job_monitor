@@ -1,15 +1,10 @@
 /**
  * Dashboard page - displays current user identity and system status.
  */
-import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { getCurrentUser, type UserInfo } from "../../lib/api";
 
-export const Route = createFileRoute("/_sidebar/dashboard")({
-  component: Dashboard,
-});
-
-function Dashboard() {
+export default function Dashboard() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
