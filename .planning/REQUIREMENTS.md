@@ -11,7 +11,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **JOB-01**: Track job success/failure rates over rolling 7-day and 30-day windows
 - [x] **JOB-02**: Alert on consecutive failures (2+ in a row triggers P1 priority)
-- [ ] **JOB-03**: Monitor job duration and detect sudden increases vs historical baseline
+- [x] **JOB-03**: Monitor job duration and detect sudden increases vs historical baseline
 - [x] **JOB-04**: Track retry counts per job to surface silent cost inflation
 
 ### SLA Monitoring
@@ -104,7 +104,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | JOB-01 | Phase 2 | Complete |
 | JOB-02 | Phase 2 | Complete |
-| JOB-03 | Phase 2 | Pending |
+| JOB-03 | Phase 2 | Complete |
 | JOB-04 | Phase 2 | Complete |
 | SLA-01 | Phase 3 | Pending |
 | SLA-02 | Phase 3 | Pending |

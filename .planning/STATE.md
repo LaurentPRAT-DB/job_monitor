@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 2 of 6 (Job Health Monitoring)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In Progress
-Last activity: 2026-02-24 -- Completed 02-01-PLAN.md
+Last activity: 2026-02-24 -- Completed 02-02-PLAN.md
 
-Progress: [##........] 22%
+Progress: [###.......] 28%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 2m 41s
-- Total execution time: 0.18 hours
+- Total plans completed: 5
+- Average duration: 2m 54s
+- Total execution time: 0.24 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 3 | 7m 56s | 2m 39s |
-| 02 | 1 | 2m 46s | 2m 46s |
+| 02 | 2 | 6m 33s | 3m 17s |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2m 49s), 01-02 (4m 7s), 01-03 (1m), 02-01 (2m 46s)
+- Last 5 plans: 01-02 (4m 7s), 01-03 (1m), 02-01 (2m 46s), 02-02 (3m 47s)
 - Trend: Progressing
 
 *Updated after each plan completion*
@@ -52,6 +52,9 @@ Recent decisions affecting current work:
 - 02-01: P3 priority assigned to jobs in yellow zone (70-89% success rate)
 - 02-01: Retry detection uses same-day multiple runs as heuristic
 - 02-01: Status computed from success_rate using Pydantic computed_field
+- 02-02: PERCENTILE_CONT(0.5) and PERCENTILE_CONT(0.9) for median/p90 calculations
+- 02-02: Anomaly threshold: duration > 2x 30-day median baseline
+- 02-02: asyncio.gather for parallel SQL queries in expanded details endpoint
 
 ### Pending Todos
 
@@ -67,5 +70,5 @@ Research flags from .planning/research/SUMMARY.md:
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 02-01-PLAN.md (Job Health Metrics API)
+Stopped at: Completed 02-02-PLAN.md (Duration Stats and Expanded Details)
 Resume file: None
