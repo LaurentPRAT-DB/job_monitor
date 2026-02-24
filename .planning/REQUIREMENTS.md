@@ -30,13 +30,13 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Cluster Efficiency
 
-- [ ] **CLUST-01**: Monitor driver/worker CPU and memory utilization per job
-- [ ] **CLUST-02**: Flag jobs with sustained <40% utilization as over-provisioned
+- [x] **CLUST-01**: Monitor driver/worker CPU and memory utilization per job
+- [x] **CLUST-02**: Flag jobs with sustained <40% utilization as over-provisioned
 
 ### Data Pipeline Integrity
 
-- [ ] **PIPE-01**: Check row count deltas vs historical baseline (+-20% threshold triggers alert)
-- [ ] **PIPE-02**: Monitor for schema drift on source data and alert on detected changes
+- [x] **PIPE-01**: Check row count deltas vs historical baseline (+-20% threshold triggers alert)
+- [x] **PIPE-02**: Monitor for schema drift on source data and alert on detected changes
 
 ### Alerting & Delivery
 
@@ -114,10 +114,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COST-03 | Phase 5 | Pending |
 | COST-04 | Phase 3 | Complete |
 | COST-05 | Phase 3 | Complete |
-| CLUST-01 | Phase 4 | Pending |
-| CLUST-02 | Phase 4 | Pending |
-| PIPE-01 | Phase 4 | Pending |
-| PIPE-02 | Phase 4 | Pending |
+| CLUST-01 | Phase 4 | Complete |
+| CLUST-02 | Phase 4 | Complete |
+| PIPE-01 | Phase 4 | Complete |
+| PIPE-02 | Phase 4 | Complete |
 | ALERT-01 | Phase 5 | Pending |
 | ALERT-02 | Phase 5 | Pending |
 | ALERT-03 | Phase 6 | Pending |

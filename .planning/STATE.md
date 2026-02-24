@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Platform team can proactively identify job failures, SLA breaches, and cost anomalies before business users report them
-**Current focus:** Phase 3 - SLA & Cost Visibility
+**Current focus:** Phase 4 - Cluster & Pipeline Integrity
 
 ## Current Position
 
-Phase: 3 of 6 (SLA & Cost Visibility) - COMPLETE
-Plan: 3 of 3 in current phase
-Status: Phase 3 Complete
-Last activity: 2026-02-24 -- Plan 03-03 complete (Costs Dashboard)
+Phase: 4 of 6 (Cluster & Pipeline Integrity)
+Plan: 1 of 3 in current phase
+Status: In Progress
+Last activity: 2026-02-24 -- Plan 04-01 complete (Backend APIs)
 
-Progress: [#####.....] 50%
+Progress: [######....] 55%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
-- Average duration: 4m 7s
-- Total execution time: 0.62 hours
+- Total plans completed: 10
+- Average duration: 4m
+- Total execution time: 0.67 hours
 
 **By Phase:**
 
@@ -30,9 +30,10 @@ Progress: [#####.....] 50%
 | 01 | 3 | 7m 56s | 2m 39s |
 | 02 | 3 | 21m 33s | 7m 11s |
 | 03 | 3 | 14m | 4m 40s |
+| 04 | 1 | 3m | 3m |
 
 **Recent Trend:**
-- Last 5 plans: 02-02 (3m 47s), 02-03 (~15m), 03-01 (8m), 03-02 (2m), 03-03 (4m)
+- Last 5 plans: 02-03 (~15m), 03-01 (8m), 03-02 (2m), 03-03 (4m), 04-01 (3m)
 - Trend: Progressing
 
 *Updated after each plan completion*
@@ -71,6 +72,11 @@ Recent decisions affecting current work:
 - 03-03: SKU breakdown shown as mini horizontal bar with tooltip for details
 - 03-03: Untagged teams/jobs highlighted with amber warning color
 - 03-03: Dollar toggle disabled when dbu_rate not configured
+- 04-01: DBU consumption proxy for utilization metrics (direct CPU/memory not in system tables)
+- 04-01: Heuristic mapping: <1 DBU/hr = ~20%, 1-2 = ~40%, 2-4 = ~60%, >4 = ~80% utilization
+- 04-01: Over-provisioned flag only when ALL analyzed runs show <40% utilization
+- 04-01: output_tables job tag for job-to-table mapping in pipeline integrity
+- 04-01: 20% threshold for row count anomaly detection
 
 ### Pending Todos
 
@@ -86,5 +92,5 @@ Research flags from .planning/research/SUMMARY.md:
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 03-03-PLAN.md (Costs Dashboard) - Phase 3 Complete
-Resume file: .planning/phases/03-sla-cost-visibility/03-03-SUMMARY.md
+Stopped at: Completed 04-01-PLAN.md (Backend APIs)
+Resume file: .planning/phases/04-cluster-pipeline-integrity/04-01-SUMMARY.md
