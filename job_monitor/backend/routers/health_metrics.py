@@ -225,3 +225,298 @@ async def get_health_metrics(
         window_days=days,
         total_count=len(sorted_jobs),
     )
+
+
+# Duration and expanded details endpoint helpers
+
+
+def _parse_duration_stats(result, job_id: str) -> DurationStatsOut:
+    """Parse statement execution result into DurationStatsOut model."""
+    if not result or not result.result or not result.result.data_array:
+        return DurationStatsOut(
+            job_id=job_id,
+            median_duration_seconds=None,
+            p90_duration_seconds=None,
+            avg_duration_seconds=None,
+            max_duration_seconds=None,
+            run_count=0,
+            baseline_30d_median=None,
+            has_sufficient_data=False,
+        )
+
+    row = result.result.data_array[0]
+    run_count = int(row[4]) if row[4] else 0
+
+    return DurationStatsOut(
+        job_id=job_id,
+        median_duration_seconds=float(row[0]) if row[0] else None,
+        p90_duration_seconds=float(row[1]) if row[1] else None,
+        avg_duration_seconds=float(row[2]) if row[2] else None,
+        max_duration_seconds=float(row[3]) if row[3] else None,
+        run_count=run_count,
+        baseline_30d_median=float(row[0]) if row[0] else None,  # 30-day median IS the baseline
+        has_sufficient_data=run_count >= 5,
+    )
+
+
+def _parse_job_runs(result, baseline_median: float | None) -> list[JobRunDetailOut]:
+    """Parse statement execution result into JobRunDetailOut models."""
+    if not result or not result.result or not result.result.data_array:
+        return []
+
+    runs = []
+    for row in result.result.data_array:
+        duration = int(row[4]) if row[4] else None
+
+        # Anomaly detection: duration > 2x baseline median
+        is_anomaly = False
+        if baseline_median and duration:
+            is_anomaly = duration > (2 * baseline_median)
+
+        runs.append(
+            JobRunDetailOut(
+                run_id=str(row[0]),
+                job_id=str(row[1]),
+                start_time=row[2],
+                end_time=row[3] if row[3] else None,
+                duration_seconds=duration,
+                result_state=row[5] if row[5] else None,
+                is_anomaly=is_anomaly,
+            )
+        )
+    return runs
+
+
+@router.get("/health-metrics/{job_id}/duration", response_model=DurationStatsOut)
+async def get_duration_stats(
+    job_id: str,
+    ws=Depends(get_ws),
+) -> DurationStatsOut:
+    """Get duration statistics for a specific job.
+
+    Calculates statistical metrics (median, p90, avg, max) for job run durations
+    over the last 30 days. Uses PERCENTILE_CONT for accurate percentile calculations.
+
+    Args:
+        job_id: The job ID to get statistics for
+        ws: WorkspaceClient dependency
+
+    Returns:
+        Duration statistics including has_sufficient_data flag (>= 5 runs)
+    """
+    if not ws:
+        return DurationStatsOut(
+            job_id=job_id,
+            run_count=0,
+            has_sufficient_data=False,
+        )
+
+    warehouse_id = settings.warehouse_id
+    if not warehouse_id:
+        return DurationStatsOut(
+            job_id=job_id,
+            run_count=0,
+            has_sufficient_data=False,
+        )
+
+    # Use PERCENTILE_CONT for accurate percentile calculations
+    query = f"""
+    SELECT
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY run_duration_seconds) as median_duration,
+        PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY run_duration_seconds) as p90_duration,
+        AVG(run_duration_seconds) as avg_duration,
+        MAX(run_duration_seconds) as max_duration,
+        COUNT(*) as run_count
+    FROM system.lakeflow.job_run_timeline
+    WHERE job_id = '{job_id}'
+      AND period_start_time >= current_date() - INTERVAL 30 DAYS
+      AND run_duration_seconds IS NOT NULL
+      AND result_state IS NOT NULL
+    """
+
+    result = await asyncio.to_thread(
+        ws.statement_execution.execute_statement,
+        warehouse_id=warehouse_id,
+        statement=query,
+        wait_timeout="30s",
+    )
+
+    return _parse_duration_stats(result, job_id)
+
+
+@router.get("/health-metrics/{job_id}/details", response_model=JobExpandedOut)
+async def get_job_details(
+    job_id: str,
+    ws=Depends(get_ws),
+) -> JobExpandedOut:
+    """Get expanded details for a job (used when expanding a row in the dashboard).
+
+    Returns:
+    - Recent runs (last 10) with anomaly flags
+    - Duration statistics
+    - Retry count in last 7 days
+    - Distinct failure reasons
+
+    Args:
+        job_id: The job ID to get details for
+        ws: WorkspaceClient dependency
+
+    Returns:
+        Expanded job details for dashboard row expansion
+    """
+    default_stats = DurationStatsOut(
+        job_id=job_id,
+        run_count=0,
+        has_sufficient_data=False,
+    )
+
+    if not ws:
+        return JobExpandedOut(
+            job_id=job_id,
+            job_name="Unknown",
+            recent_runs=[],
+            duration_stats=default_stats,
+            retry_count_7d=0,
+            failure_reasons=[],
+        )
+
+    warehouse_id = settings.warehouse_id
+    if not warehouse_id:
+        return JobExpandedOut(
+            job_id=job_id,
+            job_name="Unknown",
+            recent_runs=[],
+            duration_stats=default_stats,
+            retry_count_7d=0,
+            failure_reasons=[],
+        )
+
+    # Run all queries in parallel for better performance
+    # 1. Duration stats query
+    stats_query = f"""
+    SELECT
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY run_duration_seconds) as median_duration,
+        PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY run_duration_seconds) as p90_duration,
+        AVG(run_duration_seconds) as avg_duration,
+        MAX(run_duration_seconds) as max_duration,
+        COUNT(*) as run_count
+    FROM system.lakeflow.job_run_timeline
+    WHERE job_id = '{job_id}'
+      AND period_start_time >= current_date() - INTERVAL 30 DAYS
+      AND run_duration_seconds IS NOT NULL
+      AND result_state IS NOT NULL
+    """
+
+    # 2. Recent runs query (last 10)
+    runs_query = f"""
+    SELECT run_id, job_id, period_start_time, period_end_time,
+           run_duration_seconds, result_state
+    FROM system.lakeflow.job_run_timeline
+    WHERE job_id = '{job_id}'
+      AND period_start_time >= current_date() - INTERVAL 30 DAYS
+    ORDER BY period_start_time DESC
+    LIMIT 10
+    """
+
+    # 3. Job name query (SCD2 pattern for latest version)
+    job_name_query = f"""
+    WITH latest_jobs AS (
+        SELECT *,
+            ROW_NUMBER() OVER(
+                PARTITION BY workspace_id, job_id
+                ORDER BY change_time DESC
+            ) as rn
+        FROM system.lakeflow.jobs
+        WHERE job_id = '{job_id}'
+          AND delete_time IS NULL
+    )
+    SELECT name FROM latest_jobs WHERE rn = 1
+    """
+
+    # 4. Retry count in last 7 days (multiple runs on same day = retries)
+    retry_query = f"""
+    SELECT COUNT(*) - COUNT(DISTINCT DATE(period_start_time)) as retry_count
+    FROM system.lakeflow.job_run_timeline
+    WHERE job_id = '{job_id}'
+      AND period_start_time >= current_date() - INTERVAL 7 DAYS
+      AND result_state IS NOT NULL
+    """
+
+    # 5. Distinct failure reasons (error messages from failed runs)
+    failure_reasons_query = f"""
+    SELECT DISTINCT termination_code
+    FROM system.lakeflow.job_run_timeline
+    WHERE job_id = '{job_id}'
+      AND period_start_time >= current_date() - INTERVAL 30 DAYS
+      AND result_state = 'FAILED'
+      AND termination_code IS NOT NULL
+    LIMIT 10
+    """
+
+    # Execute all queries in parallel
+    stats_result, runs_result, name_result, retry_result, reasons_result = await asyncio.gather(
+        asyncio.to_thread(
+            ws.statement_execution.execute_statement,
+            warehouse_id=warehouse_id,
+            statement=stats_query,
+            wait_timeout="30s",
+        ),
+        asyncio.to_thread(
+            ws.statement_execution.execute_statement,
+            warehouse_id=warehouse_id,
+            statement=runs_query,
+            wait_timeout="30s",
+        ),
+        asyncio.to_thread(
+            ws.statement_execution.execute_statement,
+            warehouse_id=warehouse_id,
+            statement=job_name_query,
+            wait_timeout="30s",
+        ),
+        asyncio.to_thread(
+            ws.statement_execution.execute_statement,
+            warehouse_id=warehouse_id,
+            statement=retry_query,
+            wait_timeout="30s",
+        ),
+        asyncio.to_thread(
+            ws.statement_execution.execute_statement,
+            warehouse_id=warehouse_id,
+            statement=failure_reasons_query,
+            wait_timeout="30s",
+        ),
+    )
+
+    # Parse duration stats
+    duration_stats = _parse_duration_stats(stats_result, job_id)
+
+    # Parse recent runs with anomaly detection based on baseline
+    recent_runs = _parse_job_runs(runs_result, duration_stats.baseline_30d_median)
+
+    # Extract job name
+    job_name = "Unknown"
+    if name_result and name_result.result and name_result.result.data_array:
+        job_name = str(name_result.result.data_array[0][0]) or "Unknown"
+
+    # Extract retry count
+    retry_count = 0
+    if retry_result and retry_result.result and retry_result.result.data_array:
+        retry_count = int(retry_result.result.data_array[0][0] or 0)
+        # Ensure non-negative (edge case when all runs are on different days)
+        retry_count = max(0, retry_count)
+
+    # Extract failure reasons
+    failure_reasons = []
+    if reasons_result and reasons_result.result and reasons_result.result.data_array:
+        failure_reasons = [
+            str(row[0]) for row in reasons_result.result.data_array if row[0]
+        ]
+
+    return JobExpandedOut(
+        job_id=job_id,
+        job_name=job_name,
+        recent_runs=recent_runs,
+        duration_stats=duration_stats,
+        retry_count_7d=retry_count,
+        failure_reasons=failure_reasons,
+    )
