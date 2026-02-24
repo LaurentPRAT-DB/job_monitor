@@ -50,7 +50,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Job health metrics API with success rates, priority flags, and retry counts
+- [x] 02-01-PLAN.md — Job health metrics API with success rates, priority flags, and retry counts
 - [ ] 02-02-PLAN.md — Duration statistics and expanded details API endpoints
 - [ ] 02-03-PLAN.md — Job health dashboard UI with expandable rows and duration charts
 
@@ -128,7 +128,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Data Ingestion | 3/3 | Complete    | 2026-02-24 |
-| 2. Job Health Monitoring | 0/3 | Not started | - |
+| 2. Job Health Monitoring | 1/3 | In Progress | - |
 | 3. SLA & Cost Visibility | 0/3 | Not started | - |
 | 4. Cluster & Pipeline Integrity | 0/2 | Not started | - |
 | 5. Alerting & Remediation | 0/3 | Not started | - |
@@ -136,4 +136,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 ---
 *Roadmap created: 2026-02-18*
-*Last updated: 2026-02-24 (Phase 2 planned)*
+*Last updated: 2026-02-24 (02-01 complete)*
