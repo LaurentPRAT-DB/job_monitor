@@ -33,12 +33,12 @@ const dashboardRoute = createRoute({
   component: Dashboard,
 })
 
-// Job health route placeholder (will be created in Task 5)
-const JobHealthPlaceholder = () => <div className="p-6">Job Health page loading...</div>
+// Job health route
+import JobHealthPage from './routes/_sidebar/job-health'
 const jobHealthRoute = createRoute({
   getParentRoute: () => sidebarRoute,
   path: '/job-health',
-  component: JobHealthPlaceholder,
+  component: JobHealthPage,
 })
 
 // Export route tree
