@@ -80,6 +80,9 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-02: Inverted traffic light coloring (Green >= 60% efficient, Red < 40% wasteful)
 - [Phase 04]: 04-02: 4 separate gauges for Driver CPU, Driver Memory, Worker CPU, Worker Memory
 - [Phase 04]: 04-02: OverProvisionedBadge uses orange color scheme distinct from P1/P2/P3 badges
+- [Phase 04]: 04-03: Schema drift shown first in pipeline section (more urgent than row counts)
+- [Phase 04]: 04-03: Mini sparkline hidden when trend has <2 data points
+- [Phase 04]: 04-03: Table name truncated to last segment with full path in subtitle
 
 ### Pending Todos
 
