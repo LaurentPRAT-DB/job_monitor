@@ -81,11 +81,12 @@ Plans:
   2. Jobs with sustained <40% utilization are flagged as over-provisioned candidates
   3. Row count deltas vs historical baseline are tracked (alert on +/-20% deviation)
   4. Schema drift on source data is detected and alerts are generated
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-01-PLAN.md — Backend APIs for cluster utilization (proxy metrics) and pipeline integrity (row counts, schema drift)
+- [ ] 04-02-PLAN.md — Cluster utilization UI with circular gauges and over-provisioned badge
+- [ ] 04-03-PLAN.md — Pipeline integrity UI with row count tracking and schema drift alerts
 
 ### Phase 5: Alerting & Remediation
 **Goal**: Platform team receives proactive alerts with actionable recommendations before issues impact business users
@@ -130,10 +131,10 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Foundation & Data Ingestion | 3/3 | Complete    | 2026-02-24 |
 | 2. Job Health Monitoring | 3/3 | Complete    | 2026-02-24 |
 | 3. SLA & Cost Visibility | 3/3 | Complete    | 2026-02-24 |
-| 4. Cluster & Pipeline Integrity | 0/2 | Not started | - |
+| 4. Cluster & Pipeline Integrity | 0/3 | Planned | - |
 | 5. Alerting & Remediation | 0/3 | Not started | - |
 | 6. Dashboards & Reporting | 0/3 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-18*
-*Last updated: 2026-02-24 (03-03 complete - Phase 3 Complete)*
+*Last updated: 2026-02-24 (Phase 4 planned - 3 plans)*
