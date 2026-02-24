@@ -202,3 +202,33 @@ class JobExpandedOut(BaseModel):
     duration_stats: DurationStatsOut
     retry_count_7d: int  # Retry count in last 7 days
     failure_reasons: list[str]  # Distinct error messages from failed runs
+
+
+# SLA and Tag models for Phase 3
+
+
+class TagUpdateRequest(BaseModel):
+    """Request to update job tags."""
+
+    sla_minutes: int | None = None
+    team: str | None = None
+    owner: str | None = None
+
+
+class TagUpdateResponse(BaseModel):
+    """Response with updated tags."""
+
+    job_id: str
+    tags: dict[str, str]
+
+
+class JobTagsOut(BaseModel):
+    """Job tags including SLA and team attribution."""
+
+    job_id: str
+    sla_minutes: int | None = None
+    suggested_p90_minutes: int | None = None
+    team: str | None = None
+    owner: str | None = None
+    has_sla: bool = False
+    has_team: bool = False
