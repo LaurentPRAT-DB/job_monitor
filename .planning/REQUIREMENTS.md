@@ -22,11 +22,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Cost Attribution
 
-- [ ] **COST-01**: Calculate DBU cost per job per run using system tables + pricing data
-- [ ] **COST-02**: Attribute costs to teams/business units via job metadata mapping
+- [x] **COST-01**: Calculate DBU cost per job per run using system tables + pricing data
+- [x] **COST-02**: Attribute costs to teams/business units via job metadata mapping
 - [ ] **COST-03**: Set budget thresholds per job with breach alerts
-- [ ] **COST-04**: Detect sudden DBU spikes (>2x p90 baseline) as anomalies
-- [ ] **COST-05**: Identify zombie jobs (scheduled but processing minimal/zero records)
+- [x] **COST-04**: Detect sudden DBU spikes (>2x p90 baseline) as anomalies
+- [x] **COST-05**: Identify zombie jobs (scheduled but processing minimal/zero records)
 
 ### Cluster Efficiency
 
@@ -109,11 +109,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SLA-01 | Phase 3 | Complete |
 | SLA-02 | Phase 3 | Complete |
 | SLA-03 | Phase 5 | Pending |
-| COST-01 | Phase 3 | Pending |
-| COST-02 | Phase 3 | Pending |
+| COST-01 | Phase 3 | Complete |
+| COST-02 | Phase 3 | Complete |
 | COST-03 | Phase 5 | Pending |
-| COST-04 | Phase 3 | Pending |
-| COST-05 | Phase 3 | Pending |
+| COST-04 | Phase 3 | Complete |
+| COST-05 | Phase 3 | Complete |
 | CLUST-01 | Phase 4 | Pending |
 | CLUST-02 | Phase 4 | Pending |
 | PIPE-01 | Phase 4 | Pending |
@@ -137,4 +137,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-18*
-*Last updated: 2026-02-24 (Phase 2 complete - JOB-01/02/03/04)*
+*Last updated: 2026-02-24 (Phase 3 complete - COST-01/02/04/05)*
