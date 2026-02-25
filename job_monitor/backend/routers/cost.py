@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 logger = logging.getLogger(__name__)
 
 from job_monitor.backend.config import settings
-from job_monitor.backend.core import get_ws
+from job_monitor.backend.core import get_ws_prefer_user
 from job_monitor.backend.mock_data import get_mock_cost_summary, is_mock_mode
 from job_monitor.backend.models import (
     CostAnomalyOut,
@@ -171,7 +171,7 @@ async def get_cost_summary(
     days: Annotated[
         int, Query(ge=7, le=90, description="Time window in days")
     ] = 30,
-    ws=Depends(get_ws),
+    ws=Depends(get_ws_prefer_user),
 ) -> CostSummaryOut:
     """Get cost summary with per-job breakdown, team rollups, and anomalies.
 
@@ -376,7 +376,7 @@ async def get_costs_by_team(
     days: Annotated[
         int, Query(ge=7, le=90, description="Time window in days")
     ] = 30,
-    ws=Depends(get_ws),
+    ws=Depends(get_ws_prefer_user),
 ) -> list[TeamCostOut]:
     """Get cost rollups by team.
 
@@ -400,7 +400,7 @@ async def get_cost_anomalies(
     days: Annotated[
         int, Query(ge=7, le=90, description="Time window in days")
     ] = 30,
-    ws=Depends(get_ws),
+    ws=Depends(get_ws_prefer_user),
 ) -> list[CostAnomalyOut]:
     """Get cost anomalies (spikes and zombie jobs).
 

@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 logger = logging.getLogger(__name__)
 
 from job_monitor.backend.config import settings
-from job_monitor.backend.core import get_ws
+from job_monitor.backend.core import get_ws_prefer_user
 from job_monitor.backend.mock_data import get_mock_alerts, is_mock_mode
 from job_monitor.backend.models import (
     Alert,
@@ -658,7 +658,7 @@ async def get_alerts(
         bool | None,
         Query(description="Filter by acknowledged status"),
     ] = None,
-    ws=Depends(get_ws),
+    ws=Depends(get_ws_prefer_user),
 ) -> AlertListOut:
     """Get alerts generated from current system state.
 
@@ -740,7 +740,7 @@ async def get_alerts(
 @router.post("/{alert_id}/acknowledge", response_model=Alert)
 async def acknowledge_alert(
     alert_id: str,
-    ws=Depends(get_ws),
+    ws=Depends(get_ws_prefer_user),
 ) -> Alert:
     """Acknowledge an alert to suppress it for 24 hours.
 

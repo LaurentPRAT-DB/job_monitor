@@ -1,8 +1,11 @@
 """Core dependencies for Job Monitor backend."""
 
+import logging
 from typing import Annotated
 
 from fastapi import Header, Request
+
+logger = logging.getLogger(__name__)
 
 
 def get_ws(request: Request):
@@ -22,17 +25,56 @@ def get_user_ws(
 
     This creates a client that acts on behalf of the authenticated user,
     using the OAuth token forwarded by the Databricks App platform.
+
+    Returns None if no token is available.
     """
     if not token:
+        logger.debug("No X-Forwarded-Access-Token header found")
         return None
 
     from databricks.sdk import WorkspaceClient
     from job_monitor.backend.config import settings
 
+    logger.info(f"Creating user OBO WorkspaceClient (token length: {len(token)})")
     return WorkspaceClient(
         host=settings.databricks_host,
         token=token,
     )
+
+
+def get_ws_prefer_user(
+    request: Request,
+    token: Annotated[str | None, Header(alias="X-Forwarded-Access-Token")] = None,
+):
+    """Get WorkspaceClient, preferring user OBO token over service principal.
+
+    This is the recommended dependency for system table queries, as the user
+    likely has more permissions than the app's service principal.
+
+    Priority:
+    1. User OBO token (if available via X-Forwarded-Access-Token)
+    2. Service Principal (fallback)
+
+    Returns None if neither is available.
+    """
+    # Try user OBO first
+    if token:
+        from databricks.sdk import WorkspaceClient
+        from job_monitor.backend.config import settings
+
+        logger.info("Using user OBO token for WorkspaceClient")
+        return WorkspaceClient(
+            host=settings.databricks_host,
+            token=token,
+        )
+
+    # Fall back to service principal
+    ws = request.app.state.workspace_client
+    if ws:
+        logger.info("Using service principal WorkspaceClient (no user token available)")
+    else:
+        logger.warning("No WorkspaceClient available (no user token, no SP)")
+    return ws
 
 
 def get_current_user(

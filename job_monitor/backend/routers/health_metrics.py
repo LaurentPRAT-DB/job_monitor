@@ -16,7 +16,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from job_monitor.backend.config import settings
-from job_monitor.backend.core import get_ws
+from job_monitor.backend.core import get_ws_prefer_user
 from job_monitor.backend.mock_data import (
     get_mock_duration_stats,
     get_mock_health_metrics,
@@ -99,7 +99,7 @@ async def get_health_metrics(
         int,
         Query(description="Time window: 7 or 30 days"),
     ] = 7,
-    ws=Depends(get_ws),
+    ws=Depends(get_ws_prefer_user),
 ) -> JobHealthListOut:
     """Get job health metrics with priority flags and retry counts.
 
@@ -351,7 +351,7 @@ def _parse_job_runs(result, baseline_median: float | None) -> list[JobRunDetailO
 @router.get("/health-metrics/{job_id}/duration", response_model=DurationStatsOut)
 async def get_duration_stats(
     job_id: str,
-    ws=Depends(get_ws),
+    ws=Depends(get_ws_prefer_user),
 ) -> DurationStatsOut:
     """Get duration statistics for a specific job.
 
@@ -405,7 +405,7 @@ async def get_duration_stats(
 @router.get("/health-metrics/{job_id}/details", response_model=JobExpandedOut)
 async def get_job_details(
     job_id: str,
-    ws=Depends(get_ws),
+    ws=Depends(get_ws_prefer_user),
 ) -> JobExpandedOut:
     """Get expanded details for a job (used when expanding a row in the dashboard).
 

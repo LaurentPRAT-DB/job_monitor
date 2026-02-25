@@ -20,9 +20,7 @@ permissions:
   - user_name: "${DATABRICKS_USER}"
     level: CAN_MANAGE
 
-resources:
-  - name: oauth
-    oauth:
-      scopes:
-        - sql:*
-        - compute.clusters:read
+# User OBO (On-Behalf-Of) scopes - enables user token forwarding
+user_api_scopes:
+  - sql
+  - offline_access
