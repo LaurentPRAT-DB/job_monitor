@@ -9,6 +9,7 @@ Databricks Job Monitoring Framework - A real-time operational monitoring dashboa
 - **Cost Analysis**: Per-job and per-team cost attribution with DBU breakdown by SKU
 - **Smart Alerts**: Dynamic alert generation for failures, SLA breaches, cost anomalies
 - **Anomaly Detection**: Identify cost spikes (>2x p90 baseline) and over-provisioned clusters
+- **Metrics Cache**: Pre-aggregated Delta tables for sub-second dashboard loading
 - **Mock Data Mode**: Demo-ready fallback when system tables aren't accessible
 
 ## Architecture
@@ -179,9 +180,31 @@ databricks auth describe --profile YOUR_PROFILE
 
 ## Configuration
 
+### Central Configuration File
+
+All settings are centralized in `job_monitor/config.yaml`. This file is used by both the app and the cache refresh job.
+
+```yaml
+# job_monitor/config.yaml
+cache:
+  catalog: "job_monitor"      # Unity Catalog for cache tables
+  schema: "cache"             # Schema for cache tables
+  refresh_cron: "0 */10 * * * ?"  # Refresh schedule (every 10 min)
+  enabled: true               # Set to false to bypass cache
+
+warehouse_id: ""              # SQL Warehouse ID (usually set via env var)
+dbu_rate: 0.0                 # DBU to dollar conversion rate
+
+tags:
+  sla: "sla_minutes"          # Job tag key for SLA target
+  team: "team"                # Job tag key for team attribution
+  owner: "owner"              # Job tag key for owner
+  budget: "budget_monthly_dbus"  # Job tag key for monthly DBU budget
+```
+
 ### Environment Variables
 
-The app uses environment variables for configuration. Set these in `app.yaml`:
+Environment variables override `config.yaml` values. Set these in `app.yaml`:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -190,9 +213,53 @@ The app uses environment variables for configuration. Set these in `app.yaml`:
 | `USE_MOCK_DATA` | Enable mock data mode | `false` |
 | `LOG_LEVEL` | Logging level (DEBUG, INFO, etc.) | `INFO` |
 | `DBU_RATE` | DBU to dollar conversion rate | `0.0` |
-| `SLA_TAG_KEY` | Job tag key for SLA minutes | `sla_minutes` |
-| `TEAM_TAG_KEY` | Job tag key for team attribution | `team` |
-| `BUDGET_TAG_KEY` | Job tag key for monthly DBU budget | `budget_monthly_dbus` |
+| `CACHE_CATALOG` | Catalog for cache tables | `job_monitor` |
+| `CACHE_SCHEMA` | Schema for cache tables | `cache` |
+| `USE_CACHE` | Enable cache-first queries | `true` |
+
+### Metrics Cache
+
+The app uses pre-aggregated Delta tables for fast dashboard loading (<1 second vs 10-30 seconds with live queries).
+
+#### Cache Tables
+
+| Table | Contents |
+|-------|----------|
+| `{catalog}.{schema}.job_health_cache` | Job success rates, priorities, duration stats |
+| `{catalog}.{schema}.cost_cache` | Cost data by job with SKU breakdown |
+| `{catalog}.{schema}.alerts_cache` | Pre-computed alert conditions |
+
+#### Cache Refresh Job
+
+A Databricks job (`job-monitor-refresh-cache`) automatically refreshes the cache tables on a schedule.
+
+**Default schedule**: Every 10 minutes (configurable via `cache.refresh_cron` in config.yaml)
+
+**Run manually**:
+```bash
+databricks bundle run refresh-metrics-cache -t e2
+```
+
+**Override schedule at deploy time**:
+```bash
+databricks bundle deploy -t e2 --var="cache_refresh_cron=0 */30 * * * ?"
+```
+
+#### Check Cache Status
+
+```bash
+curl https://YOUR_APP_URL/api/cache/status
+```
+
+Returns:
+```json
+{
+  "available": true,
+  "fresh": true,
+  "refreshed_at": "2024-01-15T10:30:00Z",
+  "cache_enabled": true
+}
+```
 
 ### Job Tags for SLA and Cost Tracking
 
@@ -289,6 +356,7 @@ pytest tests/
 | `/api/costs/by-team` | GET | Costs grouped by team tag |
 | `/api/costs/anomalies` | GET | Cost spikes and zombie jobs |
 | `/api/jobs` | GET | Job list via Databricks Jobs API |
+| `/api/cache/status` | GET | Cache availability and freshness |
 
 ## Troubleshooting
 
@@ -345,6 +413,38 @@ pytest tests/
    ```
 4. Clear browser cache and re-login to trigger OAuth consent
 5. Check app logs for `gap-auth` header presence (shows authenticated user email)
+
+### Cache Not Available
+
+**Symptom**: Dashboard loads slowly, `/api/cache/status` shows `"available": false`
+
+**Solution**:
+1. Run the cache refresh job manually:
+   ```bash
+   databricks bundle run refresh-metrics-cache -t e2
+   ```
+2. Verify the job completed successfully in the Databricks Jobs UI
+3. Check that the cache catalog/schema exist:
+   ```sql
+   SHOW TABLES IN job_monitor.cache;
+   ```
+4. Verify the app has permission to read cache tables
+
+### Cache Data is Stale
+
+**Symptom**: `/api/cache/status` shows `"fresh": false`
+
+**Solution**:
+1. Check if the refresh job is running on schedule in Databricks Jobs UI
+2. Verify the job schedule in `job_monitor/config.yaml`:
+   ```yaml
+   cache:
+     refresh_cron: "0 */10 * * * ?"  # Every 10 minutes
+   ```
+3. Run the job manually to refresh immediately:
+   ```bash
+   databricks bundle run refresh-metrics-cache -t e2
+   ```
 
 ## Tech Stack
 
