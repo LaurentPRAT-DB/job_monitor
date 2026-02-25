@@ -10,8 +10,8 @@ env:
   - name: DATABRICKS_HOST
     valueFrom: workspace-host
   - name: WAREHOUSE_ID
-    description: "SQL warehouse ID for system table queries"
-    value: "58d41113cb262dce"
+    description: "SQL warehouse ID for system table queries (E2 fe-lens warehouse)"
+    value: "06c1adfd3dbdacde"
   - name: LOG_LEVEL
     description: "Logging level for debugging"
     value: "DEBUG"

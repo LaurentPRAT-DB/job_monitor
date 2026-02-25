@@ -8,24 +8,26 @@ sync:
 variables:
   warehouse_id:
     description: "SQL warehouse ID for system table queries"
-    default: "58d41113cb262dce"
+    default: "06c1adfd3dbdacde"
 
 targets:
-  dev:
-    mode: development
-    default: true
-    workspace:
-      profile: LPT_FREE_EDITION
-    variables:
-      warehouse_id: "58d41113cb262dce"
-
+  # E2 is the main deployment (OBO works here)
   e2:
     mode: development
+    default: true
     workspace:
       profile: DEFAULT
       host: https://e2-demo-field-eng.cloud.databricks.com
     variables:
       warehouse_id: "06c1adfd3dbdacde"
+
+  # Dev workspace (Free Edition - OBO not supported, uses mock data)
+  dev:
+    mode: development
+    workspace:
+      profile: LPT_FREE_EDITION
+    variables:
+      warehouse_id: "58d41113cb262dce"
 
 resources:
   apps:
