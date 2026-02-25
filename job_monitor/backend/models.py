@@ -352,3 +352,60 @@ class SchemaDrift(BaseModel):
     removed_columns: list[str]
     type_changes: list[ColumnChange]
     detected_at: str  # ISO timestamp
+
+
+# Alert models for Phase 5
+
+
+class AlertSeverity(str, Enum):
+    """Alert severity levels.
+
+    - P1: Critical - requires immediate attention (2+ consecutive failures, SLA breach)
+    - P2: Warning - requires attention soon (single failure, SLA risk, budget exceeded)
+    - P3: Info - optimization opportunity (yellow zone, over-provisioned clusters)
+    """
+
+    P1 = "P1"
+    P2 = "P2"
+    P3 = "P3"
+
+
+class AlertCategory(str, Enum):
+    """Alert categories based on monitoring domain."""
+
+    FAILURE = "failure"
+    SLA = "sla"
+    COST = "cost"
+    CLUSTER = "cluster"
+
+
+class Alert(BaseModel):
+    """Dynamic alert generated from monitoring data.
+
+    Alerts are generated on-demand from current system state,
+    not persisted. Acknowledgment state stored separately.
+    """
+
+    id: str  # Composite: {category}_{job_id}_{type}
+    job_id: str
+    job_name: str
+    category: AlertCategory
+    severity: AlertSeverity
+    title: str  # Short summary like "2 consecutive failures"
+    description: str  # Context like "Job failed at 10:30 AM, 10:15 AM"
+    remediation: str  # Actionable suggestion
+    created_at: datetime
+    acknowledged: bool = False
+    acknowledged_at: datetime | None = None
+    condition_key: str  # Unique key for deduplication
+
+
+class AlertListOut(BaseModel):
+    """Response wrapper for alert list.
+
+    Includes summary counts by severity for dashboard display.
+    """
+
+    alerts: list[Alert]
+    total: int
+    by_severity: dict[str, int]  # {"P1": 2, "P2": 5, "P3": 10}
