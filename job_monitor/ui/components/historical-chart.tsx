@@ -85,15 +85,15 @@ export function HistoricalChart({
           label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft' } : undefined}
         />
         <Tooltip
-          formatter={(value: number, name: string) => [
-            formatValue(value),
+          formatter={(value, name) => [
+            formatValue(typeof value === 'number' ? value : 0),
             name === 'current' ? currentLabel : previousLabel,
           ]}
           labelFormatter={(label) => {
             try {
-              return format(parseISO(label), 'PPP');
+              return format(parseISO(String(label)), 'PPP');
             } catch {
-              return label;
+              return String(label);
             }
           }}
           contentStyle={{ fontSize: 12 }}
