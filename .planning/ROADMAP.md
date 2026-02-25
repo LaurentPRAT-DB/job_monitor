@@ -114,12 +114,12 @@ Plans:
   3. Daily health summary report generates automatically (overnight failures, SLA breaches, actions)
   4. Weekly cost report generates automatically (per-team spend, trends, anomalies)
   5. Monthly executive report generates automatically (TCO, reliability metrics, optimization ROI)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 06-01: TBD
-- [ ] 06-02: TBD
-- [ ] 06-03: TBD
+- [ ] 06-01-PLAN.md — Global filter system with URL state sync and shared presets
+- [ ] 06-02-PLAN.md — Historical dashboard with trend charts and previous period overlay
+- [ ] 06-03-PLAN.md — Scheduled reports (daily/weekly/monthly) with email delivery
 
 ## Progress
 
@@ -133,8 +133,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 3. SLA & Cost Visibility | 3/3 | Complete    | 2026-02-24 |
 | 4. Cluster & Pipeline Integrity | 3/3 | Complete | 2026-02-24 |
 | 5. Alerting & Remediation | 3/3 | Complete | 2026-02-25 |
-| 6. Dashboards & Reporting | 0/3 | Not started | - |
+| 6. Dashboards & Reporting | 0/3 | Planned | - |
 
 ---
 *Roadmap created: 2026-02-18*
-*Last updated: 2026-02-25 (Phase 5 complete)*
+*Last updated: 2026-02-25 (Phase 6 planned)*
