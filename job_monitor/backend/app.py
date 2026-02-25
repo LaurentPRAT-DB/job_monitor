@@ -1,5 +1,6 @@
 """FastAPI application entry point for Job Monitor."""
 
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -8,6 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from job_monitor.backend.config import settings
 from job_monitor.backend.routers import alerts, auth, billing, cluster_metrics, cost, filters, health, health_metrics, historical, job_tags, jobs, jobs_api, pipeline
+from job_monitor.backend.scheduler import scheduler, setup_scheduler
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -27,9 +31,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     else:
         app.state.workspace_client = None
 
+    # Setup and start scheduler for email reports
+    setup_scheduler()
+    scheduler.start()
+    logger.info("Scheduler started with scheduled report jobs")
+
     yield
 
-    # Cleanup on shutdown (if needed)
+    # Cleanup on shutdown
+    scheduler.shutdown()
+    logger.info("Scheduler shutdown")
 
 
 app = FastAPI(
