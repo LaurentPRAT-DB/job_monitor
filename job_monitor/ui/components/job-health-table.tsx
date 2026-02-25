@@ -4,7 +4,7 @@
  */
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUp, ArrowDown, ArrowUpDown, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowUpDown, Search, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -21,6 +21,14 @@ import { fetchAlerts, type Alert } from '@/lib/alert-utils';
 
 type SortColumn = 'job_name' | 'success_rate' | 'priority' | 'sla_minutes' | 'last_run_time' | 'retry_count';
 type SortDirection = 'asc' | 'desc';
+type TimeFilter = 'all' | '1h' | '6h' | '24h';
+
+const TIME_FILTER_OPTIONS: { value: TimeFilter; label: string; hours: number | null }[] = [
+  { value: 'all', label: 'All Jobs', hours: null },
+  { value: '1h', label: 'Last Hour', hours: 1 },
+  { value: '6h', label: 'Last 6 Hours', hours: 6 },
+  { value: '24h', label: 'Last 24 Hours', hours: 24 },
+];
 
 interface JobHealthTableProps {
   jobs: JobWithSla[];
@@ -64,6 +72,7 @@ export function JobHealthTable({ jobs, isLoading, onRefetch }: JobHealthTablePro
   const [sortColumn, setSortColumn] = useState<SortColumn>('retry_count');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [searchQuery, setSearchQuery] = useState('');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -76,15 +85,30 @@ export function JobHealthTable({ jobs, isLoading, onRefetch }: JobHealthTablePro
     }
   };
 
-  // Filter jobs by search query
+  // Filter jobs by search query and time filter
   const filteredJobs = useMemo(() => {
-    if (!searchQuery.trim()) return jobs;
-    const query = searchQuery.toLowerCase();
-    return jobs.filter((job) =>
-      job.job_name.toLowerCase().includes(query) ||
-      job.job_id.toLowerCase().includes(query)
-    );
-  }, [jobs, searchQuery]);
+    let result = jobs;
+
+    // Apply time filter
+    if (timeFilter !== 'all') {
+      const filterOption = TIME_FILTER_OPTIONS.find((o) => o.value === timeFilter);
+      if (filterOption?.hours) {
+        const cutoffTime = new Date(Date.now() - filterOption.hours * 60 * 60 * 1000);
+        result = result.filter((job) => new Date(job.last_run_time) >= cutoffTime);
+      }
+    }
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((job) =>
+        job.job_name.toLowerCase().includes(query) ||
+        job.job_id.toLowerCase().includes(query)
+      );
+    }
+
+    return result;
+  }, [jobs, searchQuery, timeFilter]);
 
   // Sort filtered jobs
   const sortedJobs = useMemo(() => {
@@ -98,9 +122,14 @@ export function JobHealthTable({ jobs, isLoading, onRefetch }: JobHealthTablePro
     return sortedJobs.slice(start, start + pageSize);
   }, [sortedJobs, currentPage, pageSize]);
 
-  // Reset to page 1 when search or page size changes
+  // Reset to page 1 when search, time filter, or page size changes
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
+    setCurrentPage(1);
+  };
+
+  const handleTimeFilterChange = (value: string) => {
+    setTimeFilter(value as TimeFilter);
     setCurrentPage(1);
   };
 
@@ -209,21 +238,39 @@ export function JobHealthTable({ jobs, isLoading, onRefetch }: JobHealthTablePro
     <div>
       {/* Search and controls bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border-b dark:border-gray-700">
-        {/* Search input */}
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            type="text"
-            placeholder="Search jobs..."
-            value={searchQuery}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-9 h-9"
-          />
+        {/* Search and time filter */}
+        <div className="flex flex-col sm:flex-row gap-3 flex-1">
+          {/* Search input */}
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              type="text"
+              placeholder="Search jobs..."
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="pl-9 h-9"
+            />
+          </div>
+
+          {/* Time filter */}
+          <Select value={timeFilter} onValueChange={handleTimeFilterChange}>
+            <SelectTrigger className="w-[150px] h-9">
+              <Clock className="h-4 w-4 mr-2 text-gray-400" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TIME_FILTER_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Results count */}
         <div className="text-sm text-gray-500 dark:text-gray-400">
-          {searchQuery ? (
+          {searchQuery || timeFilter !== 'all' ? (
             <>Showing {filteredJobs.length} of {jobs.length} jobs</>
           ) : (
             <>{jobs.length} jobs</>
