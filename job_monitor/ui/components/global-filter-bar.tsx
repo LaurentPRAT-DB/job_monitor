@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import { useFilters } from '@/lib/filter-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TimeRangePicker } from './time-range-picker';
 import { FilterPresets } from './filter-presets';
 import { Button } from '@/components/ui/button';
-import { X, Filter } from 'lucide-react';
+import { X, Filter, ChevronDown } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Badge } from '@/components/ui/badge';
 
 interface Team {
   team: string;
@@ -17,7 +20,15 @@ interface Job {
 }
 
 export function GlobalFilterBar() {
+  const [isOpen, setIsOpen] = useState(false);
   const { filters, setFilters, clearFilters, hasActiveFilters } = useFilters();
+
+  // Count active filters for badge
+  const activeFilterCount = [
+    filters.team,
+    filters.jobId,
+    filters.timeRange !== '7d' ? filters.timeRange : null,
+  ].filter(Boolean).length;
 
   // Fetch teams for dropdown
   const { data: teams = [] } = useQuery<Team[]>({
@@ -50,63 +61,99 @@ export function GlobalFilterBar() {
   });
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2 bg-muted/50 border-b">
-      <Filter className="h-4 w-4 text-muted-foreground" />
+    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="border-b bg-muted/50">
+      {/* Collapsed header - always visible */}
+      <div className="flex items-center justify-between px-3 sm:px-4 py-2">
+        <CollapsibleTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 gap-2 text-muted-foreground hover:text-foreground"
+          >
+            <Filter className="h-4 w-4" />
+            <span className="font-medium">Filters</span>
+            {activeFilterCount > 0 && (
+              <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                {activeFilterCount}
+              </Badge>
+            )}
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+          </Button>
+        </CollapsibleTrigger>
 
-      {/* Presets dropdown */}
-      <FilterPresets />
+        {/* Quick actions visible when collapsed */}
+        {!isOpen && hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearFilters}
+            className="h-8 px-2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3 w-3 mr-1" />
+            Clear all
+          </Button>
+        )}
+      </div>
 
-      {/* Team filter */}
-      <Select
-        value={filters.team ?? 'all'}
-        onValueChange={(v) => setFilters({ team: v === 'all' ? null : v })}
-      >
-        <SelectTrigger className="w-[160px] h-8 text-sm">
-          <SelectValue placeholder="All Teams" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Teams</SelectItem>
-          {teams.map((team) => (
-            <SelectItem key={team.team} value={team.team}>
-              {team.team || 'Untagged'}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* Expandable filter content */}
+      <CollapsibleContent>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 px-3 sm:px-4 pb-3 pt-1">
+          {/* Presets dropdown */}
+          <FilterPresets />
 
-      {/* Job filter */}
-      <Select
-        value={filters.jobId ?? 'all'}
-        onValueChange={(v) => setFilters({ jobId: v === 'all' ? null : v })}
-      >
-        <SelectTrigger className="w-[180px] h-8 text-sm">
-          <SelectValue placeholder="All Jobs" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Jobs</SelectItem>
-          {jobs.map((job) => (
-            <SelectItem key={job.job_id} value={job.job_id}>
-              {job.job_name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+          {/* Team filter */}
+          <Select
+            value={filters.team ?? 'all'}
+            onValueChange={(v) => setFilters({ team: v === 'all' ? null : v })}
+          >
+            <SelectTrigger className="w-[130px] sm:w-[160px] h-8 text-sm">
+              <SelectValue placeholder="All Teams" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Teams</SelectItem>
+              {teams.map((team) => (
+                <SelectItem key={team.team} value={team.team}>
+                  {team.team || 'Untagged'}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-      {/* Time range picker */}
-      <TimeRangePicker />
+          {/* Job filter */}
+          <Select
+            value={filters.jobId ?? 'all'}
+            onValueChange={(v) => setFilters({ jobId: v === 'all' ? null : v })}
+          >
+            <SelectTrigger className="w-[130px] sm:w-[180px] h-8 text-sm">
+              <SelectValue placeholder="All Jobs" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Jobs</SelectItem>
+              {jobs.map((job) => (
+                <SelectItem key={job.job_id} value={job.job_id}>
+                  {job.job_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-      {/* Clear filters */}
-      {hasActiveFilters && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={clearFilters}
-          className="h-8 px-2 text-muted-foreground hover:text-foreground"
-        >
-          <X className="h-3 w-3 mr-1" />
-          Clear
-        </Button>
-      )}
-    </div>
+          {/* Time range picker */}
+          <TimeRangePicker />
+
+          {/* Clear filters */}
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="h-8 px-2 text-muted-foreground hover:text-foreground shrink-0"
+            >
+              <X className="h-3 w-3 mr-1" />
+              <span className="hidden sm:inline">Clear</span>
+            </Button>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

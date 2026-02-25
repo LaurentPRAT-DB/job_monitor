@@ -2,30 +2,26 @@ import { createRootRoute, createRoute, Outlet, redirect } from '@tanstack/react-
 import { AlertBadge } from './components/alert-badge'
 import { FilterProvider } from '@/lib/filter-context'
 import { GlobalFilterBar } from '@/components/global-filter-bar'
+import { Sidebar, MobileNav } from '@/components/sidebar'
 
 // Root layout
 const rootRoute = createRootRoute({
   component: () => (
     <FilterProvider>
-      <div className="flex min-h-screen">
-        <aside className="w-64 bg-gray-900 text-white p-4">
-          <h1 className="text-xl font-bold mb-6">Job Monitor</h1>
-          <nav className="space-y-2">
-            <a href="/dashboard" className="block px-3 py-2 rounded hover:bg-gray-700">Dashboard</a>
-            <a href="/job-health" className="block px-3 py-2 rounded hover:bg-gray-700">Job Health</a>
-            <a href="/alerts" className="block px-3 py-2 rounded hover:bg-gray-700">Alerts</a>
-            <a href="/historical" className="block px-3 py-2 rounded hover:bg-gray-700">Historical</a>
-          </nav>
-        </aside>
-        <main className="flex-1 flex flex-col">
-          {/* Header with alerts */}
-          <header className="flex justify-end items-center px-4 py-2 border-b bg-white">
+      <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+        <Sidebar />
+        <main className="flex-1 flex flex-col min-w-0">
+          {/* Header with mobile nav and alerts */}
+          <header className="flex justify-between items-center px-4 py-2 border-b bg-white dark:bg-gray-800 dark:border-gray-700">
+            <MobileNav />
+            {/* Spacer for desktop (when MobileNav is hidden) */}
+            <div className="hidden md:block" />
             <AlertBadge />
           </header>
           {/* Global filter bar */}
           <GlobalFilterBar />
           {/* Main content */}
-          <div className="flex-1">
+          <div className="flex-1 overflow-auto">
             <Outlet />
           </div>
         </main>

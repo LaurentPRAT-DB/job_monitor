@@ -40,12 +40,12 @@ export default function JobHealthPage() {
   });
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       {/* Page header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Job Health</h1>
-          <p className="text-gray-500 text-sm mt-1">
+          <h1 className="text-2xl font-bold dark:text-white">Job Health</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
             Monitor job success rates, failures, and duration trends
           </p>
         </div>
@@ -75,48 +75,48 @@ export default function JobHealthPage() {
         </TabsList>
       </Tabs>
 
-      {/* Summary stats - clickable to filter */}
+      {/* Summary stats - clickable to filter (responsive grid) */}
       {data && !isLoading && (
-        <div className="flex gap-6 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <button
             onClick={() => setPriorityFilter(priorityFilter === 'all' ? 'all' : 'all')}
-            className={`bg-white rounded-lg border px-4 py-3 text-left transition-all hover:shadow-md cursor-pointer ${
+            className={`bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 px-4 py-3 text-left transition-all hover:shadow-md cursor-pointer ${
               priorityFilter === 'all' ? 'ring-2 ring-blue-500 border-blue-500' : ''
             }`}
           >
-            <div className="text-sm text-gray-500">Total Jobs</div>
-            <div className="text-xl font-semibold">{data.total_count}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Total Jobs</div>
+            <div className="text-xl font-semibold dark:text-white">{data.total_count}</div>
           </button>
           <button
             onClick={() => setPriorityFilter(priorityFilter === 'P1' ? 'all' : 'P1')}
-            className={`bg-white rounded-lg border px-4 py-3 text-left transition-all hover:shadow-md cursor-pointer ${
+            className={`bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 px-4 py-3 text-left transition-all hover:shadow-md cursor-pointer ${
               priorityFilter === 'P1' ? 'ring-2 ring-red-500 border-red-500' : ''
             }`}
           >
-            <div className="text-sm text-gray-500">Critical (P1)</div>
-            <div className="text-xl font-semibold text-red-600">
+            <div className="text-sm text-gray-500 dark:text-gray-400">Critical (P1)</div>
+            <div className="text-xl font-semibold text-red-600 dark:text-red-400">
               {data.jobs.filter((j) => j.priority === 'P1').length}
             </div>
           </button>
           <button
             onClick={() => setPriorityFilter(priorityFilter === 'P2' ? 'all' : 'P2')}
-            className={`bg-white rounded-lg border px-4 py-3 text-left transition-all hover:shadow-md cursor-pointer ${
+            className={`bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 px-4 py-3 text-left transition-all hover:shadow-md cursor-pointer ${
               priorityFilter === 'P2' ? 'ring-2 ring-orange-500 border-orange-500' : ''
             }`}
           >
-            <div className="text-sm text-gray-500">Failing (P2)</div>
-            <div className="text-xl font-semibold text-orange-500">
+            <div className="text-sm text-gray-500 dark:text-gray-400">Failing (P2)</div>
+            <div className="text-xl font-semibold text-orange-500 dark:text-orange-400">
               {data.jobs.filter((j) => j.priority === 'P2').length}
             </div>
           </button>
           <button
             onClick={() => setPriorityFilter(priorityFilter === 'P3' ? 'all' : 'P3')}
-            className={`bg-white rounded-lg border px-4 py-3 text-left transition-all hover:shadow-md cursor-pointer ${
+            className={`bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 px-4 py-3 text-left transition-all hover:shadow-md cursor-pointer ${
               priorityFilter === 'P3' ? 'ring-2 ring-yellow-500 border-yellow-500' : ''
             }`}
           >
-            <div className="text-sm text-gray-500">Warning (P3)</div>
-            <div className="text-xl font-semibold text-yellow-600">
+            <div className="text-sm text-gray-500 dark:text-gray-400">Warning (P3)</div>
+            <div className="text-xl font-semibold text-yellow-600 dark:text-yellow-400">
               {data.jobs.filter((j) => j.priority === 'P3').length}
             </div>
           </button>
@@ -148,28 +148,30 @@ export default function JobHealthPage() {
         </div>
       )}
 
-      {/* Job health table */}
-      <div className="bg-white rounded-lg border shadow-sm">
-        <JobHealthTable
-          jobs={
-            priorityFilter === 'all'
-              ? (data?.jobs ?? [])
-              : (data?.jobs ?? []).filter((j) => j.priority === priorityFilter)
-          }
-          isLoading={isLoading}
-          onRefetch={() => refetch()}
-        />
+      {/* Job health table with horizontal scroll on mobile */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 shadow-sm overflow-x-auto">
+        <div className="min-w-[800px]">
+          <JobHealthTable
+            jobs={
+              priorityFilter === 'all'
+                ? (data?.jobs ?? [])
+                : (data?.jobs ?? []).filter((j) => j.priority === priorityFilter)
+            }
+            isLoading={isLoading}
+            onRefetch={() => refetch()}
+          />
+        </div>
       </div>
 
       {/* Active filter indicator */}
       {priorityFilter !== 'all' && data && (
         <div className="mt-2 flex items-center gap-2">
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-gray-500 dark:text-gray-400">
             Showing {data.jobs.filter((j) => j.priority === priorityFilter).length} {priorityFilter} jobs
           </span>
           <button
             onClick={() => setPriorityFilter('all')}
-            className="text-sm text-blue-600 hover:underline"
+            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
           >
             Clear filter
           </button>
@@ -177,7 +179,7 @@ export default function JobHealthPage() {
       )}
 
       {/* Footer note about data latency */}
-      <p className="text-xs text-gray-400 mt-4">
+      <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">
         Data refreshes every 5-15 minutes from Databricks system tables.
         {data && ` Showing ${days}-day window with ${data.total_count} jobs.`}
       </p>
