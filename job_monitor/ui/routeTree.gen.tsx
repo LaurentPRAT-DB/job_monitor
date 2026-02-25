@@ -1,4 +1,4 @@
-import { createRootRoute, createRoute, Outlet } from '@tanstack/react-router'
+import { createRootRoute, createRoute, Outlet, redirect } from '@tanstack/react-router'
 import { AlertBadge } from './components/alert-badge'
 import { FilterProvider } from '@/lib/filter-context'
 import { GlobalFilterBar } from '@/components/global-filter-bar'
@@ -41,6 +41,15 @@ const sidebarRoute = createRoute({
   component: () => <Outlet />,
 })
 
+// Index route - redirect to dashboard
+const indexRoute = createRoute({
+  getParentRoute: () => sidebarRoute,
+  path: '/',
+  beforeLoad: () => {
+    throw redirect({ to: '/dashboard' })
+  },
+})
+
 // Dashboard route
 import Dashboard from './routes/_sidebar/dashboard'
 const dashboardRoute = createRoute({
@@ -76,6 +85,7 @@ const historicalRoute = createRoute({
 // Export route tree
 export const routeTree = rootRoute.addChildren([
   sidebarRoute.addChildren([
+    indexRoute,
     dashboardRoute,
     jobHealthRoute,
     alertsRoute,
