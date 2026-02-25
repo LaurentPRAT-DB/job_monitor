@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from job_monitor.backend.config import settings
-from job_monitor.backend.routers import alerts, auth, billing, cluster_metrics, cost, filters, health, health_metrics, historical, job_tags, jobs, jobs_api, pipeline
+from job_monitor.backend.routers import alerts, auth, billing, cluster_metrics, cost, filters, health, health_metrics, historical, job_tags, jobs, jobs_api, pipeline, reports
 from job_monitor.backend.scheduler import scheduler, setup_scheduler
 
 logger = logging.getLogger(__name__)
@@ -73,3 +73,4 @@ app.include_router(pipeline.router)
 app.include_router(alerts.router)
 app.include_router(filters.router)
 app.include_router(historical.router)
+app.include_router(reports.router)
