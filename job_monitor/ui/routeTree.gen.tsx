@@ -14,6 +14,7 @@ const rootRoute = createRootRoute({
             <a href="/dashboard" className="block px-3 py-2 rounded hover:bg-gray-700">Dashboard</a>
             <a href="/job-health" className="block px-3 py-2 rounded hover:bg-gray-700">Job Health</a>
             <a href="/alerts" className="block px-3 py-2 rounded hover:bg-gray-700">Alerts</a>
+            <a href="/historical" className="block px-3 py-2 rounded hover:bg-gray-700">Historical</a>
           </nav>
         </aside>
         <main className="flex-1 flex flex-col">
@@ -64,11 +65,20 @@ const alertsRoute = createRoute({
   component: AlertsPage,
 })
 
+// Historical route
+import HistoricalDashboard from './routes/_sidebar/historical'
+const historicalRoute = createRoute({
+  getParentRoute: () => sidebarRoute,
+  path: '/historical',
+  component: HistoricalDashboard,
+})
+
 // Export route tree
 export const routeTree = rootRoute.addChildren([
   sidebarRoute.addChildren([
     dashboardRoute,
     jobHealthRoute,
     alertsRoute,
+    historicalRoute,
   ]),
 ])
