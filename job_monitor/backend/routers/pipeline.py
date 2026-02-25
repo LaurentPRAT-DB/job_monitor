@@ -94,8 +94,8 @@ async def _get_job_output_tables_from_lineage(ws, job_id: str, warehouse_id: str
         lineage_query = f"""
         SELECT DISTINCT target_table_full_name
         FROM system.access.table_lineage
-        WHERE source_type = 'JOB'
-          AND source_name LIKE '%{job_id}%'
+        WHERE entity_type = 'JOB'
+          AND entity_metadata.job_info.job_id = '{job_id}'
           AND target_table_full_name IS NOT NULL
           AND event_time >= current_date() - INTERVAL 30 DAYS
         ORDER BY target_table_full_name
