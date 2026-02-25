@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 6 of 6 (Dashboards & Reporting)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In Progress
-Last activity: 2026-02-25 -- Plan 06-01 complete (Global Filtering System)
+Last activity: 2026-02-25 -- Plan 06-02 complete (Historical Dashboard)
 
-Progress: [########..] 89%
+Progress: [#########.] 94%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16
+- Total plans completed: 17
 - Average duration: 4m
-- Total execution time: 0.95 hours
+- Total execution time: 1.0 hours
 
 **By Phase:**
 
@@ -32,10 +32,10 @@ Progress: [########..] 89%
 | 03 | 3 | 14m | 4m 40s |
 | 04 | 3 | 9m | 3m |
 | 05 | 3 | 12m | 4m |
-| 06 | 1 | 5m | 5m |
+| 06 | 2 | 9m | 4m 30s |
 
 **Recent Trend:**
-- Last 5 plans: 04-03 (3m), 05-01 (3m), 05-02 (4m), 05-03 (5m), 06-01 (5m)
+- Last 5 plans: 05-01 (3m), 05-02 (4m), 05-03 (5m), 06-01 (5m), 06-02 (4m)
 - Trend: Progressing
 
 *Updated after each plan completion*
@@ -100,6 +100,10 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-01: Browser History API used for URL state sync (simpler than TanStack Router's typed search params)
 - [Phase 06]: 06-01: In-memory storage for filter presets MVP (can migrate to Delta table later)
 - [Phase 06]: 06-01: Shared presets visible to all team members by default
+- [Phase 06]: 06-02: Auto-granularity: 7d=hourly, 30d=daily, 90d=weekly based on day range
+- [Phase 06]: 06-02: Previous period shown as dashed gray line overlay on all charts
+- [Phase 06]: 06-02: invertColors prop for cost/failure metrics where decrease is good
+- [Phase 06]: 06-02: Success rate shows absolute diff change, not percentage change
 
 ### Pending Todos
 
@@ -115,5 +119,5 @@ Research flags from .planning/research/SUMMARY.md:
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 06-01-PLAN.md (Global Filtering System)
-Resume file: .planning/phases/06-dashboards-reporting/06-01-SUMMARY.md
+Stopped at: Completed 06-02-PLAN.md (Historical Dashboard)
+Resume file: .planning/phases/06-dashboards-reporting/06-02-SUMMARY.md
