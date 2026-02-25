@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Platform team can proactively identify job failures, SLA breaches, and cost anomalies before business users report them
-**Current focus:** Phase 5 - Alerting & Remediation
+**Current focus:** Phase 6 - Dashboards & Reporting
 
 ## Current Position
 
-Phase: 5 of 6 (Alerting & Remediation)
-Plan: 3 of 3 in current phase
-Status: Phase Complete
-Last activity: 2026-02-25 -- Plan 05-03 complete (Alerts Page & Job Row Indicators)
+Phase: 6 of 6 (Dashboards & Reporting)
+Plan: 1 of 3 in current phase
+Status: In Progress
+Last activity: 2026-02-25 -- Plan 06-01 complete (Global Filtering System)
 
-Progress: [########..] 88%
+Progress: [########..] 89%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15
+- Total plans completed: 16
 - Average duration: 4m
-- Total execution time: 0.87 hours
+- Total execution time: 0.95 hours
 
 **By Phase:**
 
@@ -32,9 +32,10 @@ Progress: [########..] 88%
 | 03 | 3 | 14m | 4m 40s |
 | 04 | 3 | 9m | 3m |
 | 05 | 3 | 12m | 4m |
+| 06 | 1 | 5m | 5m |
 
 **Recent Trend:**
-- Last 5 plans: 04-02 (3m), 04-03 (3m), 05-01 (3m), 05-02 (4m), 05-03 (5m)
+- Last 5 plans: 04-03 (3m), 05-01 (3m), 05-02 (4m), 05-03 (5m), 06-01 (5m)
 - Trend: Progressing
 
 *Updated after each plan completion*
@@ -96,6 +97,9 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-03: Category filter tabs allow focused view by alert type
 - [Phase 05]: 05-03: AlertIndicator uses bell icon with count, colored by highest severity
 - [Phase 05]: 05-03: Alerts fetched at table level (not per-row) to avoid N+1 queries
+- [Phase 06]: 06-01: Browser History API used for URL state sync (simpler than TanStack Router's typed search params)
+- [Phase 06]: 06-01: In-memory storage for filter presets MVP (can migrate to Delta table later)
+- [Phase 06]: 06-01: Shared presets visible to all team members by default
 
 ### Pending Todos
 
@@ -111,5 +115,5 @@ Research flags from .planning/research/SUMMARY.md:
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 05-03-PLAN.md (Alerts Page & Job Row Indicators) - Phase 5 Complete
-Resume file: .planning/phases/05-alerting-remediation/05-03-SUMMARY.md
+Stopped at: Completed 06-01-PLAN.md (Global Filtering System)
+Resume file: .planning/phases/06-dashboards-reporting/06-01-SUMMARY.md
