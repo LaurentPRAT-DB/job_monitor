@@ -1,5 +1,4 @@
-import { createContext, useContext, ReactNode } from 'react';
-import { useSearch, useNavigate } from '@tanstack/react-router';
+import { createContext, useContext, ReactNode, useCallback, useMemo, useState, useEffect } from 'react';
 
 export interface FilterState {
   team: string | null;
@@ -18,47 +17,56 @@ export interface FilterContextType {
 
 const FilterContext = createContext<FilterContextType | null>(null);
 
+function parseSearchParams(): FilterState {
+  const searchParams = new URLSearchParams(window.location.search);
+  return {
+    team: searchParams.get('team'),
+    jobId: searchParams.get('jobId'),
+    timeRange: (searchParams.get('timeRange') as FilterState['timeRange']) ?? '7d',
+    startDate: searchParams.get('startDate'),
+    endDate: searchParams.get('endDate'),
+  };
+}
+
 export function FilterProvider({ children }: { children: ReactNode }) {
-  // Read from URL search params using strict: false to work at any route
-  const search = useSearch({ strict: false }) as Record<string, string | undefined>;
-  const navigate = useNavigate();
+  const [filters, setFiltersState] = useState<FilterState>(parseSearchParams);
 
-  const filters: FilterState = {
-    team: search.team ?? null,
-    jobId: search.jobId ?? null,
-    timeRange: (search.timeRange as FilterState['timeRange']) ?? '7d',
-    startDate: search.startDate ?? null,
-    endDate: search.endDate ?? null,
-  };
+  // Update filters when URL changes (browser back/forward)
+  useEffect(() => {
+    const handlePopState = () => {
+      setFiltersState(parseSearchParams());
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
-  const setFilters = (updates: Partial<FilterState>) => {
-    navigate({
-      search: (prev: Record<string, unknown>) => {
-        const next = { ...prev };
-        Object.entries(updates).forEach(([key, value]) => {
-          if (value === null) {
-            delete next[key];
-          } else {
-            next[key] = value;
-          }
-        });
-        return next;
-      },
-      replace: true,
+  const setFilters = useCallback((updates: Partial<FilterState>) => {
+    const newParams = new URLSearchParams(window.location.search);
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === null || value === undefined) {
+        newParams.delete(key);
+      } else {
+        newParams.set(key, value);
+      }
     });
-  };
+    const search = newParams.toString();
+    const newUrl = search ? `${window.location.pathname}?${search}` : window.location.pathname;
+    window.history.replaceState(null, '', newUrl);
+    setFiltersState(parseSearchParams());
+  }, []);
 
-  const clearFilters = () => {
-    navigate({ search: {}, replace: true });
-  };
+  const clearFilters = useCallback(() => {
+    window.history.replaceState(null, '', window.location.pathname);
+    setFiltersState(parseSearchParams());
+  }, []);
 
-  const hasActiveFilters = !!(
+  const hasActiveFilters = useMemo(() => !!(
     filters.team ||
     filters.jobId ||
     filters.timeRange !== '7d' ||
     filters.startDate ||
     filters.endDate
-  );
+  ), [filters]);
 
   return (
     <FilterContext.Provider value={{ filters, setFilters, clearFilters, hasActiveFilters }}>
