@@ -14,23 +14,34 @@ import { OverProvisionedBadge } from '@/components/over-provisioned-badge';
 import { JobExpandedDetails } from '@/components/job-expanded-details';
 import { InlineSlaEdit } from '@/components/inline-sla-edit';
 import { SlaSparkline } from '@/components/sla-sparkline';
+import { AlertIndicator } from '@/components/alert-indicator';
+import { AlertDrawer } from '@/components/alert-drawer';
 import { cn } from '@/lib/utils';
 import { formatTimeAgo } from '@/lib/health-utils';
 import type { JobWithSla } from '@/lib/health-utils';
+import { type Alert, getAlertsForJob, getHighestSeverity } from '@/lib/alert-utils';
 
 interface JobHealthRowProps {
   job: JobWithSla;
   onRefetch?: () => void;
+  /** All alerts from parent table (to avoid N+1 queries) */
+  allAlerts?: Alert[];
 }
 
-export function JobHealthRow({ job, onRefetch }: JobHealthRowProps) {
+export function JobHealthRow({ job, onRefetch, allAlerts = [] }: JobHealthRowProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [alertDrawerOpen, setAlertDrawerOpen] = useState(false);
 
   // Check if last run breached SLA
   const lastRunBreachedSla =
     job.sla_minutes != null &&
     job.last_duration_seconds != null &&
     job.last_duration_seconds > job.sla_minutes * 60;
+
+  // Get alerts for this job
+  const jobAlerts = getAlertsForJob(allAlerts, job.job_id);
+  const highestSeverity = getHighestSeverity(jobAlerts);
+  const jobFilter = { jobId: job.job_id, jobName: job.job_name };
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen} asChild>
@@ -54,9 +65,16 @@ export function JobHealthRow({ job, onRefetch }: JobHealthRowProps) {
             </CollapsibleTrigger>
           </TableCell>
 
-          {/* Job name */}
+          {/* Job name with alert indicator */}
           <TableCell className="font-medium" onClick={() => setIsOpen(!isOpen)}>
-            {job.job_name}
+            <div className="flex items-center gap-2">
+              {job.job_name}
+              <AlertIndicator
+                alertCount={jobAlerts.length}
+                highestSeverity={highestSeverity}
+                onClick={() => setAlertDrawerOpen(true)}
+              />
+            </div>
           </TableCell>
 
           {/* Status (traffic light + percentage) */}
@@ -127,6 +145,14 @@ export function JobHealthRow({ job, onRefetch }: JobHealthRowProps) {
             </TableCell>
           </TableRow>
         </CollapsibleContent>
+
+        {/* Alert drawer for this job */}
+        <AlertDrawer
+          open={alertDrawerOpen}
+          onOpenChange={setAlertDrawerOpen}
+          jobFilter={jobFilter}
+          onClearFilter={() => {}}
+        />
       </>
     </Collapsible>
   );

@@ -11,6 +11,7 @@ import { AlertDrawer } from "./alert-drawer";
 
 export function AlertBadge() {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [jobFilter, setJobFilter] = useState<{ jobId: string; jobName: string } | null>(null);
 
   // Fetch alerts for badge count
   const { data } = useQuery({
@@ -22,13 +23,20 @@ export function AlertBadge() {
   const unacknowledgedCount = data ? getUnacknowledgedCount(data.alerts) : 0;
   const displayCount = unacknowledgedCount > 9 ? "9+" : unacknowledgedCount;
 
+  const handleClearFilter = () => {
+    setJobFilter(null);
+  };
+
   return (
     <>
       <Button
         variant="ghost"
         size="sm"
         className="relative"
-        onClick={() => setDrawerOpen(true)}
+        onClick={() => {
+          setJobFilter(null); // Clear any filter when opening from header
+          setDrawerOpen(true);
+        }}
         aria-label={`Alerts (${unacknowledgedCount} unacknowledged)`}
       >
         <Bell className="h-5 w-5" />
@@ -38,7 +46,12 @@ export function AlertBadge() {
           </span>
         )}
       </Button>
-      <AlertDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
+      <AlertDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        jobFilter={jobFilter}
+        onClearFilter={handleClearFilter}
+      />
     </>
   );
 }

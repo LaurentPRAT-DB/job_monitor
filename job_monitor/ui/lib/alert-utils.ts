@@ -146,3 +146,21 @@ export function groupAlertsBySeverity(
 
   return grouped;
 }
+
+/**
+ * Get alerts for a specific job.
+ */
+export function getAlertsForJob(alerts: Alert[], jobId: string): Alert[] {
+  return alerts.filter((a) => a.job_id === jobId);
+}
+
+/**
+ * Get the highest severity level from a list of alerts.
+ * Returns null if no alerts.
+ */
+export function getHighestSeverity(alerts: Alert[]): AlertSeverity | null {
+  if (alerts.length === 0) return null;
+  if (alerts.some((a) => a.severity === "P1")) return "P1";
+  if (alerts.some((a) => a.severity === "P2")) return "P2";
+  return "P3";
+}

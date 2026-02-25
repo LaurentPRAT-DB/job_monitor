@@ -21,15 +21,21 @@ import {
   SEVERITY_CONFIG,
 } from "@/lib/alert-utils";
 import { AlertCard } from "./alert-card";
+import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
 
 interface AlertDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Optional job filter - when set, only shows alerts for this job */
+  jobFilter?: { jobId: string; jobName: string } | null;
+  /** Callback to clear the job filter */
+  onClearFilter?: () => void;
 }
 
 const SEVERITY_ORDER: AlertSeverity[] = ["P1", "P2", "P3"];
 
-export function AlertDrawer({ open, onOpenChange }: AlertDrawerProps) {
+export function AlertDrawer({ open, onOpenChange, jobFilter, onClearFilter }: AlertDrawerProps) {
   const queryClient = useQueryClient();
   const previousAlertsRef = useRef<Set<string>>(new Set());
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -117,16 +123,41 @@ export function AlertDrawer({ open, onOpenChange }: AlertDrawerProps) {
     previousAlertsRef.current = currentIds;
   }, [data?.alerts, isInitialLoad]);
 
-  const alerts = data?.alerts ?? [];
+  // Filter alerts by job if jobFilter is set
+  const allAlerts = data?.alerts ?? [];
+  const alerts = jobFilter
+    ? allAlerts.filter((a) => a.job_id === jobFilter.jobId)
+    : allAlerts;
   const groupedAlerts = groupAlertsBySeverity(alerts);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-[440px] sm:max-w-[540px] overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Alerts</SheetTitle>
+          <SheetTitle>
+            {jobFilter ? `Alerts for ${jobFilter.jobName}` : "Alerts"}
+          </SheetTitle>
           <SheetDescription>
-            {data ? `${data.total} total alerts` : "Loading..."}
+            {jobFilter ? (
+              <span className="flex items-center gap-2">
+                {alerts.length} alert{alerts.length !== 1 ? "s" : ""} for this job
+                {onClearFilter && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onClearFilter}
+                    className="h-5 px-2 text-xs"
+                  >
+                    <X className="h-3 w-3 mr-1" />
+                    Clear filter
+                  </Button>
+                )}
+              </span>
+            ) : data ? (
+              `${data.total} total alerts`
+            ) : (
+              "Loading..."
+            )}
           </SheetDescription>
         </SheetHeader>
 

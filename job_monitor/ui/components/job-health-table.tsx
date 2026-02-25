@@ -2,6 +2,7 @@
  * Job health table with expandable rows.
  * Displays all jobs with their health status, supporting expand/collapse for details.
  */
+import { useQuery } from '@tanstack/react-query';
 import {
   Table,
   TableBody,
@@ -11,6 +12,7 @@ import {
 } from '@/components/ui/table';
 import { JobHealthRow } from '@/components/job-health-row';
 import type { JobWithSla } from '@/lib/health-utils';
+import { fetchAlerts, type Alert } from '@/lib/alert-utils';
 
 interface JobHealthTableProps {
   jobs: JobWithSla[];
@@ -19,6 +21,15 @@ interface JobHealthTableProps {
 }
 
 export function JobHealthTable({ jobs, isLoading, onRefetch }: JobHealthTableProps) {
+  // Fetch all alerts once at table level to avoid N+1 queries
+  const { data: alertsData } = useQuery({
+    queryKey: ['alerts'],
+    queryFn: () => fetchAlerts(),
+    refetchInterval: 60000, // 60 seconds
+  });
+
+  const allAlerts: Alert[] = alertsData?.alerts ?? [];
+
   if (isLoading) {
     return (
       <Table>
@@ -96,7 +107,7 @@ export function JobHealthTable({ jobs, isLoading, onRefetch }: JobHealthTablePro
       </TableHeader>
       <TableBody>
         {jobs.map((job) => (
-          <JobHealthRow key={job.job_id} job={job} onRefetch={onRefetch} />
+          <JobHealthRow key={job.job_id} job={job} onRefetch={onRefetch} allAlerts={allAlerts} />
         ))}
       </TableBody>
     </Table>
