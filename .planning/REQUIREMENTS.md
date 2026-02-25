@@ -42,9 +42,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **ALERT-01**: Display alerts in-app with severity levels (P1/P2/P3)
 - [x] **ALERT-02**: Include actionable remediation suggestions with each alert
-- [ ] **ALERT-03**: Generate daily health summary (overnight failures, SLA breaches, action items)
-- [ ] **ALERT-04**: Generate weekly cost report (per-team spend, trends, anomalies)
-- [ ] **ALERT-05**: Generate monthly executive report (TCO, reliability metrics, optimization ROI)
+- [x] **ALERT-03**: Generate daily health summary (overnight failures, SLA breaches, action items)
+- [x] **ALERT-04**: Generate weekly cost report (per-team spend, trends, anomalies)
+- [x] **ALERT-05**: Generate monthly executive report (TCO, reliability metrics, optimization ROI)
 
 ### Application Infrastructure
 
@@ -120,9 +120,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PIPE-02 | Phase 4 | Complete |
 | ALERT-01 | Phase 5 | Complete |
 | ALERT-02 | Phase 5 | Complete |
-| ALERT-03 | Phase 6 | Pending |
-| ALERT-04 | Phase 6 | Pending |
-| ALERT-05 | Phase 6 | Pending |
+| ALERT-03 | Phase 6 | Complete |
+| ALERT-04 | Phase 6 | Complete |
+| ALERT-05 | Phase 6 | Complete |
 | APP-01 | Phase 1 | Complete |
 | APP-02 | Phase 1 | Complete |
 | APP-03 | Phase 6 | Complete |
