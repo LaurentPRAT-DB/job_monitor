@@ -5,6 +5,8 @@ Provides:
 - Team cost rollups
 - Cost anomalies (spikes and zombie jobs)
 
+Supports cache-first loading for fast response times.
+
 IMPORTANT: Uses HAVING SUM(usage_quantity) != 0 to handle RETRACTION records.
 Databricks billing system uses negative quantities for corrections.
 """
@@ -18,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 logger = logging.getLogger(__name__)
 
+from job_monitor.backend.cache import query_cost_cache
 from job_monitor.backend.config import settings
 from job_monitor.backend.core import get_ws_prefer_user
 from job_monitor.backend.mock_data import get_mock_cost_summary, is_mock_mode
@@ -178,7 +181,7 @@ async def get_cost_summary(
     Queries system.billing.usage with SKU categorization and RETRACTION handling.
     Calculates 7-day trends and identifies cost anomalies.
 
-    Supports mock data fallback when system tables aren't accessible.
+    Supports cache-first loading and mock data fallback.
 
     Args:
         days: Time window for cost aggregation (7-90 days, default 30)
@@ -202,6 +205,101 @@ async def get_cost_summary(
         return get_mock_cost_summary()
 
     dbu_rate = settings.dbu_rate
+
+    # Try cache first for fast response
+    if settings.use_cache:
+        logger.info("Attempting to load cost data from cache...")
+        cached_data = await query_cost_cache(ws)
+        if cached_data:
+            logger.info(f"Cost cache hit! {len(cached_data)} jobs from cache")
+
+            # Parse cached data into JobCostOut models
+            jobs = []
+            for row in cached_data:
+                # Parse SKU breakdown
+                cost_by_sku = []
+                if row["sku_breakdown"] and row["total_dbus_30d"] > 0:
+                    sku_parts = row["sku_breakdown"].split(",")
+                    for part in sku_parts:
+                        if ":" in part:
+                            sku_name, dbus_str = part.split(":", 1)
+                            try:
+                                sku_dbus = float(dbus_str)
+                                category = _categorize_sku(sku_name)
+                                pct = (sku_dbus / row["total_dbus_30d"]) * 100
+                                cost_by_sku.append(CostBySkuOut(
+                                    sku_category=category,
+                                    total_dbus=sku_dbus,
+                                    percentage=round(pct, 1),
+                                ))
+                            except ValueError:
+                                pass
+
+                jobs.append(JobCostOut(
+                    job_id=row["job_id"],
+                    job_name=row["job_name"],
+                    team=None,  # Will be populated via Jobs API
+                    total_dbus_30d=row["total_dbus_30d"],
+                    total_cost_dollars=row["total_dbus_30d"] * dbu_rate if dbu_rate > 0 else None,
+                    cost_by_sku=cost_by_sku,
+                    trend_7d_percent=row["trend_7d_percent"],
+                    is_anomaly=row["is_anomaly"],
+                    baseline_p90_dbus=row["baseline_p90_dbus"],
+                ))
+
+            # Lookup team tags
+            job_ids = [j.job_id for j in jobs]
+            team_map = await _get_job_teams(ws, job_ids)
+            for job in jobs:
+                job.team = team_map.get(job.job_id)
+
+            # Calculate team rollups
+            team_costs: dict[str, dict] = {}
+            for job in jobs:
+                team = job.team or "Untagged"
+                if team not in team_costs:
+                    team_costs[team] = {"total_dbus": 0.0, "job_count": 0, "current_7d": 0.0, "prev_7d": 0.0}
+                team_costs[team]["total_dbus"] += job.total_dbus_30d
+                team_costs[team]["job_count"] += 1
+
+            teams = [
+                TeamCostOut(
+                    team=team_name,
+                    total_dbus_30d=data["total_dbus"],
+                    total_cost_dollars=data["total_dbus"] * dbu_rate if dbu_rate > 0 else None,
+                    job_count=data["job_count"],
+                    trend_7d_percent=0.0,
+                )
+                for team_name, data in sorted(team_costs.items(), key=lambda x: x[1]["total_dbus"], reverse=True)
+            ]
+
+            # Identify anomalies from cached data
+            anomalies = [
+                CostAnomalyOut(
+                    job_id=job.job_id,
+                    job_name=job.job_name,
+                    team=job.team,
+                    anomaly_type="cost_spike",
+                    reason=f"Cost {job.total_dbus_30d / job.baseline_p90_dbus:.1f}x higher than p90 baseline" if job.baseline_p90_dbus else "Cost spike",
+                    current_dbus=job.total_dbus_30d,
+                    baseline_p90_dbus=job.baseline_p90_dbus,
+                    multiplier=job.total_dbus_30d / job.baseline_p90_dbus if job.baseline_p90_dbus else None,
+                    job_settings_url=f"{settings.databricks_host}/jobs/{job.job_id}",
+                )
+                for job in jobs if job.is_anomaly and job.baseline_p90_dbus
+            ]
+
+            total_dbus = sum(j.total_dbus_30d for j in jobs)
+            return CostSummaryOut(
+                jobs=jobs,
+                teams=teams,
+                anomalies=anomalies,
+                total_dbus=total_dbus,
+                total_cost_dollars=total_dbus * dbu_rate if dbu_rate > 0 else None,
+                dbu_rate=dbu_rate,
+            )
+
+        logger.info("Cost cache miss, falling back to live query")
 
     # Main query: Job costs with SKU breakdown and trend calculation
     query = f"""

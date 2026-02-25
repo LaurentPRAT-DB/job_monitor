@@ -5,8 +5,12 @@ Provides:
 - Duration statistics (median, p90, avg, max) for specific jobs
 - Expanded job details for dashboard row expansion
 
-Supports mock data fallback when system tables aren't accessible.
-Enable with USE_MOCK_DATA=true or automatically on permission errors.
+Supports:
+- Cache-first queries for fast loading (from pre-aggregated Delta tables)
+- Mock data fallback when system tables aren't accessible
+- Live queries as fallback when cache unavailable
+
+Enable mock mode with USE_MOCK_DATA=true or automatically on permission errors.
 """
 
 import asyncio
@@ -15,6 +19,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from job_monitor.backend.cache import query_job_duration_cache, query_job_health_cache
 from job_monitor.backend.config import settings
 from job_monitor.backend.core import get_ws_prefer_user
 from job_monitor.backend.mock_data import (
@@ -116,7 +121,10 @@ async def get_health_metrics(
     - yellow: 70-89%
     - red: < 70%
 
-    Supports mock data fallback when system tables aren't accessible.
+    Data source priority:
+    1. Cache tables (fast, pre-aggregated)
+    2. Live system table queries (slow, real-time)
+    3. Mock data (when permissions unavailable)
 
     Args:
         days: Time window for metrics (7 or 30 days)
@@ -148,6 +156,33 @@ async def get_health_metrics(
     if not warehouse_id:
         logger.error("WAREHOUSE_ID not configured - returning 503")
         raise HTTPException(status_code=503, detail="Warehouse ID not configured")
+
+    # Try cache first for fast response
+    if settings.use_cache:
+        logger.info("Attempting to load from cache...")
+        cached_data = await query_job_health_cache(ws, days)
+        if cached_data:
+            logger.info(f"Cache hit! Returning {len(cached_data)} jobs from cache")
+            jobs = [
+                JobHealthOut(
+                    job_id=row["job_id"],
+                    job_name=row["job_name"],
+                    total_runs=row["total_runs"],
+                    success_count=row["success_count"],
+                    success_rate=row["success_rate"],
+                    last_run_time=row["last_run_time"],
+                    last_duration_seconds=row["last_duration_seconds"],
+                    priority=row["priority"],
+                    retry_count=row["retry_count"],
+                )
+                for row in cached_data
+            ]
+            return JobHealthListOut(
+                jobs=jobs,
+                window_days=days,
+                total_count=len(jobs),
+            )
+        logger.info("Cache miss or unavailable, falling back to live query")
 
     # SQL query using CTEs for consecutive failure detection
     # Pattern from 02-RESEARCH.md with LAG window function
@@ -376,6 +411,23 @@ async def get_duration_stats(
     warehouse_id = settings.warehouse_id
     if not warehouse_id:
         return get_mock_duration_stats(job_id)
+
+    # Try cache first
+    if settings.use_cache:
+        cached = await query_job_duration_cache(ws, job_id)
+        if cached:
+            logger.info(f"Duration stats cache hit for {job_id}")
+            run_count = cached["run_count"] or 0
+            return DurationStatsOut(
+                job_id=job_id,
+                median_duration_seconds=cached["median_duration_seconds"],
+                p90_duration_seconds=cached["p90_duration_seconds"],
+                avg_duration_seconds=cached["avg_duration_seconds"],
+                max_duration_seconds=cached["max_duration_seconds"],
+                run_count=run_count,
+                baseline_30d_median=cached["median_duration_seconds"],
+                has_sufficient_data=run_count >= 5,
+            )
 
     # Use PERCENTILE_CONT for accurate percentile calculations
     query = f"""

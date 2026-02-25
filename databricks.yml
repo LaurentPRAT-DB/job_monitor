@@ -4,11 +4,21 @@ bundle:
 sync:
   include:
     - job_monitor/ui/dist/**
+    - job_monitor/jobs/**
 
 variables:
   warehouse_id:
     description: "SQL warehouse ID for system table queries"
     default: "06c1adfd3dbdacde"
+  cache_catalog:
+    description: "Catalog for metrics cache tables"
+    default: "job_monitor"
+  cache_schema:
+    description: "Schema for metrics cache tables"
+    default: "cache"
+  cache_refresh_cron:
+    description: "Cron schedule for cache refresh (default: every 15 min)"
+    default: "0 */15 * * * ?"
 
 targets:
   # E2 is the main deployment (OBO works here)
@@ -20,6 +30,8 @@ targets:
       host: https://e2-demo-field-eng.cloud.databricks.com
     variables:
       warehouse_id: "06c1adfd3dbdacde"
+      cache_catalog: "job_monitor"
+      cache_schema: "cache"
 
   # Dev workspace (Free Edition - OBO not supported, uses mock data)
   dev:
@@ -28,6 +40,8 @@ targets:
       profile: LPT_FREE_EDITION
     variables:
       warehouse_id: "58d41113cb262dce"
+      cache_catalog: "job_monitor"
+      cache_schema: "cache"
 
 resources:
   apps:
@@ -35,3 +49,28 @@ resources:
       name: job-monitor
       description: "Databricks Job Monitoring Framework"
       source_code_path: .
+
+  jobs:
+    refresh-metrics-cache:
+      name: "job-monitor-refresh-cache"
+      description: "Refresh metrics cache tables for fast dashboard loading"
+      tasks:
+        - task_key: refresh_cache
+          spark_python_task:
+            python_file: job_monitor/jobs/refresh_metrics_cache.py
+            parameters:
+              - "--catalog"
+              - "${var.cache_catalog}"
+              - "--schema"
+              - "${var.cache_schema}"
+          new_cluster:
+            spark_version: "14.3.x-scala2.12"
+            node_type_id: "i3.xlarge"
+            num_workers: 1
+            data_security_mode: "SINGLE_USER"
+      schedule:
+        quartz_cron_expression: "${var.cache_refresh_cron}"
+        timezone_id: "UTC"
+      tags:
+        project: "job-monitor"
+        purpose: "cache-refresh"

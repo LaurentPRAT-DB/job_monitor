@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # Budget tag key for monthly DBU budget per job
     budget_tag_key: str = "budget_monthly_dbus"
 
+    # Cache settings for pre-aggregated metrics
+    cache_catalog: str = "job_monitor"
+    cache_schema: str = "cache"
+    use_cache: bool = True  # Set to False to bypass cache and query system tables directly
+
     # SMTP email configuration
     smtp_host: str = ""
     smtp_port: int = 587
@@ -35,6 +40,11 @@ class Settings(BaseSettings):
 
     # App URL for report links
     app_url: str = "http://localhost:3000"
+
+    @property
+    def cache_table_prefix(self) -> str:
+        """Get the fully qualified prefix for cache tables."""
+        return f"{self.cache_catalog}.{self.cache_schema}"
 
     class Config:
         env_file = ".env"

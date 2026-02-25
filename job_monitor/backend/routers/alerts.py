@@ -9,6 +9,8 @@ Alerts are generated dynamically by combining data from:
 - Jobs API (SLA breach risk for running jobs)
 - Cost data (cost spikes, budget threshold alerts)
 - Cluster metrics (over-provisioning alerts)
+
+Supports cache-first loading for fast response times.
 """
 
 import asyncio
@@ -21,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 logger = logging.getLogger(__name__)
 
+from job_monitor.backend.cache import query_alerts_cache
 from job_monitor.backend.config import settings
 from job_monitor.backend.core import get_ws_prefer_user
 from job_monitor.backend.mock_data import get_mock_alerts, is_mock_mode
@@ -668,7 +671,7 @@ async def get_alerts(
     - Cost data (anomalies, budget thresholds)
     - Cluster metrics (over-provisioning)
 
-    Supports mock data fallback when system tables aren't accessible.
+    Supports cache-first loading and mock data fallback.
 
     Args:
         severity: Filter by P1, P2, P3 (optional)
@@ -693,7 +696,70 @@ async def get_alerts(
         logger.warning("Warehouse ID not configured - falling back to mock alerts")
         return get_mock_alerts()
 
-    # Generate alerts from all sources in parallel
+    # Try cache first for fast response
+    if settings.use_cache:
+        logger.info("Attempting to load alerts from cache...")
+        cached_alerts = await query_alerts_cache(ws)
+        if cached_alerts:
+            logger.info(f"Alerts cache hit! {len(cached_alerts)} alerts from cache")
+            all_alerts = []
+            for row in cached_alerts:
+                # Check acknowledgment status
+                condition_key = row["alert_id"]
+                is_ack, ack_time = _is_acknowledged(condition_key)
+
+                # Map category string to enum
+                cat_map = {
+                    "failure": AlertCategory.FAILURE,
+                    "sla": AlertCategory.SLA,
+                    "cost": AlertCategory.COST,
+                    "cluster": AlertCategory.CLUSTER,
+                }
+                sev_map = {
+                    "P1": AlertSeverity.P1,
+                    "P2": AlertSeverity.P2,
+                    "P3": AlertSeverity.P3,
+                }
+
+                all_alerts.append(Alert(
+                    id=row["alert_id"],
+                    job_id=row["job_id"],
+                    job_name=row["job_name"],
+                    category=cat_map.get(row["category"], AlertCategory.FAILURE),
+                    severity=sev_map.get(row["severity"], AlertSeverity.P3),
+                    title=row["title"],
+                    description=row["description"],
+                    remediation=_generate_failure_remediation(
+                        row["failure_reasons"].split(",") if row["failure_reasons"] else []
+                    ) if row["category"] == "failure" else _generate_cost_remediation(
+                        "spike", row["cost_multiplier"], row["baseline_p90_dbus"]
+                    ) if row["category"] == "cost" else "Review job configuration.",
+                    created_at=datetime.now(),
+                    acknowledged=is_ack,
+                    acknowledged_at=ack_time,
+                    condition_key=condition_key,
+                ))
+
+            # Apply filters and return
+            if severity:
+                severity_set = {s.upper() for s in severity}
+                all_alerts = [a for a in all_alerts if a.severity.value in severity_set]
+            if category:
+                category_set = {c.lower() for c in category}
+                all_alerts = [a for a in all_alerts if a.category.value in category_set]
+            if acknowledged is not None:
+                all_alerts = [a for a in all_alerts if a.acknowledged == acknowledged]
+
+            all_alerts = _sort_alerts(all_alerts)
+            by_severity = {"P1": 0, "P2": 0, "P3": 0}
+            for alert in all_alerts:
+                by_severity[alert.severity.value] = by_severity.get(alert.severity.value, 0) + 1
+
+            return AlertListOut(alerts=all_alerts, total=len(all_alerts), by_severity=by_severity)
+
+        logger.info("Alerts cache miss, falling back to live query")
+
+    # Generate alerts from all sources in parallel (live query fallback)
     failure_alerts, sla_alerts, cost_alerts, cluster_alerts = await asyncio.gather(
         _generate_failure_alerts(ws, warehouse_id),
         _generate_sla_alerts(ws),
