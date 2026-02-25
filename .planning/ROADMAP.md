@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation & Data Ingestion** - Databricks App scaffold with APX, OAuth auth, system table access
 - [x] **Phase 2: Job Health Monitoring** - Success/failure tracking, duration analysis, retry detection
 - [x] **Phase 3: SLA & Cost Visibility** - SLA target definition, breach history, cost per job, team attribution
-- [ ] **Phase 4: Cluster & Pipeline Integrity** - Resource utilization monitoring, row count validation, schema drift detection
+- [x] **Phase 4: Cluster & Pipeline Integrity** - Resource utilization monitoring, row count validation, schema drift detection
 - [ ] **Phase 5: Alerting & Remediation** - In-app alerts with severity levels, actionable suggestions, proactive warnings
 - [ ] **Phase 6: Dashboards & Reporting** - Filtering/drill-down, historical views, daily/weekly/monthly reports
 
@@ -84,9 +84,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Backend APIs for cluster utilization (proxy metrics) and pipeline integrity (row counts, schema drift)
-- [ ] 04-02-PLAN.md — Cluster utilization UI with circular gauges and over-provisioned badge
-- [ ] 04-03-PLAN.md — Pipeline integrity UI with row count tracking and schema drift alerts
+- [x] 04-01-PLAN.md — Backend APIs for cluster utilization (proxy metrics) and pipeline integrity (row counts, schema drift)
+- [x] 04-02-PLAN.md — Cluster utilization UI with circular gauges and over-provisioned badge
+- [x] 04-03-PLAN.md — Pipeline integrity UI with row count tracking and schema drift alerts
 
 ### Phase 5: Alerting & Remediation
 **Goal**: Platform team receives proactive alerts with actionable recommendations before issues impact business users
@@ -97,12 +97,12 @@ Plans:
   2. Each alert includes actionable remediation suggestions (not just problem statement)
   3. SLA breach risk alert fires when job exceeds 80% of allowed window (proactive)
   4. Budget threshold alerts fire when job cost approaches or exceeds defined limit
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 05-01: TBD
-- [ ] 05-02: TBD
-- [ ] 05-03: TBD
+- [ ] 05-01-PLAN.md — Alert backend API with dynamic generation from health, cost, SLA, cluster data
+- [ ] 05-02-PLAN.md — Alert UI components (drawer, cards, badges, toasts) with header integration
+- [ ] 05-03-PLAN.md — Alerts page with severity sections and job row alert indicators
 
 ### Phase 6: Dashboards & Reporting
 **Goal**: All user personas (platform ops, business teams, leadership) can access tailored views with appropriate filtering and scheduled reports
@@ -131,10 +131,10 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Foundation & Data Ingestion | 3/3 | Complete    | 2026-02-24 |
 | 2. Job Health Monitoring | 3/3 | Complete    | 2026-02-24 |
 | 3. SLA & Cost Visibility | 3/3 | Complete    | 2026-02-24 |
-| 4. Cluster & Pipeline Integrity | 0/3 | Planned | - |
-| 5. Alerting & Remediation | 0/3 | Not started | - |
+| 4. Cluster & Pipeline Integrity | 3/3 | Complete | 2026-02-24 |
+| 5. Alerting & Remediation | 0/3 | Planned | - |
 | 6. Dashboards & Reporting | 0/3 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-18*
-*Last updated: 2026-02-24 (Phase 4 planned - 3 plans)*
+*Last updated: 2026-02-25 (Phase 5 planned - 3 plans)*
