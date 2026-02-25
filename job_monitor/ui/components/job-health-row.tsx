@@ -48,8 +48,8 @@ export function JobHealthRow({ job, onRefetch, allAlerts = [] }: JobHealthRowPro
       <>
         {/* Collapsed row - summary view */}
         <TableRow className={cn(
-          'cursor-pointer hover:bg-gray-50',
-          isOpen && 'bg-gray-50'
+          'cursor-pointer hover:bg-muted/50',
+          isOpen && 'bg-muted/50'
         )}>
           {/* Expand button */}
           <TableCell className="w-12">
@@ -107,13 +107,13 @@ export function JobHealthRow({ job, onRefetch, allAlerts = [] }: JobHealthRowPro
             {job.breach_history && job.breach_history.length > 0 ? (
               <SlaSparkline data={job.breach_history} />
             ) : (
-              <span className="text-gray-400">--</span>
+              <span className="text-muted-foreground">--</span>
             )}
           </TableCell>
 
           {/* Last run time */}
           <TableCell
-            className="text-gray-500 text-sm"
+            className="text-muted-foreground text-sm"
             onClick={() => setIsOpen(!isOpen)}
           >
             Last run: {formatTimeAgo(job.last_run_time)}
