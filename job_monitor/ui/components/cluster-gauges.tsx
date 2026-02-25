@@ -34,12 +34,12 @@ function UtilizationGauge({ label, percentage, size = 60 }: UtilizationGaugeProp
             textSize: '22px',
             pathColor: color,
             textColor: color,
-            trailColor: '#e5e7eb',
+            trailColor: 'rgb(var(--muted))',
             pathTransitionDuration: 0.5,
           })}
         />
       </div>
-      <span className="text-xs text-gray-500">{label}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
     </div>
   );
 }
@@ -65,11 +65,11 @@ export function ClusterUtilizationSection({ jobId }: ClusterUtilizationSectionPr
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded border p-3 mt-3 animate-pulse">
-        <div className="h-4 bg-gray-200 rounded w-1/3 mb-3"></div>
+      <div className="bg-card rounded border p-3 mt-3 animate-pulse">
+        <div className="h-4 bg-muted rounded w-1/3 mb-3"></div>
         <div className="flex justify-around">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="w-[60px] h-[60px] bg-gray-100 rounded-full"></div>
+            <div key={i} className="w-[60px] h-[60px] bg-muted rounded-full"></div>
           ))}
         </div>
       </div>
@@ -78,7 +78,7 @@ export function ClusterUtilizationSection({ jobId }: ClusterUtilizationSectionPr
 
   if (error) {
     return (
-      <div className="bg-white rounded border p-3 mt-3 text-amber-600 text-sm flex items-center gap-2">
+      <div className="bg-card rounded border p-3 mt-3 text-amber-600 dark:text-amber-400 text-sm flex items-center gap-2">
         <AlertTriangle className="h-4 w-4" />
         Unable to load cluster metrics
       </div>
@@ -96,17 +96,17 @@ export function ClusterUtilizationSection({ jobId }: ClusterUtilizationSectionPr
 
   return (
     <TooltipProvider>
-      <div className="bg-white rounded border p-3 mt-3">
+      <div className="bg-card rounded border p-3 mt-3">
         <div className="flex items-center justify-between mb-3">
-          <h5 className="text-sm font-semibold text-gray-700">
+          <h5 className="text-sm font-semibold text-foreground">
             Cluster Utilization
-            <span className="text-xs font-normal text-gray-400 ml-2">
+            <span className="text-xs font-normal text-muted-foreground ml-2">
               (Avg. last {data.runs_analyzed} runs, estimated)
             </span>
           </h5>
           <Tooltip>
             <TooltipTrigger>
-              <span className="text-xs text-gray-400 cursor-help">?</span>
+              <span className="text-xs text-muted-foreground cursor-help">?</span>
             </TooltipTrigger>
             <TooltipContent className="max-w-xs">
               <p>Green = efficient (60%+), Yellow = fair (40-60%), Red = low (&lt;40%, over-provisioned).</p>
@@ -127,9 +127,9 @@ export function ClusterUtilizationSection({ jobId }: ClusterUtilizationSectionPr
 
         {/* Over-provisioned warning with recommendation */}
         {data.is_over_provisioned && data.recommendation && (
-          <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm">
-            <span className="text-red-700 font-medium">Over-provisioned: </span>
-            <span className="text-red-600">{data.recommendation}</span>
+          <div className="mt-3 p-2 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded text-sm">
+            <span className="text-red-700 dark:text-red-400 font-medium">Over-provisioned: </span>
+            <span className="text-red-600 dark:text-red-300">{data.recommendation}</span>
           </div>
         )}
       </div>

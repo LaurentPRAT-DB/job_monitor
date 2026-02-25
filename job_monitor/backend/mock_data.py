@@ -1,8 +1,12 @@
 """Mock data for demo/development when system tables aren't accessible.
 
-Enable by setting USE_MOCK_DATA=true environment variable.
-This allows the app to function for demos without requiring
-system table permissions from account admin.
+Mock data is controlled by:
+1. config.yaml mock_data.enabled setting (default: false)
+2. USE_MOCK_DATA environment variable (overrides config)
+
+Auto-fallback (mock_data.auto_fallback) allows the app to use mock data
+when system table queries fail due to permissions, while showing real data
+when available.
 """
 
 import os
@@ -15,6 +19,7 @@ from job_monitor.backend.models import (
     AlertCategory,
     AlertListOut,
     AlertSeverity,
+    ClusterUtilization,
     CostAnomalyOut,
     CostBySkuOut,
     CostSummaryOut,
@@ -29,8 +34,25 @@ from job_monitor.backend.models import (
 
 
 def is_mock_mode() -> bool:
-    """Check if mock data mode is enabled."""
-    return os.environ.get("USE_MOCK_DATA", "").lower() in ("true", "1", "yes")
+    """Check if mock data mode is explicitly enabled.
+
+    Priority:
+    1. USE_MOCK_DATA environment variable (if set)
+    2. config.yaml mock_data.enabled setting (default: false)
+    """
+    env_value = os.environ.get("USE_MOCK_DATA", "").lower()
+    if env_value:
+        return env_value in ("true", "1", "yes")
+
+    # Import config here to avoid circular imports
+    from job_monitor.backend.config import settings
+    return settings.use_mock_data
+
+
+def is_auto_fallback_enabled() -> bool:
+    """Check if auto-fallback to mock data is enabled for permission errors."""
+    from job_monitor.backend.config import settings
+    return settings.mock_auto_fallback
 
 
 # Sample job names for realistic demo data
@@ -302,4 +324,63 @@ def get_mock_alerts() -> AlertListOut:
         alerts=alerts,
         total=len(alerts),
         by_severity=by_severity,
+    )
+
+
+def get_mock_cluster_utilization(job_id: str, runs: int = 5) -> ClusterUtilization:
+    """Generate mock cluster utilization metrics.
+
+    Generates realistic utilization data with varied efficiency levels:
+    - Some jobs are efficient (60%+ utilization)
+    - Some are fairly utilized (40-60%)
+    - Some are over-provisioned (<40%)
+    """
+    # Seed based on job_id for consistent results per job
+    seed = hash(job_id) % 1000
+    random.seed(seed)
+
+    # Determine utilization tier for this job
+    tier = seed % 3  # 0=efficient, 1=fair, 2=over-provisioned
+
+    if tier == 0:
+        # Efficient: 60-85% utilization
+        base = random.uniform(60, 85)
+    elif tier == 1:
+        # Fair: 40-60% utilization
+        base = random.uniform(40, 60)
+    else:
+        # Over-provisioned: 15-40% utilization
+        base = random.uniform(15, 40)
+
+    # Add some variation between CPU/memory and driver/worker
+    driver_cpu = round(base * random.uniform(0.85, 0.95), 1)
+    driver_memory = round(base * random.uniform(0.80, 0.92), 1)
+    worker_cpu = round(base * random.uniform(0.95, 1.05), 1)
+    worker_memory = round(base * random.uniform(0.90, 1.0), 1)
+
+    # Calculate average for over-provisioning detection
+    avg_util = (driver_cpu + driver_memory + worker_cpu + worker_memory) / 4
+    is_over_provisioned = avg_util < 40
+
+    recommendation = None
+    if is_over_provisioned:
+        if avg_util < 20:
+            recommendation = "Consider reducing workers by 50% or using smaller node types"
+        elif avg_util < 30:
+            recommendation = "Consider reducing to fewer workers"
+        else:
+            recommendation = "Consider using smaller node types"
+
+    # Reset random seed
+    random.seed()
+
+    return ClusterUtilization(
+        job_id=job_id,
+        driver_cpu_percent=driver_cpu,
+        driver_memory_percent=driver_memory,
+        worker_cpu_percent=worker_cpu,
+        worker_memory_percent=worker_memory,
+        is_over_provisioned=is_over_provisioned,
+        recommendation=recommendation,
+        runs_analyzed=runs,
     )

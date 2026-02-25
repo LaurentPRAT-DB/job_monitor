@@ -86,8 +86,8 @@ export function DurationChart({ data, medianBaseline }: DurationChartProps) {
     const dateText = label ? new Date(String(label)).toLocaleString() : '';
 
     return (
-      <div className="bg-white border border-gray-200 rounded-md p-2 shadow-sm text-xs">
-        <p className="text-gray-500">{dateText}</p>
+      <div className="bg-card border rounded-md p-2 shadow-sm text-xs">
+        <p className="text-muted-foreground">{dateText}</p>
         <p className="font-medium">Duration: {durationText}</p>
       </div>
     );
@@ -95,7 +95,7 @@ export function DurationChart({ data, medianBaseline }: DurationChartProps) {
 
   if (data.length === 0) {
     return (
-      <div className="h-[200px] flex items-center justify-center text-gray-500">
+      <div className="h-[200px] flex items-center justify-center text-muted-foreground">
         No duration data available
       </div>
     );

@@ -73,16 +73,16 @@ export function JobExpandedDetails({ jobId }: JobExpandedDetailsProps) {
       <div className="p-4 animate-pulse">
         <div className="grid grid-cols-2 gap-6">
           <div className="space-y-3">
-            <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+            <div className="h-4 bg-muted rounded w-1/3"></div>
             <div className="space-y-2">
               {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="h-8 bg-gray-100 rounded"></div>
+                <div key={i} className="h-8 bg-muted/50 rounded"></div>
               ))}
             </div>
           </div>
           <div className="space-y-3">
-            <div className="h-4 bg-gray-200 rounded w-1/3"></div>
-            <div className="h-32 bg-gray-100 rounded"></div>
+            <div className="h-4 bg-muted rounded w-1/3"></div>
+            <div className="h-32 bg-muted/50 rounded"></div>
           </div>
         </div>
       </div>
@@ -115,16 +115,16 @@ export function JobExpandedDetails({ jobId }: JobExpandedDetailsProps) {
 
   return (
     <TooltipProvider>
-      <div className="p-4 bg-gray-50 border-t">
+      <div className="p-4 bg-muted/50 dark:bg-muted/20 border-t">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left: Recent Runs */}
           <div>
-            <h4 className="text-sm font-semibold text-gray-700 mb-3">
+            <h4 className="text-sm font-semibold text-foreground mb-3">
               Recent Runs (Last 10)
             </h4>
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {recent_runs.length === 0 ? (
-                <p className="text-gray-500 text-sm">No recent runs</p>
+                <p className="text-muted-foreground text-sm">No recent runs</p>
               ) : (
                 recent_runs.map((run) => (
                   <RunItem key={run.run_id} run={run} />
@@ -135,21 +135,21 @@ export function JobExpandedDetails({ jobId }: JobExpandedDetailsProps) {
 
           {/* Right: Metrics Summary */}
           <div>
-            <h4 className="text-sm font-semibold text-gray-700 mb-3">
+            <h4 className="text-sm font-semibold text-foreground mb-3">
               Metrics Summary
             </h4>
 
             {/* Duration Stats Table */}
-            <div className="bg-white rounded border p-3 mb-3">
+            <div className="bg-card rounded border p-3 mb-3">
               {!duration_stats.has_sufficient_data ? (
-                <p className="text-amber-600 text-sm flex items-center gap-2">
+                <p className="text-amber-600 dark:text-amber-400 text-sm flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4" />
                   Need 5+ runs for baseline
                 </p>
               ) : (
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
-                    <span className="text-gray-500">Median:</span>{' '}
+                    <span className="text-muted-foreground">Median:</span>{' '}
                     <span className="font-medium">
                       {duration_stats.median_duration_seconds
                         ? formatDuration(duration_stats.median_duration_seconds)
@@ -157,7 +157,7 @@ export function JobExpandedDetails({ jobId }: JobExpandedDetailsProps) {
                     </span>
                   </div>
                   <div>
-                    <span className="text-gray-500">P90:</span>{' '}
+                    <span className="text-muted-foreground">P90:</span>{' '}
                     <span className="font-medium">
                       {duration_stats.p90_duration_seconds
                         ? formatDuration(duration_stats.p90_duration_seconds)
@@ -165,7 +165,7 @@ export function JobExpandedDetails({ jobId }: JobExpandedDetailsProps) {
                     </span>
                   </div>
                   <div>
-                    <span className="text-gray-500">Max:</span>{' '}
+                    <span className="text-muted-foreground">Max:</span>{' '}
                     <span className="font-medium">
                       {duration_stats.max_duration_seconds
                         ? formatDuration(duration_stats.max_duration_seconds)
@@ -173,7 +173,7 @@ export function JobExpandedDetails({ jobId }: JobExpandedDetailsProps) {
                     </span>
                   </div>
                   <div>
-                    <span className="text-gray-500">Runs:</span>{' '}
+                    <span className="text-muted-foreground">Runs:</span>{' '}
                     <span className="font-medium">{duration_stats.run_count}</span>
                   </div>
                 </div>
@@ -182,9 +182,9 @@ export function JobExpandedDetails({ jobId }: JobExpandedDetailsProps) {
 
             {/* Last Run Comparison */}
             {recent_runs.length > 0 && baseline && recent_runs[0].duration_seconds && (
-              <div className="bg-white rounded border p-3 mb-3">
+              <div className="bg-card rounded border p-3 mb-3">
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="text-gray-500">Last run:</span>
+                  <span className="text-muted-foreground">Last run:</span>
                   <span className="font-medium">
                     {formatDuration(recent_runs[0].duration_seconds)}
                   </span>
@@ -192,8 +192,8 @@ export function JobExpandedDetails({ jobId }: JobExpandedDetailsProps) {
                     className={cn(
                       'text-xs',
                       isAnomalousDuration(recent_runs[0].duration_seconds, baseline)
-                        ? 'text-red-600'
-                        : 'text-gray-500'
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-muted-foreground'
                     )}
                   >
                     ({formatAnomalyComparison(recent_runs[0].duration_seconds, baseline)})
@@ -213,13 +213,13 @@ export function JobExpandedDetails({ jobId }: JobExpandedDetailsProps) {
             )}
 
             {/* Retry Count */}
-            <div className="bg-white rounded border p-3 mb-3">
+            <div className="bg-card rounded border p-3 mb-3">
               <div className="flex items-center gap-2 text-sm">
-                <RefreshCw className="h-4 w-4 text-gray-400" />
-                <span className="text-gray-500">Retries (7d):</span>
+                <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">Retries (7d):</span>
                 <span className="font-medium">{retry_count_7d}</span>
                 {retry_count_7d > 2 && (
-                  <Badge variant="secondary" className="bg-orange-100 text-orange-700 text-xs">
+                  <Badge variant="secondary" className="bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 text-xs">
                     High retries
                   </Badge>
                 )}
@@ -228,18 +228,18 @@ export function JobExpandedDetails({ jobId }: JobExpandedDetailsProps) {
 
             {/* Failure Reasons */}
             {failure_reasons.length > 0 && (
-              <div className="bg-white rounded border p-3">
-                <h5 className="text-xs font-medium text-gray-500 mb-2">
+              <div className="bg-card rounded border p-3">
+                <h5 className="text-xs font-medium text-muted-foreground mb-2">
                   Failure Reasons
                 </h5>
                 <ul className="space-y-1">
                   {failure_reasons.slice(0, 3).map((reason, idx) => (
-                    <li key={idx} className="text-xs text-red-600 truncate">
+                    <li key={idx} className="text-xs text-red-600 dark:text-red-400 truncate">
                       {reason}
                     </li>
                   ))}
                   {failure_reasons.length > 3 && (
-                    <li className="text-xs text-gray-500">
+                    <li className="text-xs text-muted-foreground">
                       +{failure_reasons.length - 3} more
                     </li>
                   )}
@@ -251,10 +251,10 @@ export function JobExpandedDetails({ jobId }: JobExpandedDetailsProps) {
 
         {/* Duration Chart - Full Width */}
         <div className="mt-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-3">
+          <h4 className="text-sm font-semibold text-foreground mb-3">
             Duration Trend
           </h4>
-          <div className="bg-white rounded border p-3">
+          <div className="bg-card rounded border p-3">
             <DurationChart
               data={chartData}
               medianBaseline={baseline || 0}
@@ -279,7 +279,7 @@ function RunItem({ run }: { run: JobRunDetail }) {
   const isAnomaly = run.is_anomaly;
 
   return (
-    <div className="flex items-center justify-between bg-white rounded border px-3 py-2 text-sm">
+    <div className="flex items-center justify-between bg-card rounded border px-3 py-2 text-sm">
       <div className="flex items-center gap-3">
         {/* Result icon */}
         {isSuccess ? (
@@ -287,19 +287,19 @@ function RunItem({ run }: { run: JobRunDetail }) {
         ) : isFailed ? (
           <XCircle className="h-4 w-4 text-red-500" />
         ) : (
-          <Clock className="h-4 w-4 text-gray-400" />
+          <Clock className="h-4 w-4 text-muted-foreground" />
         )}
 
         {/* Start time */}
-        <span className="text-gray-600">{formatTimeAgo(run.start_time)}</span>
+        <span className="text-muted-foreground">{formatTimeAgo(run.start_time)}</span>
 
         {/* Result badge */}
         <Badge
           variant={isSuccess ? 'default' : isFailed ? 'destructive' : 'secondary'}
           className={cn(
             'text-xs',
-            isSuccess && 'bg-green-100 text-green-700 hover:bg-green-100',
-            !isSuccess && !isFailed && 'bg-gray-100 text-gray-600'
+            isSuccess && 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900',
+            !isSuccess && !isFailed && 'bg-muted text-muted-foreground'
           )}
         >
           {run.result_state || 'UNKNOWN'}
@@ -310,7 +310,7 @@ function RunItem({ run }: { run: JobRunDetail }) {
         {/* Duration */}
         {run.duration_seconds && (
           <span
-            className={cn('text-gray-600', isAnomaly && 'text-red-600 font-medium')}
+            className={cn('text-muted-foreground', isAnomaly && 'text-red-600 dark:text-red-400 font-medium')}
           >
             {formatDuration(run.duration_seconds)}
           </span>

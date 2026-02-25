@@ -9,13 +9,21 @@ This implementation uses DBU consumption as a proxy for utilization.
 """
 
 import asyncio
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from job_monitor.backend.config import settings
-from job_monitor.backend.core import get_ws
+from job_monitor.backend.core import get_ws_prefer_user
+from job_monitor.backend.mock_data import (
+    get_mock_cluster_utilization,
+    is_auto_fallback_enabled,
+    is_mock_mode,
+)
 from job_monitor.backend.models import ClusterUtilization
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/cluster-metrics", tags=["cluster-metrics"])
 
@@ -180,7 +188,7 @@ async def get_cluster_utilization(
         int,
         Query(ge=1, le=10, description="Number of recent runs to analyze"),
     ] = 5,
-    ws=Depends(get_ws),
+    ws=Depends(get_ws_prefer_user),
 ) -> ClusterUtilization:
     """Get cluster utilization metrics for a job.
 
@@ -198,10 +206,16 @@ async def get_cluster_utilization(
     Returns:
         ClusterUtilization with estimated metrics and recommendation
     """
+    # Return mock data if mock mode is enabled
+    if is_mock_mode():
+        logger.info(f"[cluster_metrics] Returning mock data for job {job_id}")
+        return get_mock_cluster_utilization(job_id, runs)
+
     if not ws:
-        raise HTTPException(
-            status_code=503, detail="Databricks connection not available"
-        )
+        if is_auto_fallback_enabled():
+            logger.warning("[cluster_metrics] No workspace client, returning mock data (auto-fallback)")
+            return get_mock_cluster_utilization(job_id, runs)
+        raise HTTPException(status_code=503, detail="Databricks connection not available")
 
     warehouse_id = settings.warehouse_id
     if not warehouse_id:
@@ -250,11 +264,32 @@ async def get_cluster_utilization(
     ORDER BY jr.period_start_time DESC
     """
 
-    result = await asyncio.to_thread(
-        ws.statement_execution.execute_statement,
-        warehouse_id=warehouse_id,
-        statement=query,
-        wait_timeout="30s",
-    )
+    try:
+        logger.info(f"[cluster_metrics] Querying utilization for job {job_id}")
+        result = await asyncio.to_thread(
+            ws.statement_execution.execute_statement,
+            warehouse_id=warehouse_id,
+            statement=query,
+            wait_timeout="30s",
+        )
 
-    return _parse_utilization_result(result, job_id, runs)
+        # Check for permission errors in the result
+        if result.status and result.status.error:
+            error_msg = str(result.status.error.message or "")
+            if "PERMISSION_DENIED" in error_msg or "does not have permission" in error_msg.lower():
+                if is_auto_fallback_enabled():
+                    logger.warning(f"[cluster_metrics] Permission denied, falling back to mock data (auto-fallback)")
+                    return get_mock_cluster_utilization(job_id, runs)
+                raise HTTPException(status_code=403, detail="Permission denied accessing system tables")
+
+        return _parse_utilization_result(result, job_id, runs)
+
+    except Exception as e:
+        error_str = str(e)
+        if "permission" in error_str.lower() or "access" in error_str.lower():
+            if is_auto_fallback_enabled():
+                logger.warning(f"[cluster_metrics] Permission error, falling back to mock data (auto-fallback): {e}")
+                return get_mock_cluster_utilization(job_id, runs)
+            raise HTTPException(status_code=403, detail="Permission denied accessing system tables")
+        logger.error(f"[cluster_metrics] Error querying cluster metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

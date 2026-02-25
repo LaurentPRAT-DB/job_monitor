@@ -2,6 +2,15 @@
 # This file is the single source of truth for both the app and the cache refresh job.
 # Values can be overridden by environment variables (uppercase, e.g., CACHE_CATALOG).
 
+# Mock data settings (for development/demos without system table access)
+mock_data:
+  # Enable mock data mode (for development only - disables real data queries)
+  # Override with USE_MOCK_DATA=true environment variable
+  enabled: false
+  # Auto-fallback: use mock data when system table queries fail due to permissions
+  # This allows demos to work while showing real data when available
+  auto_fallback: true
+
 # Cache settings for pre-aggregated metrics
 cache:
   catalog: "job_monitor"

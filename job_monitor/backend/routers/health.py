@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Header, Request
 from job_monitor.backend.cache import check_cache_exists, get_cache_freshness
 from job_monitor.backend.config import settings
 from job_monitor.backend.core import get_ws_prefer_user
+from job_monitor.backend.mock_data import is_auto_fallback_enabled, is_mock_mode
 
 router = APIRouter(tags=["health"])
 
@@ -53,6 +54,11 @@ async def health_check(
             "enabled": settings.use_cache,
             "catalog": settings.cache_catalog,
             "schema": settings.cache_schema,
+        },
+        "mock_data": {
+            "enabled": is_mock_mode(),
+            "auto_fallback": is_auto_fallback_enabled(),
+            "source": "env" if os.environ.get("USE_MOCK_DATA") else "config",
         },
     }
 

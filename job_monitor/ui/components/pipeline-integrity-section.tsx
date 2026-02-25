@@ -52,11 +52,11 @@ export function PipelineIntegritySection({ jobId }: PipelineIntegritySectionProp
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded border p-3 mt-3 animate-pulse">
-        <div className="h-4 bg-gray-200 rounded w-1/3 mb-3"></div>
+      <div className="bg-card rounded border p-3 mt-3 animate-pulse">
+        <div className="h-4 bg-muted rounded w-1/3 mb-3"></div>
         <div className="space-y-2">
-          <div className="h-16 bg-gray-100 rounded"></div>
-          <div className="h-16 bg-gray-100 rounded"></div>
+          <div className="h-16 bg-muted/50 rounded"></div>
+          <div className="h-16 bg-muted/50 rounded"></div>
         </div>
       </div>
     );
@@ -64,7 +64,7 @@ export function PipelineIntegritySection({ jobId }: PipelineIntegritySectionProp
 
   if (hasError) {
     return (
-      <div className="bg-white rounded border p-3 mt-3 text-amber-600 text-sm flex items-center gap-2">
+      <div className="bg-card rounded border p-3 mt-3 text-amber-600 dark:text-amber-400 text-sm flex items-center gap-2">
         <AlertTriangle className="h-4 w-4" />
         Unable to load pipeline data
       </div>
@@ -73,13 +73,13 @@ export function PipelineIntegritySection({ jobId }: PipelineIntegritySectionProp
 
   if (hasNoTables) {
     return (
-      <div className="bg-white rounded border p-3 mt-3">
-        <div className="flex items-center gap-2 text-gray-500 text-sm">
+      <div className="bg-card rounded border p-3 mt-3">
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
           <Database className="h-4 w-4" />
           <span>No output tables configured for this job</span>
         </div>
-        <p className="text-xs text-gray-400 mt-1">
-          Add <code className="bg-gray-100 px-1 rounded">output_tables</code> tag to job settings to enable tracking.
+        <p className="text-xs text-muted-foreground mt-1">
+          Add <code className="bg-muted px-1 rounded">output_tables</code> tag to job settings to enable tracking.
         </p>
       </div>
     );
@@ -88,13 +88,13 @@ export function PipelineIntegritySection({ jobId }: PipelineIntegritySectionProp
   const anomalyCount = rowCounts.filter((r) => r.is_anomaly).length;
 
   return (
-    <div className="bg-white rounded border p-3 mt-3">
+    <div className="bg-card rounded border p-3 mt-3">
       <div className="flex items-center justify-between mb-3">
-        <h5 className="text-sm font-semibold text-gray-700">
+        <h5 className="text-sm font-semibold text-foreground">
           Pipeline Integrity
         </h5>
         {(anomalyCount > 0 || schemaDrifts.length > 0) && (
-          <span className="text-xs text-amber-600">
+          <span className="text-xs text-amber-600 dark:text-amber-400">
             {anomalyCount > 0 && `${anomalyCount} row count anomal${anomalyCount === 1 ? 'y' : 'ies'}`}
             {anomalyCount > 0 && schemaDrifts.length > 0 && ', '}
             {schemaDrifts.length > 0 && `${schemaDrifts.length} schema drift${schemaDrifts.length === 1 ? '' : 's'}`}

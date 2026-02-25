@@ -28,14 +28,14 @@ export function RowCountDeltaCard({ data }: RowCountDeltaProps) {
   return (
     <TooltipProvider>
       <div className={cn(
-        'bg-white rounded border p-3',
-        is_anomaly && 'border-amber-300 bg-amber-50/30'
+        'bg-card rounded border p-3',
+        is_anomaly && 'border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-950/30'
       )}>
         <div className="flex items-start justify-between gap-4">
           {/* Table info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h6 className="text-sm font-medium text-gray-700 truncate" title={table_name}>
+              <h6 className="text-sm font-medium text-foreground truncate" title={table_name}>
                 {table_name.split('.').pop()}
               </h6>
               {is_anomaly && (
@@ -50,16 +50,16 @@ export function RowCountDeltaCard({ data }: RowCountDeltaProps) {
               )}
             </div>
 
-            <div className="mt-1 text-xs text-gray-500">
+            <div className="mt-1 text-xs text-muted-foreground">
               Full path: {table_name}
             </div>
 
             {/* Counts */}
             <div className="mt-2 flex items-baseline gap-3">
-              <span className="text-lg font-semibold text-gray-900">
+              <span className="text-lg font-semibold text-foreground">
                 {formatRowCount(current_row_count)}
               </span>
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-muted-foreground">
                 vs {formatRowCount(baseline_row_count)} baseline
               </span>
             </div>
@@ -71,7 +71,7 @@ export function RowCountDeltaCard({ data }: RowCountDeltaProps) {
                 {formatDeltaPercent(delta_percent)}
               </span>
               {is_anomaly && (
-                <Badge variant="outline" className="ml-2 text-xs bg-amber-100 text-amber-700 border-amber-300">
+                <Badge variant="outline" className="ml-2 text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700">
                   Anomaly
                 </Badge>
               )}

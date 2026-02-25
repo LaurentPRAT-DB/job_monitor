@@ -59,19 +59,22 @@ resources:
   jobs:
     refresh-metrics-cache:
       name: "job-monitor-refresh-cache"
-      description: "Refresh metrics cache tables for fast dashboard loading. Config from job_monitor/config.yaml"
+      description: "Refresh metrics cache tables for fast dashboard loading"
       tasks:
         - task_key: refresh_cache
           spark_python_task:
-            # Job reads catalog/schema from job_monitor/config.yaml
             python_file: job_monitor/jobs/refresh_metrics_cache.py
+            parameters:
+              - "--catalog"
+              - "job_monitor"
+              - "--schema"
+              - "cache"
           new_cluster:
             spark_version: "14.3.x-scala2.12"
             node_type_id: "i3.xlarge"
             num_workers: 1
             data_security_mode: "SINGLE_USER"
       schedule:
-        # Schedule can be overridden via cache_refresh_cron variable
         quartz_cron_expression: "${var.cache_refresh_cron}"
         timezone_id: "UTC"
       tags:

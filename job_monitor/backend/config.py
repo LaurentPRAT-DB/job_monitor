@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     cache_refresh_cron: str = _yaml_config.get("cache", {}).get("refresh_cron", "0 */15 * * * ?")
     use_cache: bool = _yaml_config.get("cache", {}).get("enabled", True)
 
+    # Mock data settings (for development/demos)
+    # Override enabled with USE_MOCK_DATA=true environment variable
+    use_mock_data: bool = _yaml_config.get("mock_data", {}).get("enabled", False)
+    mock_auto_fallback: bool = _yaml_config.get("mock_data", {}).get("auto_fallback", True)
+
     # SMTP email configuration
     smtp_host: str = ""
     smtp_port: int = 587
