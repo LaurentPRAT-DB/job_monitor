@@ -107,6 +107,8 @@ class ActiveRunWithHistory(BaseModel):
     end_time: datetime | None = None
     run_page_url: str | None = None
     recent_runs: list[RecentRunStatus]  # Last 5 completed runs for this job
+    is_streaming: bool = False  # True if streaming/continuous job
+    is_long_running: bool = False  # True if duration > 4h (or unusual)
 
 
 class ActiveRunsWithHistoryOut(BaseModel):

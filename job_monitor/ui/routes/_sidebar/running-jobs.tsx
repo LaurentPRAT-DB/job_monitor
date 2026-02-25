@@ -5,7 +5,7 @@
  */
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, RefreshCw, Play, ExternalLink, Clock, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, CheckCircle, XCircle, MinusCircle } from 'lucide-react';
+import { AlertCircle, RefreshCw, Play, ExternalLink, Clock, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, CheckCircle, XCircle, MinusCircle, Radio, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -82,7 +82,12 @@ function formatDuration(startTime: string | null): string {
 function formatStartTime(startTime: string | null): string {
   if (!startTime) return '--';
   const date = new Date(startTime);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  // Show in UTC for consistency with Databricks
+  return date.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'UTC'
+  });
 }
 
 function getDurationMs(startTime: string | null): number {
@@ -90,6 +95,36 @@ function getDurationMs(startTime: string | null): number {
   const start = new Date(startTime);
   const now = new Date();
   return now.getTime() - start.getTime();
+}
+
+// Streaming job detection patterns
+const STREAMING_PATTERNS = [
+  /stream/i,
+  /\bcdc\b/i,
+  /continuous/i,
+  /real.?time/i,
+  /kafka/i,
+  /kinesis/i,
+  /event.?hub/i,
+  /ingest/i,
+  /pipeline/i,
+];
+
+function isStreamingJob(jobName: string | null): boolean {
+  if (!jobName) return false;
+  return STREAMING_PATTERNS.some(pattern => pattern.test(jobName));
+}
+
+// Long-running thresholds
+const LONG_RUNNING_MS = 4 * 60 * 60 * 1000; // 4 hours for batch jobs
+const VERY_LONG_RUNNING_MS = 24 * 60 * 60 * 1000; // 24 hours for any job
+
+function isLongRunning(startTime: string | null, isStreaming: boolean): boolean {
+  const durationMs = getDurationMs(startTime);
+  // Streaming jobs: only flag if > 24h (unusual even for streaming)
+  if (isStreaming) return durationMs > VERY_LONG_RUNNING_MS;
+  // Batch jobs: flag if > 4h
+  return durationMs > LONG_RUNNING_MS;
 }
 
 // State sort order (RUNNING first, then PENDING/QUEUED, then TERMINATING)
@@ -211,12 +246,17 @@ function RunningJobRow({ run }: { run: ActiveRunWithHistory }) {
     refetchOnWindowFocus: false,
   });
 
+  // Detect streaming and long-running
+  const streaming = isStreamingJob(run.run_name);
+  const longRunning = isLongRunning(run.start_time, streaming);
+
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen} asChild>
       <>
         <TableRow className={cn(
           'cursor-pointer hover:bg-muted/50',
-          isOpen && 'bg-muted/50'
+          isOpen && 'bg-muted/50',
+          longRunning && 'bg-amber-50 dark:bg-amber-900/20'
         )}>
           {/* Expand button */}
           <TableCell className="w-12">
@@ -232,11 +272,29 @@ function RunningJobRow({ run }: { run: ActiveRunWithHistory }) {
             </CollapsibleTrigger>
           </TableCell>
 
-          {/* Job name */}
+          {/* Job name with streaming/long-running indicators */}
           <TableCell className="font-medium" onClick={() => setIsOpen(!isOpen)}>
             <div className="flex items-center gap-2">
-              <Play className="h-4 w-4 text-green-500 animate-pulse" />
-              {run.run_name || `Job ${run.job_id}`}
+              {streaming ? (
+                <span title="Streaming job">
+                  <Radio className="h-4 w-4 text-blue-500" />
+                </span>
+              ) : (
+                <Play className="h-4 w-4 text-green-500 animate-pulse" />
+              )}
+              <span className={cn(longRunning && 'text-amber-700 dark:text-amber-400')}>
+                {run.run_name || `Job ${run.job_id}`}
+              </span>
+              {streaming && (
+                <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800">
+                  Streaming
+                </Badge>
+              )}
+              {longRunning && (
+                <span title={streaming ? "Running > 24h" : "Running > 4h"}>
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                </span>
+              )}
             </div>
           </TableCell>
 
@@ -477,7 +535,7 @@ export default function RunningJobsPage() {
                 <SortableHeader column="job_name">Job Name</SortableHeader>
                 <TableHead>Recent Runs</TableHead>
                 <SortableHeader column="state">State</SortableHeader>
-                <SortableHeader column="start_time">Started</SortableHeader>
+                <SortableHeader column="start_time">Started (UTC)</SortableHeader>
                 <SortableHeader column="duration">Duration</SortableHeader>
                 <TableHead>Link</TableHead>
               </TableRow>
