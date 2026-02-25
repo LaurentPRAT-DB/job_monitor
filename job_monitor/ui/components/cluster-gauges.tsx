@@ -97,17 +97,27 @@ export function ClusterUtilizationSection({ jobId }: ClusterUtilizationSectionPr
   // Check if all metrics are null (no billing data available)
   const hasNoMetrics = gauges.every((g) => g.value === null);
 
-  // No runs found at all
+  // No runs with valid duration found
   if (data.runs_analyzed === 0) {
     return (
       <div className="bg-card rounded border p-3 mt-3">
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Info className="h-4 w-4" />
-          <span>No recent job runs found for cluster utilization analysis</span>
+        <h5 className="text-sm font-semibold text-foreground mb-2">
+          Cluster Utilization
+        </h5>
+        <div className="flex items-start gap-2 text-muted-foreground text-sm">
+          <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <div>
+            <p>No runs with measurable duration found in the last 30 days.</p>
+            <p className="text-xs mt-1">
+              Utilization analysis requires runs with duration &gt; 0. This can happen when:
+            </p>
+            <ul className="text-xs mt-1 list-disc list-inside space-y-0.5">
+              <li>Job uses serverless compute with instant task completion</li>
+              <li>All recent runs failed before recording duration</li>
+              <li>Job hasn't run successfully in the last 30 days</li>
+            </ul>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-1 ml-6">
-          Run the job to start collecting utilization metrics.
-        </p>
       </div>
     );
   }
