@@ -2,6 +2,8 @@
 
 Databricks Job Monitoring Framework - A real-time operational monitoring dashboard for Databricks jobs, clusters, and resources.
 
+![Dashboard Screenshot](screenshot-dashboard.png)
+
 ## Features
 
 - **Job Health Dashboard**: View job execution status with priority flags (P1/P2/P3)
@@ -11,6 +13,8 @@ Databricks Job Monitoring Framework - A real-time operational monitoring dashboa
 - **Anomaly Detection**: Identify cost spikes (>2x p90 baseline) and over-provisioned clusters
 - **Metrics Cache**: Pre-aggregated Delta tables for sub-second dashboard loading
 - **Mock Data Mode**: Demo-ready fallback when system tables aren't accessible
+
+> **For Developers**: See [DEVELOPER.md](DEVELOPER.md) for detailed development setup, architecture, and contribution guidelines.
 
 ## Architecture
 
@@ -354,13 +358,16 @@ databricks apps deploy job-monitor \
 
 ## Development
 
-### Running Locally
+For detailed development instructions, see [DEVELOPER.md](DEVELOPER.md).
+
+### Quick Start
 
 ```bash
-# Start backend with hot reload
+# Backend (with mock data for local dev)
+export USE_MOCK_DATA=true
 uvicorn job_monitor.backend.app:app --reload --port 8000
 
-# In another terminal, start frontend dev server
+# Frontend (in another terminal)
 cd job_monitor/ui
 npm run dev
 ```
@@ -476,9 +483,14 @@ pytest tests/
 
 ## Tech Stack
 
-- **Backend**: FastAPI + Databricks SDK + Pydantic
-- **Frontend**: React + TypeScript + TanStack (Router, Query) + Recharts
-- **Deployment**: Databricks Apps via Asset Bundles
+- **Backend**: FastAPI + Databricks SDK + Pydantic + APScheduler
+- **Frontend**: React 18 + TypeScript + TanStack (Router, Query) + Tailwind CSS + Recharts
+- **Deployment**: Databricks Apps via Asset Bundles (DABs)
+
+## Documentation
+
+- [README.md](README.md) - This file (user guide, installation, deployment)
+- [DEVELOPER.md](DEVELOPER.md) - Developer guide (local setup, architecture, contributing)
 
 ## License
 
