@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 5 of 6 (Alerting & Remediation)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In Progress
-Last activity: 2026-02-25 -- Plan 05-01 complete (Alert Backend API)
+Last activity: 2026-02-25 -- Plan 05-02 complete (Alert Display UI)
 
-Progress: [########..] 79%
+Progress: [########..] 82%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
+- Total plans completed: 14
 - Average duration: 4m
-- Total execution time: 0.72 hours
+- Total execution time: 0.79 hours
 
 **By Phase:**
 
@@ -31,10 +31,10 @@ Progress: [########..] 79%
 | 02 | 3 | 21m 33s | 7m 11s |
 | 03 | 3 | 14m | 4m 40s |
 | 04 | 3 | 9m | 3m |
-| 05 | 1 | 3m | 3m |
+| 05 | 2 | 7m | 3m 30s |
 
 **Recent Trend:**
-- Last 5 plans: 03-03 (4m), 04-01 (3m), 04-02 (3m), 04-03 (3m), 05-01 (3m)
+- Last 5 plans: 04-01 (3m), 04-02 (3m), 04-03 (3m), 05-01 (3m), 05-02 (4m)
 - Trend: Progressing
 
 *Updated after each plan completion*
@@ -88,6 +88,10 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-01: Alert ID format: {category}_{job_id}_{type} for uniqueness
 - [Phase 05]: 05-01: asyncio.gather for parallel alert generation from all 4 sources
 - [Phase 05]: 05-01: Severity-based deduplication when same condition generates multiple alerts
+- [Phase 05]: 05-02: 60-second polling interval for alert refresh
+- [Phase 05]: 05-02: Toast notifications only on subsequent fetches (not initial load)
+- [Phase 05]: 05-02: P1/P2 toast durations: 10s/5s respectively
+- [Phase 05]: 05-02: Optimistic UI updates for acknowledge action
 
 ### Pending Todos
 
@@ -103,5 +107,5 @@ Research flags from .planning/research/SUMMARY.md:
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 05-01-PLAN.md (Alert Backend API)
-Resume file: .planning/phases/05-alerting-remediation/05-01-SUMMARY.md
+Stopped at: Completed 05-02-PLAN.md (Alert Display UI)
+Resume file: .planning/phases/05-alerting-remediation/05-02-SUMMARY.md

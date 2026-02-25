@@ -101,7 +101,7 @@ Plans:
 
 Plans:
 - [x] 05-01-PLAN.md — Alert backend API with dynamic generation from health, cost, SLA, cluster data
-- [ ] 05-02-PLAN.md — Alert UI components (drawer, cards, badges, toasts) with header integration
+- [x] 05-02-PLAN.md — Alert UI components (drawer, cards, badges, toasts) with header integration
 - [ ] 05-03-PLAN.md — Alerts page with severity sections and job row alert indicators
 
 ### Phase 6: Dashboards & Reporting
@@ -132,9 +132,9 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 2. Job Health Monitoring | 3/3 | Complete    | 2026-02-24 |
 | 3. SLA & Cost Visibility | 3/3 | Complete    | 2026-02-24 |
 | 4. Cluster & Pipeline Integrity | 3/3 | Complete | 2026-02-24 |
-| 5. Alerting & Remediation | 1/3 | In Progress | - |
+| 5. Alerting & Remediation | 2/3 | In Progress | - |
 | 6. Dashboards & Reporting | 0/3 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-18*
-*Last updated: 2026-02-25 (Phase 5 - Plan 01 complete)*
+*Last updated: 2026-02-25 (Phase 5 - Plan 02 complete)*
