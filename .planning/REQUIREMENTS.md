@@ -137,4 +137,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-18*
-*Last updated: 2026-02-24 (Phase 3 complete - COST-01/02/04/05)*
+*Last updated: 2026-02-25 (Phase 5 complete - ALERT-01/02)*

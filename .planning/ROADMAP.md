@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Job Health Monitoring** - Success/failure tracking, duration analysis, retry detection
 - [x] **Phase 3: SLA & Cost Visibility** - SLA target definition, breach history, cost per job, team attribution
 - [x] **Phase 4: Cluster & Pipeline Integrity** - Resource utilization monitoring, row count validation, schema drift detection
-- [ ] **Phase 5: Alerting & Remediation** - In-app alerts with severity levels, actionable suggestions, proactive warnings
+- [x] **Phase 5: Alerting & Remediation** - In-app alerts with severity levels, actionable suggestions, proactive warnings
 - [ ] **Phase 6: Dashboards & Reporting** - Filtering/drill-down, historical views, daily/weekly/monthly reports
 
 ## Phase Details
@@ -102,7 +102,7 @@ Plans:
 Plans:
 - [x] 05-01-PLAN.md — Alert backend API with dynamic generation from health, cost, SLA, cluster data
 - [x] 05-02-PLAN.md — Alert UI components (drawer, cards, badges, toasts) with header integration
-- [ ] 05-03-PLAN.md — Alerts page with severity sections and job row alert indicators
+- [x] 05-03-PLAN.md — Alerts page with severity sections and job row alert indicators
 
 ### Phase 6: Dashboards & Reporting
 **Goal**: All user personas (platform ops, business teams, leadership) can access tailored views with appropriate filtering and scheduled reports
@@ -132,9 +132,9 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 2. Job Health Monitoring | 3/3 | Complete    | 2026-02-24 |
 | 3. SLA & Cost Visibility | 3/3 | Complete    | 2026-02-24 |
 | 4. Cluster & Pipeline Integrity | 3/3 | Complete | 2026-02-24 |
-| 5. Alerting & Remediation | 2/3 | In Progress | - |
+| 5. Alerting & Remediation | 3/3 | Complete | 2026-02-25 |
 | 6. Dashboards & Reporting | 0/3 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-18*
-*Last updated: 2026-02-25 (Phase 5 - Plan 02 complete)*
+*Last updated: 2026-02-25 (Phase 5 complete)*
