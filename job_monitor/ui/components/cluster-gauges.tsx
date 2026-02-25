@@ -6,7 +6,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
 import 'react-circular-progressbar/dist/styles.css';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   getUtilizationColor,
@@ -93,6 +93,52 @@ export function ClusterUtilizationSection({ jobId }: ClusterUtilizationSectionPr
     { label: 'Worker CPU', value: data.worker_cpu_percent },
     { label: 'Worker Mem', value: data.worker_memory_percent },
   ];
+
+  // Check if all metrics are null (no billing data available)
+  const hasNoMetrics = gauges.every((g) => g.value === null);
+
+  // No runs found at all
+  if (data.runs_analyzed === 0) {
+    return (
+      <div className="bg-card rounded border p-3 mt-3">
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <Info className="h-4 w-4" />
+          <span>No recent job runs found for cluster utilization analysis</span>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1 ml-6">
+          Run the job to start collecting utilization metrics.
+        </p>
+      </div>
+    );
+  }
+
+  // Runs found but no billing data
+  if (hasNoMetrics) {
+    return (
+      <div className="bg-card rounded border p-3 mt-3">
+        <h5 className="text-sm font-semibold text-foreground mb-2">
+          Cluster Utilization
+          <span className="text-xs font-normal text-muted-foreground ml-2">
+            ({data.runs_analyzed} runs found)
+          </span>
+        </h5>
+        <div className="flex items-start gap-2 text-muted-foreground text-sm">
+          <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <div>
+            <p>No billing data available for utilization estimation.</p>
+            <p className="text-xs mt-1">
+              This can happen when:
+            </p>
+            <ul className="text-xs mt-1 list-disc list-inside space-y-0.5">
+              <li>Job uses serverless compute (billed differently)</li>
+              <li>Billing data has 24-48 hour lag</li>
+              <li>Job runs are very short or use external compute</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <TooltipProvider>
