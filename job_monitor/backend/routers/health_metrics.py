@@ -7,7 +7,8 @@ Provides:
 """
 
 import asyncio
-from typing import Annotated, Literal
+import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -20,6 +21,8 @@ from job_monitor.backend.models import (
     JobHealthOut,
     JobRunDetailOut,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["health-metrics"])
 
@@ -84,7 +87,7 @@ def _sort_by_priority(jobs: list[JobHealthOut]) -> list[JobHealthOut]:
 @router.get("/health-metrics", response_model=JobHealthListOut)
 async def get_health_metrics(
     days: Annotated[
-        Literal[7, 30],
+        int,
         Query(description="Time window: 7 or 30 days"),
     ] = 7,
     ws=Depends(get_ws),
@@ -111,13 +114,23 @@ async def get_health_metrics(
     Returns:
         JobHealthListOut with jobs sorted by priority, window_days, and total_count
     """
+    # Validate days parameter (query params come as strings, so we need manual validation)
+    if days not in (7, 30):
+        raise HTTPException(status_code=422, detail="days must be 7 or 30")
+
+    logger.info(f"get_health_metrics called with days={days}")
+    logger.info(f"WorkspaceClient available: {ws is not None}")
+    logger.info(f"WAREHOUSE_ID: {settings.warehouse_id}")
+
     if not ws:
+        logger.error("WorkspaceClient is None - returning 503")
         raise HTTPException(
             status_code=503, detail="Databricks connection not available"
         )
 
     warehouse_id = settings.warehouse_id
     if not warehouse_id:
+        logger.error("WAREHOUSE_ID not configured - returning 503")
         raise HTTPException(status_code=503, detail="Warehouse ID not configured")
 
     # SQL query using CTEs for consecutive failure detection
@@ -209,14 +222,48 @@ async def get_health_metrics(
         ROUND(100.0 * rs.success_count / NULLIF(rs.total_runs, 0), 1) ASC
     """
 
-    result = await asyncio.to_thread(
-        ws.statement_execution.execute_statement,
-        warehouse_id=warehouse_id,
-        statement=query,
-        wait_timeout="60s",
-    )
+    try:
+        logger.info(f"Executing SQL query on warehouse {warehouse_id}")
+        logger.debug(f"SQL Query:\n{query}")
+        result = await asyncio.to_thread(
+            ws.statement_execution.execute_statement,
+            warehouse_id=warehouse_id,
+            statement=query,
+            wait_timeout="50s",
+        )
+        logger.info(f"SQL query completed, status: {result.status if result else 'None'}")
+
+        # Log detailed result info
+        if result:
+            logger.info(f"Result status state: {result.status.state if result.status else 'None'}")
+            if result.status and result.status.error:
+                error_msg = str(result.status.error)
+                logger.error(f"SQL Error: {error_msg}")
+                # Check for permission errors
+                if "INSUFFICIENT_PERMISSIONS" in error_msg or "USE SCHEMA" in error_msg:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Service principal lacks permission to access system tables. "
+                               "A workspace admin needs to grant: GRANT USE CATALOG, USE SCHEMA, SELECT "
+                               "ON system.lakeflow and system.billing to the app's service principal."
+                    )
+            if result.result:
+                row_count = len(result.result.data_array) if result.result.data_array else 0
+                logger.info(f"Result row count: {row_count}")
+                if result.result.data_array and row_count > 0:
+                    logger.info(f"First row sample: {result.result.data_array[0]}")
+            else:
+                logger.warning("Result object exists but result.result is None")
+        else:
+            logger.warning("Result is None")
+    except Exception as e:
+        logger.error(f"SQL execution failed: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"SQL execution failed: {str(e)}")
 
     jobs = _parse_job_health(result)
+    logger.info(f"Parsed {len(jobs)} jobs from result")
     # Apply secondary sort to ensure consistent ordering
     sorted_jobs = _sort_by_priority(jobs)
 

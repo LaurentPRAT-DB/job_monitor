@@ -8,10 +8,13 @@ command:
 
 env:
   - name: DATABRICKS_HOST
-    value: "${DATABRICKS_HOST}"
+    valueFrom: workspace-host
   - name: WAREHOUSE_ID
     description: "SQL warehouse ID for system table queries"
-    value: ""
+    value: "58d41113cb262dce"
+  - name: LOG_LEVEL
+    description: "Logging level for debugging"
+    value: "DEBUG"
 
 permissions:
   - user_name: "${DATABRICKS_USER}"

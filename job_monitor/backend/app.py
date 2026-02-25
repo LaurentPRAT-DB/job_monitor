@@ -1,22 +1,93 @@
 """FastAPI application entry point for Job Monitor."""
 
+import json
 import logging
+import os
+import sys
+import time
+import traceback
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from pathlib import Path
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from job_monitor.backend.config import settings
 from job_monitor.backend.routers import alerts, auth, billing, cluster_metrics, cost, filters, health, health_metrics, historical, job_tags, jobs, jobs_api, pipeline, reports
 from job_monitor.backend.scheduler import scheduler, setup_scheduler
 
+# Configure logging based on LOG_LEVEL environment variable
+log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, log_level, logging.INFO),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+
 logger = logging.getLogger(__name__)
+logger.info(f"Starting Job Monitor with log level: {log_level}")
+
+
+class APILoggingMiddleware(BaseHTTPMiddleware):
+    """Middleware to log all API requests and responses for debugging."""
+
+    async def dispatch(self, request: Request, call_next):
+        # Only log API requests
+        if not request.url.path.startswith("/api"):
+            return await call_next(request)
+
+        # Log request
+        start_time = time.time()
+        logger.info(f">>> API REQUEST: {request.method} {request.url.path}")
+        logger.info(f"    Query params: {dict(request.query_params)}")
+
+        try:
+            response = await call_next(request)
+            duration = time.time() - start_time
+
+            # Log response
+            logger.info(f"<<< API RESPONSE: {request.url.path} - Status: {response.status_code} - Duration: {duration:.3f}s")
+
+            # For error responses, try to capture body
+            if response.status_code >= 400:
+                # Read response body for error logging
+                body = b""
+                async for chunk in response.body_iterator:
+                    body += chunk
+
+                try:
+                    error_detail = json.loads(body.decode())
+                    logger.error(f"    Error detail: {json.dumps(error_detail, indent=2)}")
+                except Exception:
+                    logger.error(f"    Error body: {body.decode()[:500]}")
+
+                # Return new response with the body we consumed
+                return JSONResponse(
+                    status_code=response.status_code,
+                    content=json.loads(body.decode()) if body else {},
+                    headers=dict(response.headers),
+                )
+
+            return response
+
+        except Exception as e:
+            duration = time.time() - start_time
+            logger.error(f"!!! API ERROR: {request.url.path} - Exception: {str(e)} - Duration: {duration:.3f}s")
+            logger.error(f"    Traceback: {traceback.format_exc()}")
+            raise
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler for startup and shutdown."""
+    logger.info(f"DATABRICKS_HOST: {settings.databricks_host}")
+    logger.info(f"WAREHOUSE_ID: {settings.warehouse_id}")
+
     # Initialize WorkspaceClient on startup if host is configured
     if settings.databricks_host:
         try:
@@ -25,10 +96,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             app.state.workspace_client = WorkspaceClient(
                 host=settings.databricks_host
             )
-        except Exception:
-            # WorkspaceClient will be None if initialization fails
+            logger.info("WorkspaceClient initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize WorkspaceClient: {e}")
             app.state.workspace_client = None
     else:
+        logger.warning("DATABRICKS_HOST not configured, WorkspaceClient will be None")
         app.state.workspace_client = None
 
     # Setup and start scheduler for email reports
@@ -59,6 +132,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# API logging middleware for debugging
+app.add_middleware(APILoggingMiddleware)
+
 # Include routers
 app.include_router(health.router)
 app.include_router(auth.router)
@@ -74,3 +150,24 @@ app.include_router(alerts.router)
 app.include_router(filters.router)
 app.include_router(historical.router)
 app.include_router(reports.router)
+
+# Serve frontend static files
+# Path to the built frontend (relative to this file's location)
+FRONTEND_DIR = Path(__file__).parent.parent / "ui" / "dist"
+
+if FRONTEND_DIR.exists():
+    # Mount static assets (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
+    logger.info(f"Serving frontend assets from {FRONTEND_DIR / 'assets'}")
+
+    # Catch-all route for SPA - serve index.html for all non-API routes
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve the SPA index.html for all non-API routes."""
+        # If it's an API route, this won't be reached (API routers have higher priority)
+        index_file = FRONTEND_DIR / "index.html"
+        if index_file.exists():
+            return FileResponse(index_file)
+        return {"error": "Frontend not found"}
+else:
+    logger.warning(f"Frontend directory not found at {FRONTEND_DIR}")

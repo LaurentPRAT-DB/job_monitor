@@ -1,12 +1,16 @@
 bundle:
   name: job-monitor
 
+sync:
+  include:
+    - job_monitor/ui/dist/**
+
 targets:
   dev:
     mode: development
     default: true
     workspace:
-      host: ${DATABRICKS_HOST}
+      profile: LPT_FREE_EDITION
 
 resources:
   apps:

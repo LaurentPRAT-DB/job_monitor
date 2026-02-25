@@ -10,9 +10,13 @@ Databricks billing system uses negative quantities for corrections.
 """
 
 import asyncio
+import logging
+import traceback
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+logger = logging.getLogger(__name__)
 
 from job_monitor.backend.config import settings
 from job_monitor.backend.core import get_ws
@@ -256,14 +260,27 @@ async def get_cost_summary(
     LIMIT 500
     """
 
-    result = await asyncio.to_thread(
-        ws.statement_execution.execute_statement,
-        warehouse_id=warehouse_id,
-        statement=query,
-        wait_timeout="60s",
-    )
+    logger.info(f"[cost.get_cost_summary] Executing SQL on warehouse {warehouse_id}, days={days}")
+    try:
+        result = await asyncio.to_thread(
+            ws.statement_execution.execute_statement,
+            warehouse_id=warehouse_id,
+            statement=query,
+            wait_timeout="50s",
+        )
+        logger.info(f"[cost.get_cost_summary] SQL completed, status: {result.status.state if result and result.status else 'None'}")
+        if result and result.status and result.status.error:
+            logger.error(f"[cost.get_cost_summary] SQL error: {result.status.error}")
+        if result and result.result:
+            row_count = len(result.result.data_array) if result.result.data_array else 0
+            logger.info(f"[cost.get_cost_summary] Result row count: {row_count}")
+    except Exception as e:
+        logger.error(f"[cost.get_cost_summary] SQL execution failed: {e}")
+        logger.error(f"[cost.get_cost_summary] Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"SQL execution failed: {str(e)}")
 
     jobs = _parse_job_costs(result, dbu_rate)
+    logger.info(f"[cost.get_cost_summary] Parsed {len(jobs)} jobs")
 
     # Lookup team tags for jobs
     job_ids = [j.job_id for j in jobs]
@@ -452,7 +469,7 @@ async def get_cost_anomalies(
             ws.statement_execution.execute_statement,
             warehouse_id=warehouse_id,
             statement=zombie_query,
-            wait_timeout="60s",
+            wait_timeout="50s",
         )
 
         if result and result.result and result.result.data_array:

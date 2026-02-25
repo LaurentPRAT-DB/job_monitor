@@ -12,10 +12,14 @@ Alerts are generated dynamically by combining data from:
 """
 
 import asyncio
+import logging
+import traceback
 from datetime import datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+logger = logging.getLogger(__name__)
 
 from job_monitor.backend.config import settings
 from job_monitor.backend.core import get_ws
@@ -116,6 +120,7 @@ def _generate_cluster_remediation(utilization: float, runs_analyzed: int) -> str
 async def _generate_failure_alerts(ws, warehouse_id: str) -> list[Alert]:
     """Generate alerts from health metrics (failures, yellow zone)."""
     alerts = []
+    logger.info("[alerts._generate_failure_alerts] Starting")
 
     # Query job health for 7-day window
     query = """
@@ -171,14 +176,19 @@ async def _generate_failure_alerts(ws, warehouse_id: str) -> list[Alert]:
     """
 
     try:
+        logger.info(f"[alerts._generate_failure_alerts] Executing SQL on warehouse {warehouse_id}")
         result = await asyncio.to_thread(
             ws.statement_execution.execute_statement,
             warehouse_id=warehouse_id,
             statement=query,
-            wait_timeout="60s",
+            wait_timeout="50s",
         )
+        logger.info(f"[alerts._generate_failure_alerts] SQL completed, status: {result.status.state if result and result.status else 'None'}")
+        if result and result.status and result.status.error:
+            logger.error(f"[alerts._generate_failure_alerts] SQL error: {result.status.error}")
 
         if result and result.result and result.result.data_array:
+            logger.info(f"[alerts._generate_failure_alerts] Found {len(result.result.data_array)} failure rows")
             for row in result.result.data_array:
                 job_id = str(row[0]) if row[0] else ""
                 job_name = str(row[1]) if row[1] else f"job-{job_id}"
@@ -225,10 +235,14 @@ async def _generate_failure_alerts(ws, warehouse_id: str) -> list[Alert]:
                     acknowledged_at=ack_time,
                     condition_key=condition_key,
                 ))
-    except Exception:
+        else:
+            logger.info("[alerts._generate_failure_alerts] No failure rows found")
+    except Exception as e:
         # Log error but don't fail entire alerts endpoint
-        pass
+        logger.error(f"[alerts._generate_failure_alerts] Exception: {e}")
+        logger.error(f"[alerts._generate_failure_alerts] Traceback: {traceback.format_exc()}")
 
+    logger.info(f"[alerts._generate_failure_alerts] Returning {len(alerts)} alerts")
     return alerts
 
 
@@ -369,7 +383,7 @@ async def _generate_cost_alerts(ws, warehouse_id: str) -> list[Alert]:
             ws.statement_execution.execute_statement,
             warehouse_id=warehouse_id,
             statement=spike_query,
-            wait_timeout="60s",
+            wait_timeout="50s",
         )
 
         if result and result.result and result.result.data_array:
@@ -404,7 +418,7 @@ async def _generate_cost_alerts(ws, warehouse_id: str) -> list[Alert]:
     try:
         # Get jobs with budget tags
         jobs_with_budget = []
-        jobs = await asyncio.to_thread(lambda: list(ws.jobs.list(limit=500)))
+        jobs = await asyncio.to_thread(lambda: list(ws.jobs.list(limit=100)))
 
         for job in jobs:
             if job.settings and job.settings.tags:
@@ -436,7 +450,7 @@ async def _generate_cost_alerts(ws, warehouse_id: str) -> list[Alert]:
                 ws.statement_execution.execute_statement,
                 warehouse_id=warehouse_id,
                 statement=budget_query,
-                wait_timeout="60s",
+                wait_timeout="50s",
             )
 
             if result and result.result and result.result.data_array:
@@ -554,7 +568,7 @@ async def _generate_cluster_alerts(ws, warehouse_id: str) -> list[Alert]:
             ws.statement_execution.execute_statement,
             warehouse_id=warehouse_id,
             statement=query,
-            wait_timeout="60s",
+            wait_timeout="50s",
         )
 
         if result and result.result and result.result.data_array:

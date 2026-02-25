@@ -1,0 +1,15 @@
+# Databricks bundle ignore file
+# This overrides .gitignore for bundle uploads
+
+# Exclude these from bundle
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+.env
+.pytest_cache/
+*.egg-info/
+.git/
+
+# DO NOT exclude dist - we need it for the frontend
+# (unlike .gitignore which excludes dist/)
