@@ -15,15 +15,11 @@ env:
   - name: LOG_LEVEL
     description: "Logging level for debugging"
     value: "DEBUG"
-  - name: USE_CACHE
-    description: "Enable cache-first queries for fast loading (requires refresh job)"
-    value: "true"
-  - name: CACHE_CATALOG
-    description: "Catalog name for metrics cache tables"
-    value: "job_monitor"
-  - name: CACHE_SCHEMA
-    description: "Schema name for metrics cache tables"
-    value: "cache"
+  # Cache settings are loaded from job_monitor/config.yaml
+  # Set env vars below to override config.yaml values:
+  # - CACHE_CATALOG: Catalog name for cache tables
+  # - CACHE_SCHEMA: Schema name for cache tables
+  # - USE_CACHE: Set to "false" to bypass cache
 
 permissions:
   - user_name: "${DATABRICKS_USER}"

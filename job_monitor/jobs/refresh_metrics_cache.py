@@ -1,7 +1,7 @@
 """Refresh metrics cache job.
 
 This job pre-aggregates data from system tables into Delta tables for fast dashboard loading.
-Run every 15-30 minutes via Databricks Jobs.
+Configuration is loaded from job_monitor/config.yaml, with CLI arguments as overrides.
 
 Tables created:
 - {catalog}.{schema}.job_health_cache: Pre-computed job health metrics
@@ -11,9 +11,30 @@ Tables created:
 
 import argparse
 from datetime import datetime
+from pathlib import Path
 
+import yaml
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
+
+
+def load_config() -> dict:
+    """Load configuration from config.yaml file."""
+    # Try multiple paths (job may run from different working directories)
+    config_paths = [
+        Path(__file__).parent.parent / "config.yaml",  # job_monitor/config.yaml
+        Path("job_monitor/config.yaml"),  # relative to workspace root
+        Path("/Workspace/") / "config.yaml",  # workspace root
+    ]
+
+    for config_path in config_paths:
+        if config_path.exists():
+            print(f"[{datetime.now()}] Loading config from {config_path}")
+            with open(config_path) as f:
+                return yaml.safe_load(f) or {}
+
+    print(f"[{datetime.now()}] No config.yaml found, using defaults")
+    return {}
 
 
 def get_spark() -> SparkSession:
@@ -387,15 +408,29 @@ def ensure_schema_exists(spark: SparkSession, catalog: str, schema: str):
 
 
 def main():
+    # Load config from YAML file first
+    config = load_config()
+    cache_config = config.get("cache", {})
+
+    # CLI args override config file values
     parser = argparse.ArgumentParser(description="Refresh job monitor metrics cache")
-    parser.add_argument("--catalog", default="job_monitor", help="Catalog name for cache tables")
-    parser.add_argument("--schema", default="cache", help="Schema name for cache tables")
+    parser.add_argument(
+        "--catalog",
+        default=cache_config.get("catalog", "job_monitor"),
+        help="Catalog name for cache tables (default from config.yaml)"
+    )
+    parser.add_argument(
+        "--schema",
+        default=cache_config.get("schema", "cache"),
+        help="Schema name for cache tables (default from config.yaml)"
+    )
     args = parser.parse_args()
 
     spark = get_spark()
 
     print(f"[{datetime.now()}] Starting metrics cache refresh")
     print(f"[{datetime.now()}] Target: {args.catalog}.{args.schema}")
+    print(f"[{datetime.now()}] Config: catalog={cache_config.get('catalog')}, schema={cache_config.get('schema')}, cron={cache_config.get('refresh_cron')}")
 
     # Ensure schema exists
     ensure_schema_exists(spark, args.catalog, args.schema)

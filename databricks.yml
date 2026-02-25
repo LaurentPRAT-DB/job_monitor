@@ -1,23 +1,29 @@
 bundle:
   name: job-monitor
 
+# Configuration is centralized in job_monitor/config.yaml
+# Both the app and the cache refresh job read from this file.
+# Variables below can override config.yaml values per target.
+
 sync:
   include:
     - job_monitor/ui/dist/**
     - job_monitor/jobs/**
+    - job_monitor/config.yaml
 
 variables:
   warehouse_id:
     description: "SQL warehouse ID for system table queries"
     default: "06c1adfd3dbdacde"
+  # These override config.yaml if set. Leave empty to use config.yaml values.
   cache_catalog:
-    description: "Catalog for metrics cache tables"
-    default: "job_monitor"
+    description: "Catalog for metrics cache tables (overrides config.yaml)"
+    default: ""
   cache_schema:
-    description: "Schema for metrics cache tables"
-    default: "cache"
+    description: "Schema for metrics cache tables (overrides config.yaml)"
+    default: ""
   cache_refresh_cron:
-    description: "Cron schedule for cache refresh (default: every 15 min)"
+    description: "Cron schedule for cache refresh (overrides config.yaml)"
     default: "0 */15 * * * ?"
 
 targets:
@@ -53,22 +59,19 @@ resources:
   jobs:
     refresh-metrics-cache:
       name: "job-monitor-refresh-cache"
-      description: "Refresh metrics cache tables for fast dashboard loading"
+      description: "Refresh metrics cache tables for fast dashboard loading. Config from job_monitor/config.yaml"
       tasks:
         - task_key: refresh_cache
           spark_python_task:
+            # Job reads catalog/schema from job_monitor/config.yaml
             python_file: job_monitor/jobs/refresh_metrics_cache.py
-            parameters:
-              - "--catalog"
-              - "${var.cache_catalog}"
-              - "--schema"
-              - "${var.cache_schema}"
           new_cluster:
             spark_version: "14.3.x-scala2.12"
             node_type_id: "i3.xlarge"
             num_workers: 1
             data_security_mode: "SINGLE_USER"
       schedule:
+        # Schedule can be overridden via cache_refresh_cron variable
         quartz_cron_expression: "${var.cache_refresh_cron}"
         timezone_id: "UTC"
       tags:

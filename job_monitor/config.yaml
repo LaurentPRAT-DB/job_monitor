@@ -1,0 +1,26 @@
+# Job Monitor Configuration
+# This file is the single source of truth for both the app and the cache refresh job.
+# Values can be overridden by environment variables (uppercase, e.g., CACHE_CATALOG).
+
+# Cache settings for pre-aggregated metrics
+cache:
+  catalog: "job_monitor"
+  schema: "cache"
+  # Refresh schedule in cron format (used by the Databricks job)
+  # Examples: "0 */15 * * * ?" (every 15 min), "0 0 * * * ?" (hourly)
+  refresh_cron: "0 */15 * * * ?"
+  # Enable cache-first queries (set to false to bypass cache)
+  enabled: true
+
+# SQL Warehouse for queries
+warehouse_id: ""
+
+# DBU rate for cost calculations (0 = disabled)
+dbu_rate: 0.0
+
+# Job tag keys for attribution
+tags:
+  sla: "sla_minutes"
+  team: "team"
+  owner: "owner"
+  budget: "budget_monthly_dbus"

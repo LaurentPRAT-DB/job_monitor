@@ -1,30 +1,60 @@
-"""Configuration settings for Job Monitor backend."""
+"""Configuration settings for Job Monitor backend.
 
+Loads configuration from:
+1. job_monitor/config.yaml (base configuration)
+2. Environment variables (overrides)
+
+Environment variables use uppercase names with underscores, e.g.:
+- CACHE_CATALOG, CACHE_SCHEMA, CACHE_REFRESH_CRON
+- WAREHOUSE_ID, DBU_RATE
+"""
+
+from pathlib import Path
+
+import yaml
 from pydantic_settings import BaseSettings
 
 
+def _load_yaml_config() -> dict:
+    """Load configuration from config.yaml file."""
+    config_paths = [
+        Path(__file__).parent.parent / "config.yaml",  # job_monitor/config.yaml
+        Path(__file__).parent.parent.parent / "config.yaml",  # project root
+    ]
+
+    for config_path in config_paths:
+        if config_path.exists():
+            with open(config_path) as f:
+                return yaml.safe_load(f) or {}
+
+    return {}
+
+
+# Load YAML config once at module import
+_yaml_config = _load_yaml_config()
+
+
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
+    """Application settings loaded from config.yaml and environment variables."""
 
     databricks_host: str = ""
-    warehouse_id: str = ""
+    warehouse_id: str = _yaml_config.get("warehouse_id", "")
     app_version: str = "0.1.0"
 
-    # SLA and team attribution tag keys
-    sla_tag_key: str = "sla_minutes"
-    team_tag_key: str = "team"
-    owner_tag_key: str = "owner"
+    # SLA and team attribution tag keys (from config.yaml tags section)
+    sla_tag_key: str = _yaml_config.get("tags", {}).get("sla", "sla_minutes")
+    team_tag_key: str = _yaml_config.get("tags", {}).get("team", "team")
+    owner_tag_key: str = _yaml_config.get("tags", {}).get("owner", "owner")
+    budget_tag_key: str = _yaml_config.get("tags", {}).get("budget", "budget_monthly_dbus")
 
     # DBU rate for cost calculations (0 means disabled, user configures)
-    dbu_rate: float = 0.0
+    dbu_rate: float = _yaml_config.get("dbu_rate", 0.0)
 
-    # Budget tag key for monthly DBU budget per job
-    budget_tag_key: str = "budget_monthly_dbus"
-
-    # Cache settings for pre-aggregated metrics
-    cache_catalog: str = "job_monitor"
-    cache_schema: str = "cache"
-    use_cache: bool = True  # Set to False to bypass cache and query system tables directly
+    # Cache settings for pre-aggregated metrics (from config.yaml cache section)
+    cache_catalog: str = _yaml_config.get("cache", {}).get("catalog", "job_monitor")
+    cache_schema: str = _yaml_config.get("cache", {}).get("schema", "cache")
+    cache_refresh_cron: str = _yaml_config.get("cache", {}).get("refresh_cron", "0 */15 * * * ?")
+    use_cache: bool = _yaml_config.get("cache", {}).get("enabled", True)
 
     # SMTP email configuration
     smtp_host: str = ""
@@ -57,3 +87,8 @@ settings = Settings()
 def get_settings() -> Settings:
     """Return settings instance (for dependency injection or testing)."""
     return settings
+
+
+def get_yaml_config() -> dict:
+    """Return raw YAML config (for job script access)."""
+    return _yaml_config
