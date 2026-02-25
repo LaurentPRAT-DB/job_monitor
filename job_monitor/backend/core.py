@@ -57,18 +57,31 @@ def get_ws_prefer_user(
 
     Returns None if neither is available.
     """
+    # Log what we received
+    logger.info(f"get_ws_prefer_user: X-Forwarded-Access-Token present = {token is not None}")
+    if token:
+        logger.info(f"get_ws_prefer_user: Token length = {len(token)}")
+
     # Try user OBO first
     if token:
         try:
             from databricks.sdk import WorkspaceClient
             from job_monitor.backend.config import settings
 
-            logger.info("Using user OBO token for WorkspaceClient")
+            logger.info("=== USING USER OBO TOKEN ===")
+            logger.info(f"OBO token for host: {settings.databricks_host}")
             # Use token explicitly to avoid auth conflicts
-            return WorkspaceClient(
+            ws = WorkspaceClient(
                 host=settings.databricks_host,
                 token=token,
             )
+            # Verify the token works by getting current user
+            try:
+                current_user = ws.current_user.me()
+                logger.info(f"OBO authenticated as: {current_user.user_name}")
+            except Exception as e:
+                logger.warning(f"Could not verify OBO user: {e}")
+            return ws
         except ValueError as ve:
             if "more than one authorization method" in str(ve):
                 logger.warning(f"Auth conflict with OBO token, falling back to SP: {ve}")
@@ -78,7 +91,13 @@ def get_ws_prefer_user(
     # Fall back to service principal (already initialized at startup)
     ws = request.app.state.workspace_client
     if ws:
-        logger.info("Using service principal WorkspaceClient (no user token available)")
+        logger.info("=== USING SERVICE PRINCIPAL (no user token available) ===")
+        # Log SP identity for debugging
+        try:
+            current_user = ws.current_user.me()
+            logger.info(f"Service Principal identity: {current_user.user_name}")
+        except Exception as e:
+            logger.warning(f"Could not get SP identity: {e}")
     else:
         logger.warning("No WorkspaceClient available (no user token, no SP)")
     return ws

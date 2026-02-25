@@ -46,6 +46,17 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
         logger.info(f">>> API REQUEST: {request.method} {request.url.path}")
         logger.info(f"    Query params: {dict(request.query_params)}")
 
+        # Log ALL headers to debug OBO token forwarding
+        logger.info("    === REQUEST HEADERS ===")
+        for header_name, header_value in request.headers.items():
+            # Mask sensitive values but show their presence
+            if "token" in header_name.lower() or "auth" in header_name.lower():
+                masked_value = f"{header_value[:20]}...({len(header_value)} chars)" if len(header_value) > 20 else header_value
+                logger.info(f"    {header_name}: {masked_value}")
+            else:
+                logger.info(f"    {header_name}: {header_value}")
+        logger.info("    === END HEADERS ===")
+
         try:
             response = await call_next(request)
             duration = time.time() - start_time

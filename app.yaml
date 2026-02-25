@@ -21,6 +21,7 @@ permissions:
     level: CAN_MANAGE
 
 # User OBO (On-Behalf-Of) scopes - enables user token forwarding
+# CRITICAL: "sql" scope allows app to use user's permissions for system table queries
+# Must also set via CLI: databricks apps update <name> --json '{"user_api_scopes": ["sql"]}'
 user_api_scopes:
   - sql
-  - offline_access
