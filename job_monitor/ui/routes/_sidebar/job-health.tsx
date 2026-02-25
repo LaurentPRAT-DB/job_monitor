@@ -26,8 +26,11 @@ async function fetchHealthMetrics(days: number): Promise<JobHealthListResponse> 
   return response.json();
 }
 
+type PriorityFilter = 'all' | 'P1' | 'P2' | 'P3';
+
 export default function JobHealthPage() {
   const [days, setDays] = useState<7 | 30>(7);
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['health-metrics', { days }],
@@ -72,31 +75,51 @@ export default function JobHealthPage() {
         </TabsList>
       </Tabs>
 
-      {/* Summary stats */}
+      {/* Summary stats - clickable to filter */}
       {data && !isLoading && (
         <div className="flex gap-6 mb-6">
-          <div className="bg-white rounded-lg border px-4 py-3">
+          <button
+            onClick={() => setPriorityFilter(priorityFilter === 'all' ? 'all' : 'all')}
+            className={`bg-white rounded-lg border px-4 py-3 text-left transition-all hover:shadow-md cursor-pointer ${
+              priorityFilter === 'all' ? 'ring-2 ring-blue-500 border-blue-500' : ''
+            }`}
+          >
             <div className="text-sm text-gray-500">Total Jobs</div>
             <div className="text-xl font-semibold">{data.total_count}</div>
-          </div>
-          <div className="bg-white rounded-lg border px-4 py-3">
+          </button>
+          <button
+            onClick={() => setPriorityFilter(priorityFilter === 'P1' ? 'all' : 'P1')}
+            className={`bg-white rounded-lg border px-4 py-3 text-left transition-all hover:shadow-md cursor-pointer ${
+              priorityFilter === 'P1' ? 'ring-2 ring-red-500 border-red-500' : ''
+            }`}
+          >
             <div className="text-sm text-gray-500">Critical (P1)</div>
             <div className="text-xl font-semibold text-red-600">
               {data.jobs.filter((j) => j.priority === 'P1').length}
             </div>
-          </div>
-          <div className="bg-white rounded-lg border px-4 py-3">
+          </button>
+          <button
+            onClick={() => setPriorityFilter(priorityFilter === 'P2' ? 'all' : 'P2')}
+            className={`bg-white rounded-lg border px-4 py-3 text-left transition-all hover:shadow-md cursor-pointer ${
+              priorityFilter === 'P2' ? 'ring-2 ring-orange-500 border-orange-500' : ''
+            }`}
+          >
             <div className="text-sm text-gray-500">Failing (P2)</div>
             <div className="text-xl font-semibold text-orange-500">
               {data.jobs.filter((j) => j.priority === 'P2').length}
             </div>
-          </div>
-          <div className="bg-white rounded-lg border px-4 py-3">
+          </button>
+          <button
+            onClick={() => setPriorityFilter(priorityFilter === 'P3' ? 'all' : 'P3')}
+            className={`bg-white rounded-lg border px-4 py-3 text-left transition-all hover:shadow-md cursor-pointer ${
+              priorityFilter === 'P3' ? 'ring-2 ring-yellow-500 border-yellow-500' : ''
+            }`}
+          >
             <div className="text-sm text-gray-500">Warning (P3)</div>
             <div className="text-xl font-semibold text-yellow-600">
               {data.jobs.filter((j) => j.priority === 'P3').length}
             </div>
-          </div>
+          </button>
         </div>
       )}
 
@@ -128,11 +151,30 @@ export default function JobHealthPage() {
       {/* Job health table */}
       <div className="bg-white rounded-lg border shadow-sm">
         <JobHealthTable
-          jobs={data?.jobs ?? []}
+          jobs={
+            priorityFilter === 'all'
+              ? (data?.jobs ?? [])
+              : (data?.jobs ?? []).filter((j) => j.priority === priorityFilter)
+          }
           isLoading={isLoading}
           onRefetch={() => refetch()}
         />
       </div>
+
+      {/* Active filter indicator */}
+      {priorityFilter !== 'all' && data && (
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-sm text-gray-500">
+            Showing {data.jobs.filter((j) => j.priority === priorityFilter).length} {priorityFilter} jobs
+          </span>
+          <button
+            onClick={() => setPriorityFilter('all')}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Clear filter
+          </button>
+        </div>
+      )}
 
       {/* Footer note about data latency */}
       <p className="text-xs text-gray-400 mt-4">
