@@ -261,9 +261,17 @@ Returns:
 }
 ```
 
-### Job Tags for SLA and Cost Tracking
+### Job Tags for Monitoring Features
 
-Tag your Databricks jobs to enable SLA monitoring and cost attribution:
+Tag your Databricks jobs to enable advanced monitoring features:
+
+| Tag Key | Description | Example Value |
+|---------|-------------|---------------|
+| `team` | Team attribution for cost grouping | `data-platform` |
+| `sla_minutes` | SLA target in minutes | `30` |
+| `budget_monthly_dbus` | Monthly DBU budget | `500` |
+| `owner` | Job owner for notifications | `jane.doe@company.com` |
+| `output_tables` | Tables written by job (for Pipeline Integrity) | `catalog.schema.table1,catalog.schema.table2` |
 
 ```python
 # Example: Setting job tags via SDK
@@ -272,11 +280,31 @@ job_settings = {
     "tags": {
         "team": "data-platform",
         "sla_minutes": "30",
-        "budget_monthly_dbus": "500"
+        "budget_monthly_dbus": "500",
+        "output_tables": "main.sales.orders,main.sales.customers"
     },
     # ... other settings
 }
 ```
+
+#### Pipeline Integrity Tracking
+
+The `output_tables` tag enables **Pipeline Integrity** monitoring for jobs that write to Delta tables:
+
+- **Row Count Deltas**: Compares current row counts against a 7-day baseline. Alerts if counts deviate significantly (e.g., table suddenly has 50% fewer rows).
+- **Schema Drift Detection**: Detects when table schemas change unexpectedly (columns added/removed/modified).
+
+**How to configure:**
+
+1. Go to **Databricks → Workflows → Select job → Edit**
+2. Add a tag with key `output_tables`
+3. Value is a comma-separated list of fully-qualified table names
+
+```
+output_tables = main.sales.orders,main.sales.customers
+```
+
+> **Note**: This is optional. Jobs that don't write to tables or don't need data quality tracking can safely skip this configuration.
 
 ## Deployment
 
