@@ -1,140 +1,36 @@
 # Roadmap: Databricks Job Health & Monitoring Framework
 
-## Overview
+## Milestones
 
-This roadmap transforms requirements into a monitoring framework that shifts platform operations from reactive to proactive. We start by establishing the Databricks App foundation and data ingestion from Unity Catalog system tables (Phase 1), then build job health tracking as the core monitoring capability (Phase 2). SLA and cost visibility follow (Phase 3), enabling business-relevant metrics. Cluster efficiency and data pipeline integrity add advanced monitoring (Phase 4). Alerting and remediation suggestions make the system proactive rather than passive (Phase 5). Finally, dashboards and reporting deliver the polished user experience with filtering, drill-down, and scheduled reports (Phase 6).
+- ✅ **v1.0 MVP** — Phases 1-6 (shipped 2026-02-25)
 
 ## Phases
 
-**Phase Numbering:**
-- Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
+<details>
+<summary>✅ v1.0 MVP (Phases 1-6) — SHIPPED 2026-02-25</summary>
 
-Decimal phases appear between their surrounding integers in numeric order.
+- [x] Phase 1: Foundation & Data Ingestion (3/3 plans) — completed 2026-02-24
+- [x] Phase 2: Job Health Monitoring (3/3 plans) — completed 2026-02-24
+- [x] Phase 3: SLA & Cost Visibility (3/3 plans) — completed 2026-02-24
+- [x] Phase 4: Cluster & Pipeline Integrity (3/3 plans) — completed 2026-02-24
+- [x] Phase 5: Alerting & Remediation (3/3 plans) — completed 2026-02-25
+- [x] Phase 6: Dashboards & Reporting (3/3 plans) — completed 2026-02-25
 
-- [x] **Phase 1: Foundation & Data Ingestion** - Databricks App scaffold with APX, OAuth auth, system table access
-- [x] **Phase 2: Job Health Monitoring** - Success/failure tracking, duration analysis, retry detection
-- [x] **Phase 3: SLA & Cost Visibility** - SLA target definition, breach history, cost per job, team attribution
-- [x] **Phase 4: Cluster & Pipeline Integrity** - Resource utilization monitoring, row count validation, schema drift detection
-- [x] **Phase 5: Alerting & Remediation** - In-app alerts with severity levels, actionable suggestions, proactive warnings
-- [ ] **Phase 6: Dashboards & Reporting** - Filtering/drill-down, historical views, daily/weekly/monthly reports
+**Full details:** `.planning/milestones/v1.0-ROADMAP.md`
 
-## Phase Details
-
-### Phase 1: Foundation & Data Ingestion
-**Goal**: Platform team can access a running Databricks App that authenticates users and ingests data from Unity Catalog system tables
-**Depends on**: Nothing (first phase)
-**Requirements**: APP-01, APP-02, APP-05, APP-06
-**Success Criteria** (what must be TRUE):
-  1. App deploys successfully to Databricks workspace and is accessible via URL
-  2. User authenticates via Databricks OAuth and sees their identity displayed
-  3. App queries system.billing and system.lakeflow tables and returns data
-  4. App calls Jobs API and retrieves job metadata not available in system tables
-  5. Data ingestion handles SCD2 semantics correctly (latest record per job)
-**Plans**: 3 plans
-
-Plans:
-- [x] 01-01-PLAN.md — APX scaffold with OAuth authentication and user identity display
-- [x] 01-02-PLAN.md — System tables ingestion (jobs, billing) with SCD2/RETRACTION handling
-- [x] 01-03-PLAN.md — Jobs API integration for real-time data + deployment verification
-
-### Phase 2: Job Health Monitoring
-**Goal**: Platform team can view job success/failure rates, duration trends, and retry patterns for all monitored jobs
-**Depends on**: Phase 1
-**Requirements**: JOB-01, JOB-02, JOB-03, JOB-04
-**Success Criteria** (what must be TRUE):
-  1. Platform user can view success/failure rate for any job over 7-day and 30-day windows
-  2. Jobs with 2+ consecutive failures are flagged with P1 priority indicator
-  3. Platform user can see job duration trend and identify sudden increases vs baseline
-  4. Retry counts per job are visible, highlighting jobs with silent cost inflation
-**Plans**: 3 plans
-
-Plans:
-- [x] 02-01-PLAN.md — Job health metrics API with success rates, priority flags, and retry counts
-- [x] 02-02-PLAN.md — Duration statistics and expanded details API endpoints
-- [x] 02-03-PLAN.md — Job health dashboard UI with expandable rows and duration charts
-
-### Phase 3: SLA & Cost Visibility
-**Goal**: Platform team can define SLA targets per job, track breach history, and see cost attribution by job and team
-**Depends on**: Phase 2
-**Requirements**: SLA-01, SLA-02, COST-01, COST-02, COST-04, COST-05
-**Success Criteria** (what must be TRUE):
-  1. Platform user can define expected completion window (SLA target) for any job
-  2. SLA breach history is visible per job for optimization prioritization
-  3. DBU cost per job per run is calculated and displayed (handles RETRACTION records)
-  4. Costs are attributed to teams/business units via job metadata mapping
-  5. Jobs with sudden DBU spikes (>2x p90 baseline) are flagged as anomalies
-  6. Zombie jobs (scheduled but processing minimal records) are identified
-**Plans**: 3 plans
-
-Plans:
-- [x] 03-01-PLAN.md — Backend APIs for job tags (SLA/team) and cost endpoints with anomaly detection
-- [x] 03-02-PLAN.md — SLA UI integration with inline editing and breach sparkline in job health table
-- [x] 03-03-PLAN.md — Costs dashboard page with team rollups and anomalies tab
-
-### Phase 4: Cluster & Pipeline Integrity
-**Goal**: Platform team can identify over-provisioned clusters and detect data quality issues before they cascade
-**Depends on**: Phase 3
-**Requirements**: CLUST-01, CLUST-02, PIPE-01, PIPE-02
-**Success Criteria** (what must be TRUE):
-  1. Driver and worker CPU/memory utilization is visible per job run
-  2. Jobs with sustained <40% utilization are flagged as over-provisioned candidates
-  3. Row count deltas vs historical baseline are tracked (alert on +/-20% deviation)
-  4. Schema drift on source data is detected and alerts are generated
-**Plans**: 3 plans
-
-Plans:
-- [x] 04-01-PLAN.md — Backend APIs for cluster utilization (proxy metrics) and pipeline integrity (row counts, schema drift)
-- [x] 04-02-PLAN.md — Cluster utilization UI with circular gauges and over-provisioned badge
-- [x] 04-03-PLAN.md — Pipeline integrity UI with row count tracking and schema drift alerts
-
-### Phase 5: Alerting & Remediation
-**Goal**: Platform team receives proactive alerts with actionable recommendations before issues impact business users
-**Depends on**: Phase 4
-**Requirements**: ALERT-01, ALERT-02, SLA-03, COST-03
-**Success Criteria** (what must be TRUE):
-  1. Alerts display in-app with severity levels (P1/P2/P3) and clear categorization
-  2. Each alert includes actionable remediation suggestions (not just problem statement)
-  3. SLA breach risk alert fires when job exceeds 80% of allowed window (proactive)
-  4. Budget threshold alerts fire when job cost approaches or exceeds defined limit
-**Plans**: 3 plans
-
-Plans:
-- [x] 05-01-PLAN.md — Alert backend API with dynamic generation from health, cost, SLA, cluster data
-- [x] 05-02-PLAN.md — Alert UI components (drawer, cards, badges, toasts) with header integration
-- [x] 05-03-PLAN.md — Alerts page with severity sections and job row alert indicators
-
-### Phase 6: Dashboards & Reporting
-**Goal**: All user personas (platform ops, business teams, leadership) can access tailored views with appropriate filtering and scheduled reports
-**Depends on**: Phase 5
-**Requirements**: APP-03, APP-04, ALERT-03, ALERT-04, ALERT-05
-**Success Criteria** (what must be TRUE):
-  1. Platform user can filter/drill-down by team, job, and time range
-  2. Historical dashboard shows 7/30/90-day views with trend visualization
-  3. Daily health summary report generates automatically (overnight failures, SLA breaches, actions)
-  4. Weekly cost report generates automatically (per-team spend, trends, anomalies)
-  5. Monthly executive report generates automatically (TCO, reliability metrics, optimization ROI)
-**Plans**: 3 plans
-
-Plans:
-- [ ] 06-01-PLAN.md — Global filter system with URL state sync and shared presets
-- [ ] 06-02-PLAN.md — Historical dashboard with trend charts and previous period overlay
-- [ ] 06-03-PLAN.md — Scheduled reports (daily/weekly/monthly) with email delivery
+</details>
 
 ## Progress
 
-**Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Foundation & Data Ingestion | 3/3 | Complete    | 2026-02-24 |
-| 2. Job Health Monitoring | 3/3 | Complete    | 2026-02-24 |
-| 3. SLA & Cost Visibility | 3/3 | Complete    | 2026-02-24 |
-| 4. Cluster & Pipeline Integrity | 3/3 | Complete | 2026-02-24 |
-| 5. Alerting & Remediation | 3/3 | Complete | 2026-02-25 |
-| 6. Dashboards & Reporting | 0/3 | Planned | - |
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 1. Foundation & Data Ingestion | v1.0 | 3/3 | Complete | 2026-02-24 |
+| 2. Job Health Monitoring | v1.0 | 3/3 | Complete | 2026-02-24 |
+| 3. SLA & Cost Visibility | v1.0 | 3/3 | Complete | 2026-02-24 |
+| 4. Cluster & Pipeline Integrity | v1.0 | 3/3 | Complete | 2026-02-24 |
+| 5. Alerting & Remediation | v1.0 | 3/3 | Complete | 2026-02-25 |
+| 6. Dashboards & Reporting | v1.0 | 3/3 | Complete | 2026-02-25 |
 
 ---
 *Roadmap created: 2026-02-18*
-*Last updated: 2026-02-25 (Phase 6 planned)*
+*v1.0 shipped: 2026-02-25*
