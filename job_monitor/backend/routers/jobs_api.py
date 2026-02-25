@@ -8,7 +8,7 @@ System tables have 5-15 minute latency, while Jobs API provides instant access t
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -33,7 +33,7 @@ def _job_to_model(job) -> JobApiOut:
         name=job.settings.name if job.settings else "Unknown",
         creator_user_name=job.creator_user_name,
         created_time=(
-            datetime.fromtimestamp(job.created_time / 1000)
+            datetime.fromtimestamp(job.created_time / 1000, tz=timezone.utc)
             if job.created_time
             else None
         ),
@@ -62,10 +62,10 @@ def _run_to_model(run) -> JobApiRunOut:
             else None
         ),
         start_time=(
-            datetime.fromtimestamp(run.start_time / 1000) if run.start_time else None
+            datetime.fromtimestamp(run.start_time / 1000, tz=timezone.utc) if run.start_time else None
         ),
         end_time=(
-            datetime.fromtimestamp(run.end_time / 1000) if run.end_time else None
+            datetime.fromtimestamp(run.end_time / 1000, tz=timezone.utc) if run.end_time else None
         ),
         run_page_url=run.run_page_url,
     )
@@ -271,12 +271,12 @@ async def get_active_runs_with_history(
                     else None
                 ),
                 start_time=(
-                    datetime.fromtimestamp(run.start_time / 1000)
+                    datetime.fromtimestamp(run.start_time / 1000, tz=timezone.utc)
                     if run.start_time
                     else None
                 ),
                 end_time=(
-                    datetime.fromtimestamp(run.end_time / 1000)
+                    datetime.fromtimestamp(run.end_time / 1000, tz=timezone.utc)
                     if run.end_time
                     else None
                 ),
