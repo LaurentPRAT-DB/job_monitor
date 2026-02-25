@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Platform team can proactively identify job failures, SLA breaches, and cost anomalies before business users report them
-**Current focus:** Phase 4 - Cluster & Pipeline Integrity
+**Current focus:** Phase 5 - Alerting & Remediation
 
 ## Current Position
 
-Phase: 4 of 6 (Cluster & Pipeline Integrity)
-Plan: 3 of 3 in current phase
-Status: Complete
-Last activity: 2026-02-24 -- Plan 04-03 complete (Pipeline Integrity UI)
+Phase: 5 of 6 (Alerting & Remediation)
+Plan: 1 of 3 in current phase
+Status: In Progress
+Last activity: 2026-02-25 -- Plan 05-01 complete (Alert Backend API)
 
-Progress: [########..] 73%
+Progress: [########..] 79%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
+- Total plans completed: 13
 - Average duration: 4m
-- Total execution time: 0.67 hours
+- Total execution time: 0.72 hours
 
 **By Phase:**
 
@@ -31,9 +31,10 @@ Progress: [########..] 73%
 | 02 | 3 | 21m 33s | 7m 11s |
 | 03 | 3 | 14m | 4m 40s |
 | 04 | 3 | 9m | 3m |
+| 05 | 1 | 3m | 3m |
 
 **Recent Trend:**
-- Last 5 plans: 03-02 (2m), 03-03 (4m), 04-01 (3m), 04-02 (3m), 04-03 (3m)
+- Last 5 plans: 03-03 (4m), 04-01 (3m), 04-02 (3m), 04-03 (3m), 05-01 (3m)
 - Trend: Progressing
 
 *Updated after each plan completion*
@@ -83,6 +84,10 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-03: Schema drift shown first in pipeline section (more urgent than row counts)
 - [Phase 04]: 04-03: Mini sparkline hidden when trend has <2 data points
 - [Phase 04]: 04-03: Table name truncated to last segment with full path in subtitle
+- [Phase 05]: 05-01: In-memory acknowledgment with 24h TTL (no database persistence needed)
+- [Phase 05]: 05-01: Alert ID format: {category}_{job_id}_{type} for uniqueness
+- [Phase 05]: 05-01: asyncio.gather for parallel alert generation from all 4 sources
+- [Phase 05]: 05-01: Severity-based deduplication when same condition generates multiple alerts
 
 ### Pending Todos
 
@@ -97,6 +102,6 @@ Research flags from .planning/research/SUMMARY.md:
 
 ## Session Continuity
 
-Last session: 2026-02-24
-Stopped at: Completed 04-03-PLAN.md (Pipeline Integrity UI) - Phase 4 complete
-Resume file: .planning/phases/04-cluster-pipeline-integrity/04-03-SUMMARY.md
+Last session: 2026-02-25
+Stopped at: Completed 05-01-PLAN.md (Alert Backend API)
+Resume file: .planning/phases/05-alerting-remediation/05-01-SUMMARY.md

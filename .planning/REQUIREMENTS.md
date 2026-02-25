@@ -18,13 +18,13 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **SLA-01**: Define expected completion windows per job (SLA targets)
 - [x] **SLA-02**: Track SLA breach history for optimization prioritization
-- [ ] **SLA-03**: Alert on SLA breach risk when job exceeds 80% of allowed window (proactive prediction)
+- [x] **SLA-03**: Alert on SLA breach risk when job exceeds 80% of allowed window (proactive prediction)
 
 ### Cost Attribution
 
 - [x] **COST-01**: Calculate DBU cost per job per run using system tables + pricing data
 - [x] **COST-02**: Attribute costs to teams/business units via job metadata mapping
-- [ ] **COST-03**: Set budget thresholds per job with breach alerts
+- [x] **COST-03**: Set budget thresholds per job with breach alerts
 - [x] **COST-04**: Detect sudden DBU spikes (>2x p90 baseline) as anomalies
 - [x] **COST-05**: Identify zombie jobs (scheduled but processing minimal/zero records)
 
@@ -40,8 +40,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Alerting & Delivery
 
-- [ ] **ALERT-01**: Display alerts in-app with severity levels (P1/P2/P3)
-- [ ] **ALERT-02**: Include actionable remediation suggestions with each alert
+- [x] **ALERT-01**: Display alerts in-app with severity levels (P1/P2/P3)
+- [x] **ALERT-02**: Include actionable remediation suggestions with each alert
 - [ ] **ALERT-03**: Generate daily health summary (overnight failures, SLA breaches, action items)
 - [ ] **ALERT-04**: Generate weekly cost report (per-team spend, trends, anomalies)
 - [ ] **ALERT-05**: Generate monthly executive report (TCO, reliability metrics, optimization ROI)
@@ -108,18 +108,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | JOB-04 | Phase 2 | Complete |
 | SLA-01 | Phase 3 | Complete |
 | SLA-02 | Phase 3 | Complete |
-| SLA-03 | Phase 5 | Pending |
+| SLA-03 | Phase 5 | Complete |
 | COST-01 | Phase 3 | Complete |
 | COST-02 | Phase 3 | Complete |
-| COST-03 | Phase 5 | Pending |
+| COST-03 | Phase 5 | Complete |
 | COST-04 | Phase 3 | Complete |
 | COST-05 | Phase 3 | Complete |
 | CLUST-01 | Phase 4 | Complete |
 | CLUST-02 | Phase 4 | Complete |
 | PIPE-01 | Phase 4 | Complete |
 | PIPE-02 | Phase 4 | Complete |
-| ALERT-01 | Phase 5 | Pending |
-| ALERT-02 | Phase 5 | Pending |
+| ALERT-01 | Phase 5 | Complete |
+| ALERT-02 | Phase 5 | Complete |
 | ALERT-03 | Phase 6 | Pending |
 | ALERT-04 | Phase 6 | Pending |
 | ALERT-05 | Phase 6 | Pending |
