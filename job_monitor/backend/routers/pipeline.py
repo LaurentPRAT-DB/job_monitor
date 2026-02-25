@@ -4,7 +4,10 @@ Provides:
 - Row count tracking with baseline comparison and anomaly detection
 - Schema drift detection for pipeline output tables
 
-Note: Requires job-to-table mapping via job tags (output_tables key).
+Output tables are discovered via:
+1. Unity Catalog lineage (system.access.table_lineage) - automatic discovery
+2. Job tags (output_tables key) - manual fallback
+
 Row counts from information_schema may be approximate.
 """
 
@@ -73,8 +76,51 @@ def _detect_schema_drift(
     )
 
 
-async def _get_job_output_tables(ws, job_id: str) -> list[str]:
-    """Get output tables for a job from job tags.
+async def _get_job_output_tables_from_lineage(ws, job_id: str, warehouse_id: str) -> list[str]:
+    """Get output tables for a job from Unity Catalog lineage.
+
+    Queries system.access.table_lineage to find tables written by this job.
+
+    Args:
+        ws: WorkspaceClient
+        job_id: Job ID to lookup
+        warehouse_id: SQL Warehouse ID for query execution
+
+    Returns:
+        List of fully qualified table names (catalog.schema.table)
+    """
+    try:
+        # Query lineage for tables written by this job in last 30 days
+        lineage_query = f"""
+        SELECT DISTINCT target_table_full_name
+        FROM system.access.table_lineage
+        WHERE source_type = 'JOB'
+          AND source_name LIKE '%{job_id}%'
+          AND target_table_full_name IS NOT NULL
+          AND event_time >= current_date() - INTERVAL 30 DAYS
+        ORDER BY target_table_full_name
+        LIMIT 20
+        """
+
+        result = await asyncio.to_thread(
+            ws.statement_execution.execute_statement,
+            warehouse_id=warehouse_id,
+            statement=lineage_query,
+            wait_timeout="30s",
+        )
+
+        if result and result.result and result.result.data_array:
+            return [str(row[0]) for row in result.result.data_array if row[0]]
+
+    except Exception:
+        # Lineage table might not be accessible
+        pass
+
+    return []
+
+
+async def _get_job_output_tables_from_tags(ws, job_id: str) -> list[str]:
+    """Get output tables for a job from job tags (fallback method).
 
     Looks for 'output_tables' tag containing comma-separated table names.
 
@@ -94,6 +140,30 @@ async def _get_job_output_tables(ws, job_id: str) -> list[str]:
     except Exception:
         pass
     return []
+
+
+async def _get_job_output_tables(ws, job_id: str, warehouse_id: str) -> list[str]:
+    """Get output tables for a job.
+
+    Tries multiple sources in order:
+    1. Unity Catalog lineage (automatic discovery)
+    2. Job tags (manual configuration fallback)
+
+    Args:
+        ws: WorkspaceClient
+        job_id: Job ID to lookup
+        warehouse_id: SQL Warehouse ID for lineage query
+
+    Returns:
+        List of fully qualified table names (catalog.schema.table)
+    """
+    # First try Unity Catalog lineage for automatic discovery
+    tables = await _get_job_output_tables_from_lineage(ws, job_id, warehouse_id)
+    if tables:
+        return tables
+
+    # Fall back to job tags
+    return await _get_job_output_tables_from_tags(ws, job_id)
 
 
 def _parse_table_parts(table_name: str) -> tuple[str | None, str | None, str | None]:
@@ -143,11 +213,11 @@ async def get_row_count_deltas(
     if not warehouse_id:
         raise HTTPException(status_code=503, detail="Warehouse ID not configured")
 
-    # Get output tables from job tags
-    output_tables = await _get_job_output_tables(ws, job_id)
+    # Get output tables from lineage or job tags
+    output_tables = await _get_job_output_tables(ws, job_id, warehouse_id)
 
     if not output_tables:
-        # Return empty list if no output tables configured
+        # Return empty list if no output tables found
         return []
 
     results = []
@@ -286,11 +356,11 @@ async def get_schema_drift(
     if not warehouse_id:
         raise HTTPException(status_code=503, detail="Warehouse ID not configured")
 
-    # Get output tables from job tags
-    output_tables = await _get_job_output_tables(ws, job_id)
+    # Get output tables from lineage or job tags
+    output_tables = await _get_job_output_tables(ws, job_id, warehouse_id)
 
     if not output_tables:
-        # Return empty list if no output tables configured
+        # Return empty list if no output tables found
         return []
 
     results = []

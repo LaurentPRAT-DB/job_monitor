@@ -76,10 +76,10 @@ export function PipelineIntegritySection({ jobId }: PipelineIntegritySectionProp
       <div className="bg-card rounded border p-3 mt-3">
         <div className="flex items-center gap-2 text-muted-foreground text-sm">
           <Database className="h-4 w-4" />
-          <span>No output tables configured for this job</span>
+          <span>No output tables found for this job</span>
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          Add <code className="bg-muted px-1 rounded">output_tables</code> tag to job settings to enable tracking.
+          Tables are discovered via Unity Catalog lineage. If the job writes to tables, they should appear after the next run.
         </p>
       </div>
     );
