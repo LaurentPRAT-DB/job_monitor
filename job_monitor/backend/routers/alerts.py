@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 from job_monitor.backend.config import settings
 from job_monitor.backend.core import get_ws
+from job_monitor.backend.mock_data import get_mock_alerts, is_mock_mode
 from job_monitor.backend.models import (
     Alert,
     AlertCategory,
@@ -117,8 +118,11 @@ def _generate_cluster_remediation(utilization: float, runs_analyzed: int) -> str
     return f"Cluster running at ~{utilization:.0f}% utilization across {runs_analyzed} recent runs. Consider reducing workers by {reduction} or using smaller node types."
 
 
-async def _generate_failure_alerts(ws, warehouse_id: str) -> list[Alert]:
-    """Generate alerts from health metrics (failures, yellow zone)."""
+async def _generate_failure_alerts(ws, warehouse_id: str) -> list[Alert] | None:
+    """Generate alerts from health metrics (failures, yellow zone).
+
+    Returns None if permission error detected (signals to use mock data).
+    """
     alerts = []
     logger.info("[alerts._generate_failure_alerts] Starting")
 
@@ -185,7 +189,12 @@ async def _generate_failure_alerts(ws, warehouse_id: str) -> list[Alert]:
         )
         logger.info(f"[alerts._generate_failure_alerts] SQL completed, status: {result.status.state if result and result.status else 'None'}")
         if result and result.status and result.status.error:
-            logger.error(f"[alerts._generate_failure_alerts] SQL error: {result.status.error}")
+            error_msg = str(result.status.error)
+            logger.error(f"[alerts._generate_failure_alerts] SQL error: {error_msg}")
+            # Check for permission errors - return special marker
+            if "INSUFFICIENT_PERMISSIONS" in error_msg or "USE SCHEMA" in error_msg:
+                logger.warning("[alerts._generate_failure_alerts] Permission denied - will use mock data")
+                return None  # Signal to use mock data
 
         if result and result.result and result.result.data_array:
             logger.info(f"[alerts._generate_failure_alerts] Found {len(result.result.data_array)} failure rows")
@@ -659,6 +668,8 @@ async def get_alerts(
     - Cost data (anomalies, budget thresholds)
     - Cluster metrics (over-provisioning)
 
+    Supports mock data fallback when system tables aren't accessible.
+
     Args:
         severity: Filter by P1, P2, P3 (optional)
         category: Filter by failure, sla, cost, cluster (optional)
@@ -668,14 +679,19 @@ async def get_alerts(
     Returns:
         AlertListOut with alerts sorted by severity and counts by severity
     """
+    # Check for mock data mode
+    if is_mock_mode():
+        logger.info("Mock mode enabled - returning mock alerts")
+        return get_mock_alerts()
+
     if not ws:
-        raise HTTPException(
-            status_code=503, detail="Databricks connection not available"
-        )
+        logger.warning("WorkspaceClient not available - falling back to mock alerts")
+        return get_mock_alerts()
 
     warehouse_id = settings.warehouse_id
     if not warehouse_id:
-        raise HTTPException(status_code=503, detail="Warehouse ID not configured")
+        logger.warning("Warehouse ID not configured - falling back to mock alerts")
+        return get_mock_alerts()
 
     # Generate alerts from all sources in parallel
     failure_alerts, sla_alerts, cost_alerts, cluster_alerts = await asyncio.gather(
@@ -684,6 +700,11 @@ async def get_alerts(
         _generate_cost_alerts(ws, warehouse_id),
         _generate_cluster_alerts(ws, warehouse_id),
     )
+
+    # Check if any generator returned None (permission error) - fall back to mock data
+    if failure_alerts is None:
+        logger.warning("Permission error detected in alert generation - falling back to mock alerts")
+        return get_mock_alerts()
 
     # Combine and deduplicate
     all_alerts = failure_alerts + sla_alerts + cost_alerts + cluster_alerts

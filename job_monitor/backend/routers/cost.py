@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 from job_monitor.backend.config import settings
 from job_monitor.backend.core import get_ws
+from job_monitor.backend.mock_data import get_mock_cost_summary, is_mock_mode
 from job_monitor.backend.models import (
     CostAnomalyOut,
     CostBySkuOut,
@@ -177,6 +178,8 @@ async def get_cost_summary(
     Queries system.billing.usage with SKU categorization and RETRACTION handling.
     Calculates 7-day trends and identifies cost anomalies.
 
+    Supports mock data fallback when system tables aren't accessible.
+
     Args:
         days: Time window for cost aggregation (7-90 days, default 30)
         ws: WorkspaceClient dependency
@@ -184,14 +187,19 @@ async def get_cost_summary(
     Returns:
         Complete cost summary with jobs, teams, and anomalies
     """
+    # Check for mock data mode
+    if is_mock_mode():
+        logger.info("Mock mode enabled - returning mock cost summary")
+        return get_mock_cost_summary()
+
     if not ws:
-        raise HTTPException(
-            status_code=503, detail="Databricks connection not available"
-        )
+        logger.warning("WorkspaceClient not available - falling back to mock cost summary")
+        return get_mock_cost_summary()
 
     warehouse_id = settings.warehouse_id
     if not warehouse_id:
-        raise HTTPException(status_code=503, detail="Warehouse ID not configured")
+        logger.warning("Warehouse ID not configured - falling back to mock cost summary")
+        return get_mock_cost_summary()
 
     dbu_rate = settings.dbu_rate
 

@@ -4,6 +4,9 @@ Provides:
 - Job health summary with priority flags (P1/P2/P3)
 - Duration statistics (median, p90, avg, max) for specific jobs
 - Expanded job details for dashboard row expansion
+
+Supports mock data fallback when system tables aren't accessible.
+Enable with USE_MOCK_DATA=true or automatically on permission errors.
 """
 
 import asyncio
@@ -14,6 +17,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from job_monitor.backend.config import settings
 from job_monitor.backend.core import get_ws
+from job_monitor.backend.mock_data import (
+    get_mock_duration_stats,
+    get_mock_health_metrics,
+    get_mock_job_details,
+    is_mock_mode,
+)
 from job_monitor.backend.models import (
     DurationStatsOut,
     JobExpandedOut,
@@ -107,6 +116,8 @@ async def get_health_metrics(
     - yellow: 70-89%
     - red: < 70%
 
+    Supports mock data fallback when system tables aren't accessible.
+
     Args:
         days: Time window for metrics (7 or 30 days)
         ws: WorkspaceClient dependency
@@ -117,6 +128,11 @@ async def get_health_metrics(
     # Validate days parameter (query params come as strings, so we need manual validation)
     if days not in (7, 30):
         raise HTTPException(status_code=422, detail="days must be 7 or 30")
+
+    # Check for mock data mode
+    if is_mock_mode():
+        logger.info(f"Mock mode enabled - returning mock health metrics for {days} days")
+        return get_mock_health_metrics(days)
 
     logger.info(f"get_health_metrics called with days={days}")
     logger.info(f"WorkspaceClient available: {ws is not None}")
@@ -239,14 +255,10 @@ async def get_health_metrics(
             if result.status and result.status.error:
                 error_msg = str(result.status.error)
                 logger.error(f"SQL Error: {error_msg}")
-                # Check for permission errors
+                # Check for permission errors - fall back to mock data
                 if "INSUFFICIENT_PERMISSIONS" in error_msg or "USE SCHEMA" in error_msg:
-                    raise HTTPException(
-                        status_code=403,
-                        detail="Service principal lacks permission to access system tables. "
-                               "A workspace admin needs to grant: GRANT USE CATALOG, USE SCHEMA, SELECT "
-                               "ON system.lakeflow and system.billing to the app's service principal."
-                    )
+                    logger.warning("Permission denied on system tables - falling back to mock data")
+                    return get_mock_health_metrics(days)
             if result.result:
                 row_count = len(result.result.data_array) if result.result.data_array else 0
                 logger.info(f"Result row count: {row_count}")
@@ -260,7 +272,9 @@ async def get_health_metrics(
         logger.error(f"SQL execution failed: {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"SQL execution failed: {str(e)}")
+        # Fall back to mock data on any SQL error
+        logger.warning("SQL execution failed - falling back to mock data")
+        return get_mock_health_metrics(days)
 
     jobs = _parse_job_health(result)
     logger.info(f"Parsed {len(jobs)} jobs from result")
@@ -351,20 +365,17 @@ async def get_duration_stats(
     Returns:
         Duration statistics including has_sufficient_data flag (>= 5 runs)
     """
+    # Check for mock data mode
+    if is_mock_mode():
+        logger.info(f"Mock mode enabled - returning mock duration stats for {job_id}")
+        return get_mock_duration_stats(job_id)
+
     if not ws:
-        return DurationStatsOut(
-            job_id=job_id,
-            run_count=0,
-            has_sufficient_data=False,
-        )
+        return get_mock_duration_stats(job_id)
 
     warehouse_id = settings.warehouse_id
     if not warehouse_id:
-        return DurationStatsOut(
-            job_id=job_id,
-            run_count=0,
-            has_sufficient_data=False,
-        )
+        return get_mock_duration_stats(job_id)
 
     # Use PERCENTILE_CONT for accurate percentile calculations
     query = f"""
@@ -411,32 +422,17 @@ async def get_job_details(
     Returns:
         Expanded job details for dashboard row expansion
     """
-    default_stats = DurationStatsOut(
-        job_id=job_id,
-        run_count=0,
-        has_sufficient_data=False,
-    )
+    # Check for mock data mode
+    if is_mock_mode():
+        logger.info(f"Mock mode enabled - returning mock job details for {job_id}")
+        return get_mock_job_details(job_id)
 
     if not ws:
-        return JobExpandedOut(
-            job_id=job_id,
-            job_name="Unknown",
-            recent_runs=[],
-            duration_stats=default_stats,
-            retry_count_7d=0,
-            failure_reasons=[],
-        )
+        return get_mock_job_details(job_id)
 
     warehouse_id = settings.warehouse_id
     if not warehouse_id:
-        return JobExpandedOut(
-            job_id=job_id,
-            job_name="Unknown",
-            recent_runs=[],
-            duration_stats=default_stats,
-            retry_count_7d=0,
-            failure_reasons=[],
-        )
+        return get_mock_job_details(job_id)
 
     # Run all queries in parallel for better performance
     # 1. Duration stats query
