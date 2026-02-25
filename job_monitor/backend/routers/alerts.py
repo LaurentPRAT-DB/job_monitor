@@ -517,18 +517,26 @@ async def _generate_cluster_alerts(ws, warehouse_id: str) -> list[Alert]:
     alerts = []
 
     # Query for over-provisioned jobs (low utilization across all recent runs)
+    # Note: run_duration_seconds can be 0 for serverless jobs, so we calculate
+    # effective duration from timestamps as fallback
     query = """
-    WITH job_runs AS (
+    WITH job_runs_raw AS (
         SELECT
             job_id,
             run_id,
-            run_duration_seconds,
+            CASE
+                WHEN run_duration_seconds IS NULL OR run_duration_seconds = 0
+                THEN TIMESTAMPDIFF(SECOND, period_start_time, period_end_time)
+                ELSE run_duration_seconds
+            END as run_duration_seconds,
             period_start_time
         FROM system.lakeflow.job_run_timeline
         WHERE period_start_time >= current_date() - INTERVAL 30 DAYS
-            AND run_duration_seconds IS NOT NULL
-            AND run_duration_seconds > 0
+            AND period_end_time IS NOT NULL
             AND result_state IS NOT NULL
+    ),
+    job_runs AS (
+        SELECT * FROM job_runs_raw WHERE run_duration_seconds > 0
     ),
     billing AS (
         SELECT

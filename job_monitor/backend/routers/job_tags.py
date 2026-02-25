@@ -43,14 +43,26 @@ async def _get_p90_duration(ws, job_id: str, warehouse_id: str) -> int | None:
     if not warehouse_id:
         return None
 
+    # Note: run_duration_seconds can be 0 for serverless jobs, so we calculate
+    # effective duration from timestamps as fallback
     query = f"""
+    WITH runs_with_duration AS (
+        SELECT
+            CASE
+                WHEN run_duration_seconds IS NULL OR run_duration_seconds = 0
+                THEN TIMESTAMPDIFF(SECOND, period_start_time, period_end_time)
+                ELSE run_duration_seconds
+            END as effective_duration
+        FROM system.lakeflow.job_run_timeline
+        WHERE job_id = '{job_id}'
+          AND period_start_time >= current_date() - INTERVAL 30 DAYS
+          AND period_end_time IS NOT NULL
+          AND result_state IS NOT NULL
+    )
     SELECT
-        CEIL(PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY run_duration_seconds) / 60) as p90_minutes
-    FROM system.lakeflow.job_run_timeline
-    WHERE job_id = '{job_id}'
-      AND period_start_time >= current_date() - INTERVAL 30 DAYS
-      AND run_duration_seconds IS NOT NULL
-      AND result_state IS NOT NULL
+        CEIL(PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY effective_duration) / 60) as p90_minutes
+    FROM runs_with_duration
+    WHERE effective_duration > 0
     HAVING COUNT(*) >= 5
     """
 

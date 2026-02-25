@@ -487,25 +487,43 @@ async def get_job_details(
         return get_mock_job_details(job_id)
 
     # Run all queries in parallel for better performance
+    # Note: run_duration_seconds can be 0 for serverless jobs, so we calculate
+    # effective duration from timestamps as fallback
     # 1. Duration stats query
     stats_query = f"""
+    WITH runs_with_duration AS (
+        SELECT
+            CASE
+                WHEN run_duration_seconds IS NULL OR run_duration_seconds = 0
+                THEN TIMESTAMPDIFF(SECOND, period_start_time, period_end_time)
+                ELSE run_duration_seconds
+            END as effective_duration
+        FROM system.lakeflow.job_run_timeline
+        WHERE job_id = '{job_id}'
+          AND period_start_time >= current_date() - INTERVAL 30 DAYS
+          AND period_end_time IS NOT NULL
+          AND result_state IS NOT NULL
+    )
     SELECT
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY run_duration_seconds) as median_duration,
-        PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY run_duration_seconds) as p90_duration,
-        AVG(run_duration_seconds) as avg_duration,
-        MAX(run_duration_seconds) as max_duration,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY effective_duration) as median_duration,
+        PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY effective_duration) as p90_duration,
+        AVG(effective_duration) as avg_duration,
+        MAX(effective_duration) as max_duration,
         COUNT(*) as run_count
-    FROM system.lakeflow.job_run_timeline
-    WHERE job_id = '{job_id}'
-      AND period_start_time >= current_date() - INTERVAL 30 DAYS
-      AND run_duration_seconds IS NOT NULL
-      AND result_state IS NOT NULL
+    FROM runs_with_duration
+    WHERE effective_duration > 0
     """
 
     # 2. Recent runs query (last 10)
+    # Calculate effective duration for serverless jobs where run_duration_seconds = 0
     runs_query = f"""
     SELECT run_id, job_id, period_start_time, period_end_time,
-           run_duration_seconds, result_state
+           CASE
+               WHEN run_duration_seconds IS NULL OR run_duration_seconds = 0
+               THEN TIMESTAMPDIFF(SECOND, period_start_time, period_end_time)
+               ELSE run_duration_seconds
+           END as run_duration_seconds,
+           result_state
     FROM system.lakeflow.job_run_timeline
     WHERE job_id = '{job_id}'
       AND period_start_time >= current_date() - INTERVAL 30 DAYS

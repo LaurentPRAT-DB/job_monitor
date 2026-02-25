@@ -223,19 +223,28 @@ async def get_cluster_utilization(
 
     # Query billing data for DBU consumption patterns across recent runs
     # Using proxy calculation: DBUs per hour normalized against typical rates
+    # Note: run_duration_seconds can be 0 for serverless jobs, so we calculate
+    # effective duration from timestamps as fallback
     query = f"""
     WITH job_runs AS (
         SELECT
             run_id,
             job_id,
-            run_duration_seconds,
+            CASE
+                WHEN run_duration_seconds IS NULL OR run_duration_seconds = 0
+                THEN TIMESTAMPDIFF(SECOND, period_start_time, period_end_time)
+                ELSE run_duration_seconds
+            END as run_duration_seconds,
             period_start_time
         FROM system.lakeflow.job_run_timeline
         WHERE job_id = '{job_id}'
             AND period_start_time >= current_date() - INTERVAL 30 DAYS
-            AND run_duration_seconds IS NOT NULL
-            AND run_duration_seconds > 0
+            AND period_end_time IS NOT NULL
             AND result_state IS NOT NULL
+    ),
+    job_runs_filtered AS (
+        SELECT * FROM job_runs
+        WHERE run_duration_seconds > 0
         ORDER BY period_start_time DESC
         LIMIT {runs}
     ),
@@ -259,7 +268,7 @@ async def get_cluster_utilization(
                 COALESCE(b.total_dbus, 0) / (jr.run_duration_seconds / 3600.0)
             ELSE 0
         END as dbus_per_hour
-    FROM job_runs jr
+    FROM job_runs_filtered jr
     LEFT JOIN billing b ON DATE(jr.period_start_time) = b.usage_date
     ORDER BY jr.period_start_time DESC
     """
