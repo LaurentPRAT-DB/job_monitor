@@ -5,12 +5,27 @@ sync:
   include:
     - job_monitor/ui/dist/**
 
+variables:
+  warehouse_id:
+    description: "SQL warehouse ID for system table queries"
+    default: "58d41113cb262dce"
+
 targets:
   dev:
     mode: development
     default: true
     workspace:
       profile: LPT_FREE_EDITION
+    variables:
+      warehouse_id: "58d41113cb262dce"
+
+  e2:
+    mode: development
+    workspace:
+      profile: DEFAULT
+      host: https://e2-demo-field-eng.cloud.databricks.com
+    variables:
+      warehouse_id: "06c1adfd3dbdacde"
 
 resources:
   apps:

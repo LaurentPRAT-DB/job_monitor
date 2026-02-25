@@ -93,12 +93,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         try:
             from databricks.sdk import WorkspaceClient
 
-            app.state.workspace_client = WorkspaceClient(
-                host=settings.databricks_host
-            )
-            logger.info("WorkspaceClient initialized successfully")
+            # In Databricks Apps, use default credentials (OAuth from service principal)
+            # Don't pass host explicitly to avoid auth conflicts
+            # The SDK will auto-detect from DATABRICKS_HOST env var
+            try:
+                # First try: let SDK auto-detect everything
+                app.state.workspace_client = WorkspaceClient()
+                logger.info("WorkspaceClient initialized with auto-detected credentials")
+            except ValueError as ve:
+                # If there are conflicting auth methods, try with explicit host only
+                if "more than one authorization method" in str(ve):
+                    logger.warning(f"Auth conflict detected: {ve}")
+                    # Clear any conflicting token and retry with host-only
+                    import os
+                    os.environ.pop("DATABRICKS_TOKEN", None)
+                    app.state.workspace_client = WorkspaceClient()
+                    logger.info("WorkspaceClient initialized after clearing DATABRICKS_TOKEN")
+                else:
+                    raise
         except Exception as e:
             logger.error(f"Failed to initialize WorkspaceClient: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             app.state.workspace_client = None
     else:
         logger.warning("DATABRICKS_HOST not configured, WorkspaceClient will be None")

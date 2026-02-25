@@ -59,16 +59,23 @@ def get_ws_prefer_user(
     """
     # Try user OBO first
     if token:
-        from databricks.sdk import WorkspaceClient
-        from job_monitor.backend.config import settings
+        try:
+            from databricks.sdk import WorkspaceClient
+            from job_monitor.backend.config import settings
 
-        logger.info("Using user OBO token for WorkspaceClient")
-        return WorkspaceClient(
-            host=settings.databricks_host,
-            token=token,
-        )
+            logger.info("Using user OBO token for WorkspaceClient")
+            # Use token explicitly to avoid auth conflicts
+            return WorkspaceClient(
+                host=settings.databricks_host,
+                token=token,
+            )
+        except ValueError as ve:
+            if "more than one authorization method" in str(ve):
+                logger.warning(f"Auth conflict with OBO token, falling back to SP: {ve}")
+            else:
+                raise
 
-    # Fall back to service principal
+    # Fall back to service principal (already initialized at startup)
     ws = request.app.state.workspace_client
     if ws:
         logger.info("Using service principal WorkspaceClient (no user token available)")

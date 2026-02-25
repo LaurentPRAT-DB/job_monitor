@@ -1,0 +1,26 @@
+command:
+  - uvicorn
+  - job_monitor.backend.app:app
+  - --host
+  - "0.0.0.0"
+  - --port
+  - "8000"
+
+env:
+  - name: DATABRICKS_HOST
+    valueFrom: workspace-host
+  - name: WAREHOUSE_ID
+    description: "SQL warehouse ID for system table queries (E2 fe-lens warehouse)"
+    value: "06c1adfd3dbdacde"
+  - name: LOG_LEVEL
+    description: "Logging level for debugging"
+    value: "DEBUG"
+
+permissions:
+  - user_name: "${DATABRICKS_USER}"
+    level: CAN_MANAGE
+
+# User OBO (On-Behalf-Of) scopes - enables user token forwarding
+user_api_scopes:
+  - sql
+  - offline_access
