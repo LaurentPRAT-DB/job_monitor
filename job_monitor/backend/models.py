@@ -88,6 +88,34 @@ class ActiveRunsOut(BaseModel):
     runs: list[JobApiRunOut]
 
 
+class RecentRunStatus(BaseModel):
+    """Minimal run status for recent runs display (like Databricks UI)."""
+
+    run_id: int
+    result_state: str | None = None  # SUCCESS, FAILED, CANCELED, SKIPPED, None (running)
+
+
+class ActiveRunWithHistory(BaseModel):
+    """Active run enriched with recent run history for main list view."""
+
+    run_id: int
+    job_id: int
+    run_name: str | None = None
+    state: str  # PENDING, RUNNING, TERMINATED, etc.
+    result_state: str | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    run_page_url: str | None = None
+    recent_runs: list[RecentRunStatus]  # Last 5 completed runs for this job
+
+
+class ActiveRunsWithHistoryOut(BaseModel):
+    """Active runs with recent run history response model."""
+
+    total_active: int
+    runs: list[ActiveRunWithHistory]
+
+
 # Billing models for system.billing.usage
 
 

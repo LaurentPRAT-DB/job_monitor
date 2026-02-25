@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Moon, Sun, Menu, LayoutDashboard, Activity, Bell, History } from 'lucide-react'
+import { Moon, Sun, Menu, LayoutDashboard, Activity, Bell, History, Play } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { useTheme } from '@/lib/theme-context'
 import {
@@ -24,6 +24,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/running-jobs', label: 'Running Jobs', icon: Play },
   { href: '/job-health', label: 'Job Health', icon: Activity },
   { href: '/alerts', label: 'Alerts', icon: Bell },
   { href: '/historical', label: 'Historical', icon: History },

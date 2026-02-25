@@ -14,7 +14,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from job_monitor.backend.core import get_ws
-from job_monitor.backend.models import ActiveRunsOut, JobApiOut, JobApiRunOut
+from job_monitor.backend.models import (
+    ActiveRunsOut,
+    ActiveRunsWithHistoryOut,
+    ActiveRunWithHistory,
+    JobApiOut,
+    JobApiRunOut,
+    RecentRunStatus,
+)
 
 router = APIRouter(prefix="/api/jobs-api", tags=["Jobs API"])
 
@@ -175,6 +182,117 @@ async def get_active_runs(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get active runs: {str(e)}",
+        )
+
+
+@router.get("/active-with-history", response_model=ActiveRunsWithHistoryOut)
+async def get_active_runs_with_history(
+    ws=Depends(get_ws),
+) -> ActiveRunsWithHistoryOut:
+    """Get active runs with recent run history for each job.
+
+    Returns all currently active jobs enriched with the last 5 completed runs
+    for each job. This enables displaying the recent run status icons like
+    in the Databricks native UI.
+
+    Note: To keep response times reasonable, history is fetched only for
+    up to 100 unique jobs. Jobs without history will show empty circles.
+
+    Args:
+        ws: WorkspaceClient dependency
+
+    Returns:
+        Active runs with recent run history
+    """
+    if not ws:
+        raise HTTPException(
+            status_code=503,
+            detail="WorkspaceClient not available. Check Databricks credentials.",
+        )
+
+    try:
+        # Get active runs
+        active_runs = await asyncio.to_thread(
+            lambda: list(ws.jobs.list_runs(active_only=True))
+        )
+
+        # Get unique job IDs - limit to 50 to keep response time reasonable
+        all_job_ids = list(set(run.job_id for run in active_runs))
+        job_ids = all_job_ids[:50]  # Limit history fetches
+
+        # Use semaphore to limit concurrent API calls (SDK is blocking)
+        semaphore = asyncio.Semaphore(10)
+
+        async def fetch_job_history(job_id: int) -> tuple[int, list[RecentRunStatus]]:
+            """Fetch last 5 completed runs for a job."""
+            async with semaphore:
+                try:
+                    runs = await asyncio.to_thread(
+                        lambda jid=job_id: list(ws.jobs.list_runs(job_id=jid, limit=6))
+                    )
+                    # Filter to completed runs only (exclude currently running)
+                    completed = [
+                        RecentRunStatus(
+                            run_id=r.run_id,
+                            result_state=(
+                                r.state.result_state.value
+                                if r.state and r.state.result_state
+                                else None
+                            ),
+                        )
+                        for r in runs
+                        if r.state
+                        and r.state.life_cycle_state
+                        and r.state.life_cycle_state.value == "TERMINATED"
+                    ][:5]
+                    return (job_id, completed)
+                except Exception:
+                    return (job_id, [])
+
+        # Fetch job histories with limited concurrency
+        history_tasks = [fetch_job_history(job_id) for job_id in job_ids]
+        history_results = await asyncio.gather(*history_tasks)
+        history_by_job = dict(history_results)
+
+        # Build enriched response
+        enriched_runs = [
+            ActiveRunWithHistory(
+                run_id=run.run_id,
+                job_id=run.job_id,
+                run_name=run.run_name,
+                state=(
+                    run.state.life_cycle_state.value
+                    if run.state and run.state.life_cycle_state
+                    else "UNKNOWN"
+                ),
+                result_state=(
+                    run.state.result_state.value
+                    if run.state and run.state.result_state
+                    else None
+                ),
+                start_time=(
+                    datetime.fromtimestamp(run.start_time / 1000)
+                    if run.start_time
+                    else None
+                ),
+                end_time=(
+                    datetime.fromtimestamp(run.end_time / 1000)
+                    if run.end_time
+                    else None
+                ),
+                run_page_url=run.run_page_url,
+                recent_runs=history_by_job.get(run.job_id, []),
+            )
+            for run in active_runs
+        ]
+
+        return ActiveRunsWithHistoryOut(
+            total_active=len(enriched_runs), runs=enriched_runs
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get active runs with history: {str(e)}",
         )
 
 

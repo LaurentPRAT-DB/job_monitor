@@ -54,6 +54,14 @@ const dashboardRoute = createRoute({
   component: Dashboard,
 })
 
+// Running jobs route
+import RunningJobsPage from './routes/_sidebar/running-jobs'
+const runningJobsRoute = createRoute({
+  getParentRoute: () => sidebarRoute,
+  path: '/running-jobs',
+  component: RunningJobsPage,
+})
+
 // Job health route
 import JobHealthPage from './routes/_sidebar/job-health'
 const jobHealthRoute = createRoute({
@@ -83,6 +91,7 @@ export const routeTree = rootRoute.addChildren([
   sidebarRoute.addChildren([
     indexRoute,
     dashboardRoute,
+    runningJobsRoute,
     jobHealthRoute,
     alertsRoute,
     historicalRoute,
