@@ -3,7 +3,7 @@
  * Displays currently running/active jobs with real-time data from Jobs API.
  * Features: sortable columns, clickable filter cards, expandable rows.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, RefreshCw, Play, ExternalLink, Clock, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, CheckCircle, XCircle, MinusCircle, Radio, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -64,13 +64,24 @@ async function fetchActiveRuns(): Promise<ActiveRunsResponse> {
   };
 }
 
+// Ensure timestamp is parsed as UTC (append 'Z' if no timezone info)
+function parseAsUtc(timestamp: string): Date {
+  // If already has timezone info (Z or +/-), parse directly
+  if (/[Zz]$/.test(timestamp) || /[+-]\d{2}:?\d{2}$/.test(timestamp)) {
+    return new Date(timestamp);
+  }
+  // Otherwise, assume UTC and append Z
+  return new Date(timestamp + 'Z');
+}
+
 function formatDuration(startTime: string | null): string {
   if (!startTime) return '--';
-  const start = new Date(startTime);
-  const now = new Date();
-  const diffMs = now.getTime() - start.getTime();
+  const start = parseAsUtc(startTime);
+  const nowUtc = Date.now(); // Always UTC milliseconds
+  const diffMs = nowUtc - start.getTime();
   const diffMins = Math.floor(diffMs / 60000);
 
+  if (diffMins < 0) return '0m'; // Handle edge case
   if (diffMins < 60) {
     return `${diffMins}m`;
   }
@@ -92,9 +103,31 @@ function formatStartTime(startTime: string | null): string {
 
 function getDurationMs(startTime: string | null): number {
   if (!startTime) return 0;
-  const start = new Date(startTime);
-  const now = new Date();
-  return now.getTime() - start.getTime();
+  const start = parseAsUtc(startTime);
+  const nowUtc = Date.now();
+  return nowUtc - start.getTime();
+}
+
+// Clock component showing both local and UTC time
+function TimeClock() {
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const localTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const utcTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC' });
+
+  return (
+    <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded px-3 py-1.5">
+      <Clock className="h-3.5 w-3.5" />
+      <span>Local: <span className="font-mono">{localTime}</span></span>
+      <span className="text-gray-300 dark:text-gray-600">|</span>
+      <span>UTC: <span className="font-mono font-medium text-blue-600 dark:text-blue-400">{utcTime}</span></span>
+    </div>
+  );
 }
 
 // Streaming job detection patterns
@@ -434,16 +467,21 @@ export default function RunningJobsPage() {
           </p>
         </div>
 
-        {/* Refresh button */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-4">
+          {/* Time clock */}
+          <TimeClock />
+
+          {/* Refresh button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Summary stats - clickable to filter */}
