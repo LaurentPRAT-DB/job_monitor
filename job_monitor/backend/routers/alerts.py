@@ -767,16 +767,32 @@ async def get_alerts(
 
         logger.info("[CACHE_MISS] alerts: falling back to live query")
 
-    # Generate alerts from all sources in parallel (live query fallback)
+    # Determine which alert categories to generate
+    # If category filter is specified, only run those queries (major perf optimization)
+    requested_categories = {c.lower() for c in category} if category else {"failure", "sla", "cost", "cluster"}
+    logger.info(f"[alerts] Generating alerts for categories: {requested_categories}")
+
+    # Build list of coroutines to run based on requested categories
+    tasks = []
+    task_names = []
+    if "failure" in requested_categories:
+        tasks.append(_generate_failure_alerts(ws, warehouse_id))
+        task_names.append("failure")
+    if "sla" in requested_categories:
+        tasks.append(_generate_sla_alerts(ws))
+        task_names.append("sla")
+    if "cost" in requested_categories:
+        tasks.append(_generate_cost_alerts(ws, warehouse_id))
+        task_names.append("cost")
+    if "cluster" in requested_categories:
+        tasks.append(_generate_cluster_alerts(ws, warehouse_id))
+        task_names.append("cluster")
+
+    # Generate alerts from selected sources in parallel
     # Add timeout to prevent gateway timeout (504) - fall back to mock data if too slow
     try:
-        failure_alerts, sla_alerts, cost_alerts, cluster_alerts = await asyncio.wait_for(
-            asyncio.gather(
-                _generate_failure_alerts(ws, warehouse_id),
-                _generate_sla_alerts(ws),
-                _generate_cost_alerts(ws, warehouse_id),
-                _generate_cluster_alerts(ws, warehouse_id),
-            ),
+        results = await asyncio.wait_for(
+            asyncio.gather(*tasks),
             timeout=45.0,  # 45 second timeout to avoid 504
         )
     except asyncio.TimeoutError:
@@ -784,22 +800,22 @@ async def get_alerts(
         return get_mock_alerts()
 
     # Check if any generator returned None (permission error) - fall back to mock data
-    if failure_alerts is None:
+    if any(r is None for r in results):
         logger.warning("Permission error detected in alert generation - falling back to mock alerts")
         return get_mock_alerts()
 
-    # Combine and deduplicate
-    all_alerts = failure_alerts + sla_alerts + cost_alerts + cluster_alerts
+    # Combine all results
+    all_alerts = []
+    for result in results:
+        all_alerts.extend(result)
     all_alerts = _deduplicate_alerts(all_alerts)
 
-    # Apply filters
+    # Apply severity filter
     if severity:
         severity_set = {s.upper() for s in severity}
         all_alerts = [a for a in all_alerts if a.severity.value in severity_set]
 
-    if category:
-        category_set = {c.lower() for c in category}
-        all_alerts = [a for a in all_alerts if a.category.value in category_set]
+    # Category filter already applied by selective query execution
 
     if acknowledged is not None:
         all_alerts = [a for a in all_alerts if a.acknowledged == acknowledged]

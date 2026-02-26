@@ -1,0 +1,67 @@
+
+================================================================================
+JOB MONITOR LOAD TEST REPORT (INTERIM)
+================================================================================
+
+Test Duration: 17.5m / 1.0h
+Remaining: 42.5m
+Report Time: 2026-02-26T17:49:35.361Z
+
+────────────────────────────────────────────────────────────────────────────────
+API ENDPOINT PERFORMANCE
+────────────────────────────────────────────────────────────────────────────────
+Endpoint                          Calls        Avg        P50        P95        P99   Errors   Cache%
+----------------------------------------------------------------------------------------------
+User Info                             6      215ms      209ms      229ms      229ms        0     0.0%
+Alerts                                6      27.8s      28.3s      32.3s      32.3s        0     0.0%
+Active Jobs                           6      424ms      397ms      567ms      567ms        0     0.0%
+Health Metrics 7d                     6      13.4s      12.9s      14.7s      14.7s        0     0.0%
+Health Metrics 30d                    6      13.9s      13.5s      17.6s      17.6s        0     0.0%
+Historical Runs 7d                    6       1.9s       1.4s       4.4s       4.4s        0    16.7%
+Historical Runs 30d                   6      343ms      199ms       1.3s       1.3s        0    16.7%
+Cost Summary                          6      38.1s      36.7s      41.9s      41.9s        0     0.0%
+Filter Presets                        6       1.7s       1.7s       1.8s       1.8s        0     0.0%
+----------------------------------------------------------------------------------------------
+TOTAL                                54      10.9s                             0     2.4%
+
+────────────────────────────────────────────────────────────────────────────────
+PAGE LOAD PERFORMANCE
+────────────────────────────────────────────────────────────────────────────────
+Page                    Loads        Avg        P50        P95   Errors
+------------------------------------------------------------------
+Dashboard                   6       2.2s      565ms       9.9s        0
+Running Jobs                6      373ms      362ms      413ms        0
+Job Health                  6      343ms      336ms      355ms        0
+Alerts                      6      347ms      343ms      371ms        0
+Historical                  6      347ms      342ms      364ms        0
+
+────────────────────────────────────────────────────────────────────────────────
+UI INTERACTION PERFORMANCE
+────────────────────────────────────────────────────────────────────────────────
+Action                                 Count        Avg   Errors
+-------------------------------------------------------------
+-------------------------------------------------------------
+TOTAL CLICKS                               0
+
+────────────────────────────────────────────────────────────────────────────────
+CACHE STATISTICS
+────────────────────────────────────────────────────────────────────────────────
+Cache Hits:   2
+Cache Misses: 82
+Hit Rate:     2.4%
+
+────────────────────────────────────────────────────────────────────────────────
+RECOMMENDATIONS
+────────────────────────────────────────────────────────────────────────────────
+⚠️  Alerts: Average response time 27.8s is high. Consider caching or query optimization.
+⚠️  Alerts: P95 response time 32.3s indicates occasional slowdowns.
+⚠️  Health Metrics 7d: Average response time 13.4s is high. Consider caching or query optimization.
+⚠️  Health Metrics 7d: P95 response time 14.7s indicates occasional slowdowns.
+⚠️  Health Metrics 30d: Average response time 13.9s is high. Consider caching or query optimization.
+⚠️  Health Metrics 30d: P95 response time 17.6s indicates occasional slowdowns.
+⚠️  Cost Summary: Average response time 38.1s is high. Consider caching or query optimization.
+⚠️  Cost Summary: P95 response time 41.9s indicates occasional slowdowns.
+⚠️  Low cache hit rate (2.4%). Consider increasing staleTime or cacheTime in TanStack Query.
+✅ No API errors recorded. System is stable.
+
+================================================================================

@@ -1,0 +1,61 @@
+
+============================================================
+JOB MONITOR LOAD TEST
+============================================================
+Target: https://job-monitor-2556758628403379.aws.databricksapps.com
+Duration: 1 hour(s)
+Started: 2026-02-26T17:54:00.148Z
+============================================================
+
+
+--- Iteration 1 (31ms elapsed) ---
+
+Navigating to Dashboard...
+  ✓ Page loaded in 423ms
+    - Refresh button (disabled)
+
+Navigating to Running Jobs...
+  ✓ Page loaded in 361ms
+    ✓ Refresh button (4ms)
+
+Navigating to Job Health...
+  ✓ Page loaded in 548ms
+    ✓ 7 Days tab (2ms)
+    ✓ 30 Days tab (2ms)
+    - Total Jobs filter (not_found)
+    - Critical filter (not_found)
+    - Failing filter (not_found)
+    - Warning filter (not_found)
+    ✓ Filters toggle (11ms)
+    ✓ Time 7D (62ms)
+    ✓ Time 30D (61ms)
+    ✓ Time 90D (63ms)
+    - Refresh button (disabled)
+
+Navigating to Alerts...
+  ✓ Page loaded in 343ms
+    ✓ All tab (2ms)
+    - Failures tab (not_found)
+    - Duration tab (not_found)
+    - Config tab (not_found)
+    - Total filter (not_found)
+    - P1 filter (not_found)
+    - P2 filter (not_found)
+    - P3 filter (not_found)
+    - Next page (not_found)
+    - Prev page (not_found)
+
+Navigating to Historical...
+  ✓ Page loaded in 348ms
+    - 7 Days tab (not_found)
+    - 30 Days tab (not_found)
+    - Refresh button (not_found)
+
+Testing API endpoints directly...
+  ✓ User Info: 199ms
+  ✓ Alerts: 29.1s
+  ✓ Active Jobs: 256ms
+  ✓ Health Metrics 7d: 11.3s
+  ✓ Health Metrics 30d: 15.7s
+  ✓ Historical Runs 7d: 4.4s
+  ✓ Historical Runs 30d: 211ms

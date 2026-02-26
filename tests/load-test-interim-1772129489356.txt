@@ -1,0 +1,81 @@
+
+================================================================================
+JOB MONITOR LOAD TEST REPORT (INTERIM)
+================================================================================
+
+Test Duration: 13.0m / 1.0h
+Remaining: 47.0m
+Report Time: 2026-02-26T18:11:29.356Z
+
+────────────────────────────────────────────────────────────────────────────────
+API ENDPOINT PERFORMANCE
+────────────────────────────────────────────────────────────────────────────────
+Endpoint                          Calls        Avg        P50        P95        P99   Errors   Cache%
+----------------------------------------------------------------------------------------------
+User Info                             5      224ms      219ms      259ms      259ms        0     0.0%
+Alerts                                5      17.1s      17.5s      20.9s      20.9s        0     0.0%
+Active Jobs                           5      466ms      448ms      599ms      599ms        0     0.0%
+Health Metrics 7d                     5      10.4s      10.6s      11.3s      11.3s        0     0.0%
+Health Metrics 30d                    5      11.3s      11.4s      12.3s      12.3s        0     0.0%
+Historical Runs 7d                    5       3.2s       3.7s       8.3s       8.3s        0    40.0%
+Historical Runs 30d                   5      143ms      216ms      268ms      268ms        0    40.0%
+Cost Summary                          5      37.3s      37.0s      39.2s      39.2s        0     0.0%
+Filter Presets                        5       1.8s       1.8s       2.0s       2.0s        0     0.0%
+----------------------------------------------------------------------------------------------
+TOTAL                                45       9.1s                             0     3.2%
+
+────────────────────────────────────────────────────────────────────────────────
+PAGE LOAD PERFORMANCE
+────────────────────────────────────────────────────────────────────────────────
+Page                    Loads        Avg        P50        P95   Errors
+------------------------------------------------------------------
+Dashboard                   5      427ms      561ms      593ms        0
+Running Jobs                5      297ms      363ms      387ms        0
+Job Health                  5      471ms      334ms       1.4s        0
+Alerts                      5      304ms      358ms      491ms        0
+Historical                  5      282ms      355ms      368ms        0
+
+────────────────────────────────────────────────────────────────────────────────
+UI INTERACTION PERFORMANCE
+────────────────────────────────────────────────────────────────────────────────
+Action                                 Count        Avg   Errors
+-------------------------------------------------------------
+Job Health: 7 Days tab                     5        2ms        0
+Job Health: 30 Days tab                    5        1ms        0
+Job Health: Filters toggle                 5        1ms        0
+Alerts: All tab                            5        2ms        0
+Alerts: Failure tab                        5        1ms        0
+Alerts: SLA tab                            5        2ms        0
+Alerts: Cost tab                           5        1ms        0
+Alerts: Cluster tab                        5        3ms        0
+Historical: Success Rate tab               5        4ms        0
+Historical: Failures tab                   5        3ms        0
+Job Health: Refresh button                 4        5ms        0
+Running Jobs: Refresh button               2        5ms        0
+-------------------------------------------------------------
+TOTAL CLICKS                              56
+
+────────────────────────────────────────────────────────────────────────────────
+CACHE STATISTICS
+────────────────────────────────────────────────────────────────────────────────
+Cache Hits:   4
+Cache Misses: 122
+Hit Rate:     3.2%
+
+────────────────────────────────────────────────────────────────────────────────
+RECOMMENDATIONS
+────────────────────────────────────────────────────────────────────────────────
+⚠️  Alerts: Average response time 17.1s is high. Consider caching or query optimization.
+⚠️  Alerts: P95 response time 20.9s indicates occasional slowdowns.
+⚠️  Health Metrics 7d: Average response time 10.4s is high. Consider caching or query optimization.
+⚠️  Health Metrics 7d: P95 response time 11.3s indicates occasional slowdowns.
+⚠️  Health Metrics 30d: Average response time 11.3s is high. Consider caching or query optimization.
+⚠️  Health Metrics 30d: P95 response time 12.3s indicates occasional slowdowns.
+⚠️  Historical Runs 7d: Average response time 3.2s is high. Consider caching or query optimization.
+⚠️  Historical Runs 7d: P95 response time 8.3s indicates occasional slowdowns.
+⚠️  Cost Summary: Average response time 37.3s is high. Consider caching or query optimization.
+⚠️  Cost Summary: P95 response time 39.2s indicates occasional slowdowns.
+⚠️  Low cache hit rate (3.2%). Consider increasing staleTime or cacheTime in TanStack Query.
+✅ No API errors recorded. System is stable.
+
+================================================================================
