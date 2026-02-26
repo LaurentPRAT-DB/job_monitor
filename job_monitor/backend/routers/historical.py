@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from job_monitor.backend.config import get_settings
-from job_monitor.backend.core import get_ws
+from job_monitor.backend.core import get_ws_prefer_user
 
 router = APIRouter(prefix="/api/historical", tags=["historical"])
 
