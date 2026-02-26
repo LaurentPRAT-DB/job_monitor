@@ -21,19 +21,28 @@ from pyspark.sql import functions as F
 def load_config() -> dict:
     """Load configuration from config.yaml file."""
     # Try multiple paths (job may run from different working directories)
+    # Note: __file__ is not available in Spark context, so use try/except
     config_paths = [
-        Path(__file__).parent.parent / "config.yaml",  # job_monitor/config.yaml
         Path("job_monitor/config.yaml"),  # relative to workspace root
-        Path("/Workspace/") / "config.yaml",  # workspace root
+        Path("/Workspace/job_monitor/config.yaml"),  # workspace path
     ]
 
-    for config_path in config_paths:
-        if config_path.exists():
-            print(f"[{datetime.now()}] Loading config from {config_path}")
-            with open(config_path) as f:
-                return yaml.safe_load(f) or {}
+    # Try to add path relative to script location (only works locally)
+    try:
+        config_paths.insert(0, Path(__file__).parent.parent / "config.yaml")
+    except NameError:
+        pass  # __file__ not defined in Spark context
 
-    print(f"[{datetime.now()}] No config.yaml found, using defaults")
+    for config_path in config_paths:
+        try:
+            if config_path.exists():
+                print(f"[{datetime.now()}] Loading config from {config_path}")
+                with open(config_path) as f:
+                    return yaml.safe_load(f) or {}
+        except Exception as e:
+            print(f"[{datetime.now()}] Could not read {config_path}: {e}")
+
+    print(f"[{datetime.now()}] No config.yaml found, using CLI arguments only")
     return {}
 
 

@@ -7,6 +7,8 @@ const API_BASE = "";
 export interface UserInfo {
   email: string;
   display_name: string | null;
+  workspace_host: string | null;
+  workspace_name: string | null;
 }
 
 export interface HealthResponse {

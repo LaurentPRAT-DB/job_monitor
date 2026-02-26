@@ -11,6 +11,8 @@ import {
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Link, useLocation } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
+import { getCurrentUser } from '@/lib/api'
 
 // Version from package.json - updated at build time
 const APP_VERSION = '1.1.0'
@@ -90,10 +92,23 @@ function NavigationContent({ onNavigate }: { onNavigate?: () => void }) {
 
 // Desktop Sidebar - hidden on mobile
 export function Sidebar() {
+  const { data: user } = useQuery({
+    queryKey: ['user'],
+    queryFn: getCurrentUser,
+    staleTime: Infinity, // User info doesn't change during session
+  })
+
   return (
     <aside className="hidden md:flex w-64 bg-gray-900 text-white p-4 flex-col shrink-0">
-      {/* App title */}
-      <h1 className="text-xl font-bold mb-6">Job Monitor</h1>
+      {/* App title and workspace */}
+      <div className="mb-6">
+        <h1 className="text-xl font-bold">Job Monitor</h1>
+        {user?.workspace_name && (
+          <div className="text-xs text-gray-400 mt-1" title={user.workspace_host || ''}>
+            {user.workspace_name}
+          </div>
+        )}
+      </div>
       <NavigationContent />
     </aside>
   )
@@ -102,6 +117,11 @@ export function Sidebar() {
 // Mobile Navigation - hamburger menu with sheet
 export function MobileNav() {
   const [open, setOpen] = useState(false)
+  const { data: user } = useQuery({
+    queryKey: ['user'],
+    queryFn: getCurrentUser,
+    staleTime: Infinity,
+  })
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -118,6 +138,11 @@ export function MobileNav() {
       <SheetContent side="left" className="w-72 bg-gray-900 text-white border-gray-700 p-0">
         <SheetHeader className="p-4 border-b border-gray-700">
           <SheetTitle className="text-white text-xl font-bold">Job Monitor</SheetTitle>
+          {user?.workspace_name && (
+            <div className="text-xs text-gray-400" title={user.workspace_host || ''}>
+              {user.workspace_name}
+            </div>
+          )}
         </SheetHeader>
         <div className="p-4 flex flex-col h-[calc(100%-65px)]">
           <NavigationContent onNavigate={() => setOpen(false)} />

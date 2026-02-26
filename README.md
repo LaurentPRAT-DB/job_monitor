@@ -258,6 +258,16 @@ The cache refresh job needs permissions to create/write to the cache catalog and
 
 > **Note**: The `CREATE CATALOG` permission requires metastore admin privileges. If you cannot create a new catalog, use an existing catalog where you have schema creation rights.
 
+4. **Grant read access to app users** (required for OBO authentication):
+   ```sql
+   -- Allow all workspace users to read cache tables
+   GRANT USE CATALOG ON CATALOG job_monitor TO `account users`;
+   GRANT USE SCHEMA ON SCHEMA job_monitor.cache TO `account users`;
+   GRANT SELECT ON SCHEMA job_monitor.cache TO `account users`;
+   ```
+
+> **Note**: This step is required when using OBO (On-Behalf-Of) authentication. The app queries cache tables using the logged-in user's permissions, so users need read access to the cache.
+
 #### Cache Tables
 
 | Table | Contents |

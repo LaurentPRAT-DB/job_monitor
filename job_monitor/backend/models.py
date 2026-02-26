@@ -12,6 +12,8 @@ class UserInfo(BaseModel):
 
     email: str
     display_name: str | None = None
+    workspace_host: str | None = None
+    workspace_name: str | None = None
 
 
 class HealthResponse(BaseModel):
