@@ -404,6 +404,13 @@ This test plan validates the job name wildcard filtering feature and preset edit
 - TC8.1: Delete preset - removed from dropdown, persists after reload ✅
 
 **Suite 9 - Integration (Adapted):**
+- TC9.2: Pattern + Single Job Selection - UNEXPECTED BEHAVIOR
+  - Expected: Single job takes precedence, only selected job shown
+  - Actual: Pattern filtering still shows 17 jobs despite job selection
+  - Filter badge correctly shows "Filters 2" (pattern + job)
+  - URL has both `jobNamePatterns` and `jobId` parameters
+  - **Finding**: Job Health page doesn't filter by `jobId` from global filter context
+  - Logged as potential enhancement: job selection should override pattern filtering
 - TC9.4: Active Filter Count Badge ✅
   - Step 1: Clear all filters → Badge shows "Filters" (no count) ✅
   - Step 2: Add pattern `*demo*` → Badge shows "Filters 1" ✅
