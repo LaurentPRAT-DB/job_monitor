@@ -60,15 +60,21 @@ if [ ! -d "job_monitor/ui/dist" ] || [ "$(find job_monitor/ui/src -newer job_mon
   cd ../..
 fi
 
-# Deploy bundle using DABs (this uploads files and updates resources)
+# Backup existing databricks.yml and use target-specific config
 echo ""
-echo "Step 1: Deploying bundle via DABs..."
-databricks bundle deploy \
-  --target "$TARGET" \
-  --config-file "$BUNDLE_FILE"
+echo "Step 1: Setting up bundle config for $TARGET..."
+if [ -f "databricks.yml" ]; then
+  cp databricks.yml databricks.yml.bak
+fi
+cp "$BUNDLE_FILE" databricks.yml
 
-# Get the source code path from bundle output
-SOURCE_PATH=$(databricks bundle summary --target "$TARGET" --config-file "$BUNDLE_FILE" 2>/dev/null | grep -o '/Workspace[^"]*files' | head -1)
+# Deploy bundle using DABs
+echo ""
+echo "Step 2: Deploying bundle via DABs..."
+databricks bundle deploy --target "$TARGET"
+
+# Get the source code path from bundle
+SOURCE_PATH=$(databricks bundle summary --target "$TARGET" 2>/dev/null | grep -o 'file_path[^,]*' | head -1 | cut -d'"' -f3)
 
 if [ -z "$SOURCE_PATH" ]; then
   # Fallback: construct path based on target
@@ -82,9 +88,9 @@ if [ -z "$SOURCE_PATH" ]; then
   esac
 fi
 
-# Deploy app code via DABs app deployment
+# Deploy app code
 echo ""
-echo "Step 2: Deploying app via DABs..."
+echo "Step 3: Deploying app..."
 databricks apps deploy job-monitor \
   --source-code-path "$SOURCE_PATH" \
   --profile "$PROFILE"
@@ -92,10 +98,15 @@ databricks apps deploy job-monitor \
 # Enable OBO (only for non-dev targets that support it)
 if [ "$TARGET" != "dev" ]; then
   echo ""
-  echo "Step 3: Enabling OBO authentication..."
+  echo "Step 4: Enabling OBO authentication..."
   databricks apps update job-monitor \
     --json '{"user_api_scopes": ["sql"]}' \
     --profile "$PROFILE"
+fi
+
+# Restore original databricks.yml
+if [ -f "databricks.yml.bak" ]; then
+  mv databricks.yml.bak databricks.yml
 fi
 
 echo ""
