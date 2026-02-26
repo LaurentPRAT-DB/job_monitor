@@ -11,6 +11,10 @@
 #
 #   dev   - Dev workspace (LPT_FREE_EDITION profile)
 #           https://job-monitor-3704140105640043.aws.databricksapps.com
+#
+# Features:
+#   - Validates warehouse ID before deployment
+#   - Auto-selects serverless or running warehouse if configured one is invalid
 
 set -e
 
@@ -54,6 +58,102 @@ if [ ! -f "$BUNDLE_FILE" ]; then
   exit 1
 fi
 
+# ============================================
+# WAREHOUSE VALIDATION FUNCTION
+# ============================================
+validate_warehouse() {
+  local config_file="$1"
+  local profile="$2"
+
+  # Extract configured warehouse ID from app config
+  CONFIGURED_WH=$(grep -A1 'name: WAREHOUSE_ID' "$config_file" | grep 'value:' | sed 's/.*value:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}/\1/' | tr -d ' ')
+
+  if [ -z "$CONFIGURED_WH" ]; then
+    echo "  [WARN] No WAREHOUSE_ID found in $config_file"
+    return 1
+  fi
+
+  echo "  Configured warehouse: $CONFIGURED_WH"
+
+  # Verify warehouse exists and is accessible
+  echo "  Verifying warehouse..."
+  WH_INFO=$(databricks warehouses get "$CONFIGURED_WH" --profile "$profile" 2>&1) || {
+    echo "  [FAIL] Warehouse $CONFIGURED_WH not found or not accessible"
+    return 1
+  }
+
+  # Check warehouse state
+  WH_STATE=$(echo "$WH_INFO" | grep -o '"state":"[^"]*"' | head -1 | cut -d'"' -f4)
+  WH_NAME=$(echo "$WH_INFO" | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+  echo "  [OK] Warehouse found: $WH_NAME (state: $WH_STATE)"
+  return 0
+}
+
+# ============================================
+# FIND FALLBACK WAREHOUSE FUNCTION
+# ============================================
+find_fallback_warehouse() {
+  local profile="$1"
+
+  echo "  Searching for available warehouses..."
+
+  # List all warehouses
+  WH_LIST=$(databricks warehouses list --profile "$profile" 2>/dev/null) || {
+    echo "  [ERROR] Cannot list warehouses"
+    return 1
+  }
+
+  # Try to find a serverless warehouse first (preferred)
+  SERVERLESS_WH=$(echo "$WH_LIST" | grep -i 'serverless' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+  if [ -n "$SERVERLESS_WH" ]; then
+    SERVERLESS_NAME=$(echo "$WH_LIST" | grep -B5 "\"id\":\"$SERVERLESS_WH\"" | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
+    echo "  [FOUND] Serverless warehouse: $SERVERLESS_NAME ($SERVERLESS_WH)"
+    echo "$SERVERLESS_WH"
+    return 0
+  fi
+
+  # Try to find a RUNNING warehouse
+  RUNNING_WH=$(echo "$WH_LIST" | grep -B10 '"state":"RUNNING"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+  if [ -n "$RUNNING_WH" ]; then
+    RUNNING_NAME=$(echo "$WH_LIST" | grep -B5 "\"id\":\"$RUNNING_WH\"" | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
+    echo "  [FOUND] Running warehouse: $RUNNING_NAME ($RUNNING_WH)"
+    echo "$RUNNING_WH"
+    return 0
+  fi
+
+  # Fall back to any warehouse
+  ANY_WH=$(echo "$WH_LIST" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+  if [ -n "$ANY_WH" ]; then
+    ANY_NAME=$(echo "$WH_LIST" | grep -B5 "\"id\":\"$ANY_WH\"" | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
+    echo "  [FOUND] Available warehouse: $ANY_NAME ($ANY_WH)"
+    echo "$ANY_WH"
+    return 0
+  fi
+
+  echo "  [ERROR] No warehouses available in workspace"
+  return 1
+}
+
+# ============================================
+# UPDATE APP CONFIG WITH NEW WAREHOUSE
+# ============================================
+update_warehouse_in_config() {
+  local config_file="$1"
+  local new_wh_id="$2"
+
+  echo "  Updating $config_file with warehouse: $new_wh_id"
+
+  # Use sed to replace the warehouse ID value
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS sed
+    sed -i '' "s/\(name: WAREHOUSE_ID\)/\1/; /name: WAREHOUSE_ID/{n;s/value:.*/value: \"$new_wh_id\"/;}" "$config_file"
+  else
+    # GNU sed
+    sed -i "s/\(name: WAREHOUSE_ID\)/\1/; /name: WAREHOUSE_ID/{n;s/value:.*/value: \"$new_wh_id\"/;}" "$config_file"
+  fi
+}
+
 # Build frontend if dist doesn't exist or is older than source
 if [ ! -d "job_monitor/ui/dist" ] || [ "$(find job_monitor/ui/src -newer job_monitor/ui/dist -print -quit 2>/dev/null)" ]; then
   echo ""
@@ -80,6 +180,47 @@ fi
 if [ -f "$APP_CONFIG" ] && [ "$APP_CONFIG" != "app.yaml" ]; then
   echo "Using app config: $APP_CONFIG"
   cp "$APP_CONFIG" app.yaml
+fi
+
+# ============================================
+# STEP 1.5: VALIDATE WAREHOUSE
+# ============================================
+echo ""
+echo "Step 1.5: Validating warehouse configuration..."
+
+if ! validate_warehouse "app.yaml" "$PROFILE"; then
+  echo ""
+  echo "  Warehouse validation failed. Looking for fallback..."
+
+  FALLBACK_WH=$(find_fallback_warehouse "$PROFILE")
+
+  if [ -n "$FALLBACK_WH" ] && [ "$FALLBACK_WH" != "" ]; then
+    echo ""
+    read -p "  Use fallback warehouse $FALLBACK_WH? [Y/n] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+      update_warehouse_in_config "app.yaml" "$FALLBACK_WH"
+      # Also update the source config file for future deployments
+      if [ "$APP_CONFIG" != "app.yaml" ]; then
+        update_warehouse_in_config "$APP_CONFIG" "$FALLBACK_WH"
+        echo "  [INFO] Also updated $APP_CONFIG for future deployments"
+      fi
+    else
+      echo "  [ABORT] Deployment cancelled. Please fix warehouse ID manually."
+      # Restore backups before exiting
+      [ -f "databricks.yml.bak" ] && mv databricks.yml.bak databricks.yml
+      [ -f "app.yaml.bak" ] && mv app.yaml.bak app.yaml
+      exit 1
+    fi
+  else
+    echo "  [ERROR] No fallback warehouse found. Deployment cannot proceed."
+    # Restore backups before exiting
+    [ -f "databricks.yml.bak" ] && mv databricks.yml.bak databricks.yml
+    [ -f "app.yaml.bak" ] && mv app.yaml.bak app.yaml
+    exit 1
+  fi
+else
+  echo "  [OK] Warehouse validation passed"
 fi
 
 # Deploy bundle using DABs
