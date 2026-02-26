@@ -33,9 +33,14 @@ databricks_job_monitoring/
 │   │   ├── routes/           # TanStack Router pages
 │   │   └── main.tsx          # App entry point
 │   └── config.yaml           # Centralized configuration
-├── app.yaml                   # Databricks App manifest (dev)
+├── app.yaml                   # Databricks App manifest (dev/E2 default)
 ├── app.e2.yaml               # Databricks App manifest (E2)
-├── databricks.yml            # DABs bundle configuration
+├── app.prod.yaml             # Databricks App manifest (DEMO WEST)
+├── databricks.yml            # DABs bundle configuration (default)
+├── databricks.e2.yml         # DABs bundle for E2
+├── databricks.prod.yml       # DABs bundle for DEMO WEST
+├── databricks.dev.yml        # DABs bundle for dev
+├── deploy.sh                 # Deployment script (handles config swapping)
 ├── pyproject.toml            # Python project config
 └── README.md                 # User documentation
 ```
@@ -372,21 +377,63 @@ def test_my_endpoint():
 
 ### Targets
 
-| Target | Profile | Description |
-|--------|---------|-------------|
-| `e2` | DEFAULT | Production (E2 workspace, OBO enabled) |
-| `dev` | LPT_FREE_EDITION | Development (mock data) |
+| Target | Profile | Warehouse | App URL |
+|--------|---------|-----------|---------|
+| `e2` | DEFAULT | `06c1adfd3dbdacde` | https://job-monitor-1444828305810485.aws.databricksapps.com |
+| `prod` | DEMO WEST | `75fd8278393d07eb` | https://job-monitor-2556758628403379.aws.databricksapps.com |
+| `dev` | LPT_FREE_EDITION | `58d41113cb262dce` | https://job-monitor-3704140105640043.aws.databricksapps.com |
+
+### Configuration Files Per Target
+
+Each target has its own configuration files:
+
+| Target | Bundle Config | App Config |
+|--------|--------------|------------|
+| `e2` | `databricks.e2.yml` | `app.e2.yaml` |
+| `prod` | `databricks.prod.yml` | `app.prod.yaml` |
+| `dev` | `databricks.dev.yml` | `app.yaml` |
+
+**Important**: The `app.*.yaml` files contain target-specific `WAREHOUSE_ID` and other environment variables.
 
 ### Deploy Commands
 
+Use the `deploy.sh` script for simplified deployment:
+
 ```bash
-# Build frontend first
+# Deploy to E2 (default)
+./deploy.sh e2
+
+# Deploy to DEMO WEST (production)
+./deploy.sh prod
+
+# Deploy to dev workspace
+./deploy.sh dev
+```
+
+The script handles:
+1. Building frontend (if needed)
+2. Swapping `databricks.yml` and `app.yaml` to target-specific versions
+3. Running `databricks bundle deploy`
+4. Running `databricks apps deploy`
+5. Enabling OBO authentication (for non-dev targets)
+6. Restoring original config files
+
+### Manual Deployment
+
+If you need manual control:
+
+```bash
+# Build frontend
 cd job_monitor/ui && npm run build && cd ../..
 
-# Deploy to E2 (production)
+# Copy target-specific configs
+cp databricks.e2.yml databricks.yml
+cp app.e2.yaml app.yaml
+
+# Deploy bundle
 databricks bundle deploy -t e2
 
-# Deploy app code
+# Deploy app
 databricks apps deploy job-monitor \
   --source-code-path /Workspace/Users/YOUR_EMAIL/.bundle/job-monitor/e2/files \
   -p DEFAULT
@@ -404,9 +451,23 @@ databricks apps get job-monitor -p DEFAULT
 # View logs
 open https://YOUR_APP_URL/logz
 
-# Test API
+# Test API endpoints
+curl https://YOUR_APP_URL/api/me
 curl https://YOUR_APP_URL/api/health-metrics
+curl https://YOUR_APP_URL/api/alerts
 ```
+
+### Troubleshooting Deployment
+
+**API returning 500 errors**:
+1. Check warehouse ID matches the target workspace
+2. Verify `app.yaml` was swapped correctly (check `WAREHOUSE_ID` value)
+3. Ensure OBO is enabled (`effective_user_api_scopes` includes `sql`)
+
+**OBO not working**:
+1. Verify `user_api_scopes: ["sql"]` in app.yaml
+2. Run `databricks apps update` command
+3. Check `effective_user_api_scopes` in `databricks apps get` output
 
 ## Configuration
 
@@ -467,6 +528,26 @@ user_api_scopes:
 databricks apps update job-monitor --json '{"user_api_scopes": ["sql"]}' -p DEFAULT
 ```
 
+### Using OBO in Routers
+
+**CRITICAL**: All routers querying system tables must use `get_ws_prefer_user`:
+
+```python
+# CORRECT - Uses OBO (user's permissions)
+from ..core import get_ws_prefer_user
+
+@router.get("/data")
+async def get_data(ws=Depends(get_ws_prefer_user)):
+    result = ws.statement_execution.execute_statement(...)
+
+# WRONG - Uses Service Principal (limited permissions)
+from ..core import get_ws
+
+@router.get("/data")
+async def get_data(ws=Depends(get_ws)):  # Will fail on system tables!
+    ...
+```
+
 ### Debugging OBO
 
 ```bash
@@ -499,6 +580,17 @@ databricks apps get job-monitor -p DEFAULT | grep -A5 scopes
 - Run CLI update command (required after app creation)
 - Check `effective_user_api_scopes` in `databricks apps get` output
 - Clear browser cache and re-authenticate
+
+**API returning 500 errors after deployment**
+- **CRITICAL**: Check if router uses `get_ws` vs `get_ws_prefer_user`
+  - `get_ws` = Service Principal auth (limited permissions)
+  - `get_ws_prefer_user` = OBO auth (user's permissions)
+- All routers querying system tables MUST use `get_ws_prefer_user`
+- Verify correct `WAREHOUSE_ID` in `app.*.yaml` for target workspace:
+  - E2: `06c1adfd3dbdacde`
+  - DEMO WEST: `75fd8278393d07eb`
+  - Dev: `58d41113cb262dce`
+- Check `deploy.sh` swapped the correct app config file
 
 ### Logs
 

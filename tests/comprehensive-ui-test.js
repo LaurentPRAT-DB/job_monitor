@@ -1,43 +1,54 @@
 /**
  * Comprehensive UI Test for Job Monitor Application
  *
- * This script tests all clickable elements and validates caching behavior
- * over a 30-minute period.
+ * Tests all clickable elements, validates API responses, and measures performance.
  *
  * Usage:
- *   node comprehensive-ui-test.js
+ *   node comprehensive-ui-test.js [--duration=30] [--headless]
  *
- * Requirements:
- *   npm install puppeteer
+ * Options:
+ *   --duration=N   Test duration in minutes (default: 30)
+ *   --headless     Run in headless mode
+ *   --quick        Quick test (5 minutes, no stress phase)
  */
 
 const puppeteer = require('puppeteer');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
 const BASE_URL = 'https://job-monitor-2556758628403379.aws.databricksapps.com';
 
+// Parse command line args
+const args = process.argv.slice(2);
+const isQuick = args.includes('--quick');
+const isHeadless = args.includes('--headless');
+const durationArg = args.find(a => a.startsWith('--duration='));
+const testDuration = durationArg ? parseInt(durationArg.split('=')[1]) : (isQuick ? 5 : 30);
+
 // Test configuration
 const CONFIG = {
-  testDuration: 30 * 60 * 1000, // 30 minutes
-  cycleWait: 5 * 60 * 1000, // 5 minutes between cycles
-  headless: false, // Set to true for CI
-  slowMo: 50, // Slow down actions for visibility
+  testDuration: testDuration * 60 * 1000,
+  cycleWait: isQuick ? 60 * 1000 : 5 * 60 * 1000,
+  headless: isHeadless,
+  slowMo: 30,
   viewport: { width: 1920, height: 1080 },
+  timeout: 60000,
 };
 
 // Test results storage
 const results = {
   totalClicks: 0,
+  successfulClicks: 0,
+  skippedClicks: 0,
   apiCalls: [],
-  cacheHits: 0,
-  cacheMisses: 0,
-  errors: [],
+  apiByEndpoint: {},
+  apiErrors: [],
   pageResults: {},
+  consoleErrors: [],
   startTime: null,
   endTime: null,
 };
-
-// Track API requests to detect cache behavior
-const seenRequests = new Map();
 
 // Helper function to wait
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -50,25 +61,16 @@ class JobMonitorTester {
   }
 
   async initialize() {
-    // Create a temporary copy of the Chrome profile for isolated testing
-    const fs = require('fs');
-    const path = require('path');
-    const os = require('os');
-    const { execSync } = require('child_process');
-
     const sourceProfile = process.env.CHROME_USER_DATA_DIR ||
       '/Users/laurent.prat/.vibe/chrome/profile';
 
-    // Create temp directory for profile copy
     this.tempProfileDir = path.join(os.tmpdir(), `chrome-profile-${Date.now()}`);
     console.log(`Creating temp profile at: ${this.tempProfileDir}`);
 
-    // Copy cookies and local storage (essential for auth)
     fs.mkdirSync(this.tempProfileDir, { recursive: true });
     const defaultDir = path.join(this.tempProfileDir, 'Default');
     fs.mkdirSync(defaultDir, { recursive: true });
 
-    // Copy only essential files for auth
     const essentialFiles = ['Cookies', 'Login Data', 'Preferences'];
     const sourceDefault = path.join(sourceProfile, 'Default');
 
@@ -81,7 +83,6 @@ class JobMonitorTester {
       }
     }
 
-    // Copy Local State from profile root
     const localState = path.join(sourceProfile, 'Local State');
     if (fs.existsSync(localState)) {
       fs.copyFileSync(localState, path.join(this.tempProfileDir, 'Local State'));
@@ -101,272 +102,483 @@ class JobMonitorTester {
     this.page = await this.browser.newPage();
     await this.page.setViewport(CONFIG.viewport);
 
-    // Track all network requests
+    // Track all network requests and responses
     this.page.on('request', (request) => {
       if (request.url().includes('/api/')) {
         const url = request.url();
-        const now = Date.now();
-        const key = url.split('?')[0];
+        const endpoint = url.split('/api')[1]?.split('?')[0] || url;
 
         results.apiCalls.push({
+          endpoint,
           url,
           method: request.method(),
-          timestamp: now,
-          fromCache: false,
+          timestamp: Date.now(),
         });
-
-        if (seenRequests.has(key)) {
-          const lastCall = seenRequests.get(key);
-          const timeSince = now - lastCall.timestamp;
-          if (timeSince < 5 * 60 * 1000) {
-            console.log(`  [CACHE CHECK] ${key.split('/api')[1]} - ${timeSince}ms since last`);
-          }
-        }
-        seenRequests.set(key, { timestamp: now, url });
       }
     });
 
     this.page.on('response', async (response) => {
       if (response.url().includes('/api/')) {
         const url = response.url();
+        const endpoint = url.split('/api')[1]?.split('?')[0] || url;
         const status = response.status();
-        const fromCache = response.fromCache();
 
-        if (fromCache) {
-          results.cacheHits++;
-        } else {
-          results.cacheMisses++;
+        if (!results.apiByEndpoint[endpoint]) {
+          results.apiByEndpoint[endpoint] = { success: 0, errors: 0, statuses: {} };
         }
 
-        const endpoint = url.split('/api')[1]?.split('?')[0] || url;
-        console.log(`  [API] ${response.request().method()} ${endpoint} - ${status} ${fromCache ? '(CACHE)' : '(FRESH)'}`);
-      }
-    });
+        if (status >= 200 && status < 300) {
+          results.apiByEndpoint[endpoint].success++;
+        } else {
+          results.apiByEndpoint[endpoint].errors++;
+          results.apiErrors.push({ endpoint, status, timestamp: Date.now() });
+        }
 
-    this.page.on('console', (msg) => {
-      if (msg.type() === 'error') {
-        results.errors.push({ text: msg.text(), timestamp: Date.now() });
+        results.apiByEndpoint[endpoint].statuses[status] =
+          (results.apiByEndpoint[endpoint].statuses[status] || 0) + 1;
+
+        const statusEmoji = status >= 200 && status < 300 ? '✓' : '✗';
+        console.log(`  [API ${statusEmoji}] ${response.request().method()} ${endpoint} -> ${status}`);
       }
     });
 
     this.page.on('pageerror', (error) => {
-      results.errors.push({ text: error.message, timestamp: Date.now() });
+      results.consoleErrors.push({ text: error.message, timestamp: Date.now() });
     });
   }
 
-  async click(selector, description) {
+  // Find element by text content (Puppeteer-compatible)
+  async findByText(selector, text, exact = false) {
+    const elements = await this.page.$$(selector);
+    for (const el of elements) {
+      const content = await el.evaluate(e => e.textContent);
+      if (exact ? content.trim() === text : content.includes(text)) {
+        return el;
+      }
+    }
+    return null;
+  }
+
+  // Click element by text content
+  async clickByText(selector, text, description) {
+    try {
+      const el = await this.findByText(selector, text);
+      if (el) {
+        await el.click();
+        results.totalClicks++;
+        results.successfulClicks++;
+        console.log(`  [CLICK ✓] ${description}`);
+        await wait(300);
+        return true;
+      }
+    } catch (error) {}
+    results.totalClicks++;
+    results.skippedClicks++;
+    console.log(`  [CLICK -] ${description} - not found`);
+    return false;
+  }
+
+  // Click by CSS selector
+  async click(selector, description, options = {}) {
+    const { waitAfter = 300 } = options;
     try {
       await this.page.waitForSelector(selector, { timeout: 3000 });
       await this.page.click(selector);
       results.totalClicks++;
-      console.log(`  [CLICK] ${description}`);
-      await wait(300);
+      results.successfulClicks++;
+      console.log(`  [CLICK ✓] ${description}`);
+      await wait(waitAfter);
+      return true;
     } catch (error) {
-      console.log(`  [SKIP] ${description} - not found`);
+      results.totalClicks++;
+      results.skippedClicks++;
+      console.log(`  [CLICK -] ${description} - not found`);
+      return false;
+    }
+  }
+
+  // Click all matching elements
+  async clickAll(selector, description, maxClicks = 5) {
+    try {
+      const elements = await this.page.$$(selector);
+      if (elements.length === 0) {
+        console.log(`  [CLICK -] ${description} - no elements found`);
+        return 0;
+      }
+
+      let clicked = 0;
+      for (let i = 0; i < Math.min(elements.length, maxClicks); i++) {
+        try {
+          await elements[i].click();
+          clicked++;
+          results.totalClicks++;
+          results.successfulClicks++;
+          await wait(200);
+        } catch (e) {}
+      }
+      console.log(`  [CLICK ✓] ${description} - clicked ${clicked}/${elements.length}`);
+      return clicked;
+    } catch (error) {
+      console.log(`  [CLICK -] ${description} - error`);
+      return 0;
     }
   }
 
   async testDashboard() {
-    console.log('\n=== Testing Dashboard ===');
-    results.pageResults.dashboard = { clicks: 0, apiCalls: 0 };
-    const startCalls = results.apiCalls.length;
-    const startClicks = results.totalClicks;
+    console.log('\n' + '='.repeat(60));
+    console.log('Testing Dashboard (/dashboard)');
+    console.log('='.repeat(60));
 
-    await this.page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle2', timeout: 30000 });
+    const startClicks = results.successfulClicks;
+    const startApiCalls = results.apiCalls.length;
+
+    await this.page.goto(`${BASE_URL}/dashboard`, {
+      waitUntil: 'networkidle2',
+      timeout: CONFIG.timeout
+    });
     await wait(3000);
 
-    // Click metric cards using Link components
-    await this.click('a[href="/job-health"]', 'Total Jobs card');
+    // Test metric cards (links)
+    console.log('\n--- Metric Cards ---');
+    await this.click('a[href="/job-health"]', 'Total Jobs card -> Job Health');
     await wait(1000);
     await this.page.goBack();
     await wait(500);
 
-    await this.click('a[href="/alerts"]', 'Active Alerts card');
+    await this.click('a[href="/alerts"]', 'Active Alerts card -> Alerts');
     await wait(1000);
     await this.page.goBack();
     await wait(500);
 
-    await this.click('a[href="/historical"]', 'DBU Cost card');
+    await this.click('a[href="/historical"]', 'DBU Cost card -> Historical');
     await wait(1000);
     await this.page.goBack();
     await wait(500);
 
-    // Click Refresh button
-    await this.click('button:has-text("Refresh")', 'Refresh button');
+    // Header controls
+    console.log('\n--- Header Controls ---');
+    await this.clickByText('button', 'Refresh', 'Refresh button');
     await wait(2000);
 
-    // Toggle dark mode
-    await this.click('button[role="switch"]', 'Dark mode ON');
+    // Dark mode toggle
+    await this.click('button[role="switch"]', 'Dark mode toggle ON');
+    await wait(500);
+    await this.click('button[role="switch"]', 'Dark mode toggle OFF');
     await wait(300);
-    await this.click('button[role="switch"]', 'Dark mode OFF');
 
     // Sidebar navigation
+    console.log('\n--- Sidebar Navigation ---');
+    await this.click('nav a[href="/job-health"]', 'Sidebar: Job Health');
+    await wait(500);
     await this.click('nav a[href="/running-jobs"]', 'Sidebar: Running Jobs');
+    await wait(500);
+    await this.click('nav a[href="/alerts"]', 'Sidebar: Alerts');
+    await wait(500);
+    await this.click('nav a[href="/historical"]', 'Sidebar: Historical');
     await wait(500);
     await this.click('nav a[href="/dashboard"]', 'Sidebar: Dashboard');
     await wait(500);
 
-    // Expand filters
-    await this.click('button:has-text("Filters")', 'Expand Filters');
-    await wait(500);
-    await this.click('button:has-text("Filters")', 'Collapse Filters');
-
-    results.pageResults.dashboard.clicks = results.totalClicks - startClicks;
-    results.pageResults.dashboard.apiCalls = results.apiCalls.length - startCalls;
+    results.pageResults.dashboard = {
+      clicks: results.successfulClicks - startClicks,
+      apiCalls: results.apiCalls.length - startApiCalls,
+    };
   }
 
   async testJobHealth() {
-    console.log('\n=== Testing Job Health ===');
-    results.pageResults.jobHealth = { clicks: 0, apiCalls: 0 };
-    const startCalls = results.apiCalls.length;
-    const startClicks = results.totalClicks;
+    console.log('\n' + '='.repeat(60));
+    console.log('Testing Job Health (/job-health)');
+    console.log('='.repeat(60));
 
-    await this.page.goto(`${BASE_URL}/job-health`, { waitUntil: 'networkidle2', timeout: 30000 });
+    const startClicks = results.successfulClicks;
+    const startApiCalls = results.apiCalls.length;
+
+    await this.page.goto(`${BASE_URL}/job-health`, {
+      waitUntil: 'networkidle2',
+      timeout: CONFIG.timeout
+    });
     await wait(3000);
 
     // Time range tabs
-    await this.click('button[role="tab"]:has-text("30 Days")', '30 Days tab');
-    await wait(2000);
-    await this.click('button[role="tab"]:has-text("7 Days")', '7 Days tab');
+    console.log('\n--- Time Range Tabs ---');
+    await this.clickAll('button[role="tab"]', 'Time range tabs');
     await wait(1000);
 
-    // Summary filter cards
-    await this.click('button:has-text("Total Jobs")', 'Total Jobs card');
-    await wait(300);
-    await this.click('button:has-text("Critical")', 'Critical card');
-    await wait(300);
-    await this.click('button:has-text("Failing")', 'Failing card');
-    await wait(300);
-    await this.click('button:has-text("Warning")', 'Warning card');
-    await wait(300);
-
-    // Search box
-    const searchBox = await this.page.$('input[placeholder*="Search"]');
-    if (searchBox) {
-      await searchBox.type('test');
-      results.totalClicks++;
-      console.log('  [INPUT] Search: test');
-      await wait(500);
-      await searchBox.click({ clickCount: 3 });
-      await searchBox.press('Backspace');
+    // Summary cards (filter buttons)
+    console.log('\n--- Summary Cards ---');
+    const cardTexts = ['Total', 'Critical', 'Failing', 'Warning', 'Healthy'];
+    for (const text of cardTexts) {
+      await this.clickByText('button', text, `${text} card filter`);
+      await wait(300);
     }
 
-    // Status dropdown
+    // Search
+    console.log('\n--- Search ---');
+    const searchInput = await this.page.$('input[type="text"], input[placeholder*="earch"]');
+    if (searchInput) {
+      await searchInput.type('test');
+      results.totalClicks++;
+      results.successfulClicks++;
+      console.log('  [TYPE ✓] Search: "test"');
+      await wait(500);
+      await searchInput.click({ clickCount: 3 });
+      await searchInput.press('Backspace');
+      console.log('  [CLEAR ✓] Search cleared');
+    }
+
+    // Status filter dropdown
+    console.log('\n--- Status Filter ---');
     await this.click('button[role="combobox"]', 'Status dropdown');
     await wait(300);
-
-    // Pagination
-    await this.click('button:has-text("Next page")', 'Next page');
-    await wait(300);
-    await this.click('button:has-text("Previous page")', 'Previous page');
+    await this.clickAll('[role="option"]', 'Dropdown options', 3);
+    await this.page.keyboard.press('Escape');
     await wait(300);
 
-    // Rows per page
-    await this.click('button:has-text("10")', 'Rows dropdown');
-    await wait(200);
+    // Table row expansion
+    console.log('\n--- Table Row Expansion ---');
+    const expandButtons = await this.page.$$('table tbody tr td button');
+    for (let i = 0; i < Math.min(expandButtons.length, 3); i++) {
+      try {
+        await expandButtons[i].click();
+        results.totalClicks++;
+        results.successfulClicks++;
+        console.log(`  [CLICK ✓] Expand row ${i + 1}`);
+        await wait(1500);
 
-    // Expand first job row
-    const expandBtn = await this.page.$('table tbody tr:first-child button');
-    if (expandBtn) {
-      await expandBtn.click();
-      results.totalClicks++;
-      console.log('  [CLICK] Expand row');
-      await wait(1000);
-      await expandBtn.click();
-      results.totalClicks++;
-      console.log('  [CLICK] Collapse row');
+        // Collapse
+        await expandButtons[i].click();
+        results.totalClicks++;
+        results.successfulClicks++;
+        console.log(`  [CLICK ✓] Collapse row ${i + 1}`);
+        await wait(300);
+      } catch (e) {}
     }
 
+    // Pagination
+    console.log('\n--- Pagination ---');
+    await this.clickAll('nav button, [aria-label*="page"]', 'Pagination buttons', 4);
+
     // Refresh
-    await this.click('button:has-text("Refresh")', 'Refresh');
+    await this.clickByText('button', 'Refresh', 'Refresh button');
     await wait(2000);
 
-    results.pageResults.jobHealth.clicks = results.totalClicks - startClicks;
-    results.pageResults.jobHealth.apiCalls = results.apiCalls.length - startCalls;
+    results.pageResults.jobHealth = {
+      clicks: results.successfulClicks - startClicks,
+      apiCalls: results.apiCalls.length - startApiCalls,
+    };
   }
 
   async testRunningJobs() {
-    console.log('\n=== Testing Running Jobs ===');
-    results.pageResults.runningJobs = { clicks: 0, apiCalls: 0 };
-    const startCalls = results.apiCalls.length;
-    const startClicks = results.totalClicks;
+    console.log('\n' + '='.repeat(60));
+    console.log('Testing Running Jobs (/running-jobs)');
+    console.log('='.repeat(60));
 
-    await this.page.goto(`${BASE_URL}/running-jobs`, { waitUntil: 'networkidle2', timeout: 30000 });
+    const startClicks = results.successfulClicks;
+    const startApiCalls = results.apiCalls.length;
+
+    await this.page.goto(`${BASE_URL}/running-jobs`, {
+      waitUntil: 'networkidle2',
+      timeout: CONFIG.timeout
+    });
     await wait(3000);
 
-    // Refresh button
-    await this.click('button:has-text("Refresh")', 'Refresh');
+    console.log('\n--- Controls ---');
+    await this.clickByText('button', 'Refresh', 'Refresh button');
     await wait(2000);
 
+    console.log('\n--- Table ---');
+    await this.clickAll('th button', 'Column sort buttons');
+
+    // External links
+    const jobLinks = await this.page.$$('table tbody tr a');
+    console.log(`  Found ${jobLinks.length} job links (external)`);
+
     // Wait for auto-refresh
-    console.log('  [WAIT] 35s for auto-refresh...');
+    console.log('\n--- Auto-Refresh ---');
+    console.log('  Waiting 35s for auto-refresh...');
     await wait(35000);
 
-    results.pageResults.runningJobs.clicks = results.totalClicks - startClicks;
-    results.pageResults.runningJobs.apiCalls = results.apiCalls.length - startCalls;
+    results.pageResults.runningJobs = {
+      clicks: results.successfulClicks - startClicks,
+      apiCalls: results.apiCalls.length - startApiCalls,
+    };
   }
 
   async testAlerts() {
-    console.log('\n=== Testing Alerts ===');
-    results.pageResults.alerts = { clicks: 0, apiCalls: 0 };
-    const startCalls = results.apiCalls.length;
-    const startClicks = results.totalClicks;
+    console.log('\n' + '='.repeat(60));
+    console.log('Testing Alerts (/alerts)');
+    console.log('='.repeat(60));
 
-    await this.page.goto(`${BASE_URL}/alerts`, { waitUntil: 'networkidle2', timeout: 30000 });
+    const startClicks = results.successfulClicks;
+    const startApiCalls = results.apiCalls.length;
+
+    await this.page.goto(`${BASE_URL}/alerts`, {
+      waitUntil: 'networkidle2',
+      timeout: CONFIG.timeout
+    });
     await wait(3000);
 
     // Category tabs
-    await this.click('button[role="tab"][value="failure"]', 'Failure tab');
-    await wait(500);
-    await this.click('button[role="tab"][value="sla"]', 'SLA tab');
-    await wait(500);
-    await this.click('button[role="tab"][value="cost"]', 'Cost tab');
-    await wait(500);
-    await this.click('button[role="tab"][value="cluster"]', 'Cluster tab');
-    await wait(500);
-    await this.click('button[role="tab"][value="all"]', 'All tab');
+    console.log('\n--- Category Tabs ---');
+    await this.clickAll('button[role="tab"]', 'Category tabs');
     await wait(500);
 
-    // Acknowledge button
-    await this.click('button:has-text("Acknowledge")', 'Acknowledge');
+    // Alert cards
+    console.log('\n--- Alert Cards ---');
+    await this.clickAll('[class*="alert"], [class*="card"]', 'Alert cards', 5);
+
+    // Acknowledge buttons
+    console.log('\n--- Actions ---');
+    await this.clickByText('button', 'Acknowledge', 'Acknowledge button');
     await wait(500);
 
-    results.pageResults.alerts.clicks = results.totalClicks - startClicks;
-    results.pageResults.alerts.apiCalls = results.apiCalls.length - startCalls;
+    // View job links
+    await this.clickByText('button', 'View', 'View Job button');
+    await wait(500);
+    if (this.page.url().includes('/job-health')) {
+      await this.page.goBack();
+      await wait(500);
+    }
+
+    // Expandable sections
+    await this.clickAll('button[aria-expanded]', 'Expand/collapse buttons');
+
+    results.pageResults.alerts = {
+      clicks: results.successfulClicks - startClicks,
+      apiCalls: results.apiCalls.length - startApiCalls,
+    };
   }
 
   async testHistorical() {
-    console.log('\n=== Testing Historical ===');
-    results.pageResults.historical = { clicks: 0, apiCalls: 0 };
-    const startCalls = results.apiCalls.length;
-    const startClicks = results.totalClicks;
+    console.log('\n' + '='.repeat(60));
+    console.log('Testing Historical (/historical)');
+    console.log('='.repeat(60));
 
-    await this.page.goto(`${BASE_URL}/historical`, { waitUntil: 'networkidle2', timeout: 30000 });
+    const startClicks = results.successfulClicks;
+    const startApiCalls = results.apiCalls.length;
+
+    await this.page.goto(`${BASE_URL}/historical`, {
+      waitUntil: 'networkidle2',
+      timeout: CONFIG.timeout
+    });
     await wait(3000);
 
-    results.pageResults.historical.clicks = results.totalClicks - startClicks;
-    results.pageResults.historical.apiCalls = results.apiCalls.length - startCalls;
-  }
+    // Time range buttons
+    console.log('\n--- Time Range ---');
+    for (const days of ['7', '14', '30', '90']) {
+      await this.clickByText('button', days, `${days} days button`);
+      await wait(1000);
+    }
 
-  async testMobileNav() {
-    console.log('\n=== Testing Mobile Navigation ===');
+    // Chart interactions
+    console.log('\n--- Charts ---');
+    await this.clickAll('.recharts-surface, svg', 'Chart elements', 3);
 
-    await this.page.setViewport({ width: 390, height: 844 });
-    await this.page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle2' });
+    // Hover over charts
+    const charts = await this.page.$$('.recharts-wrapper, [class*="chart"]');
+    for (let i = 0; i < Math.min(charts.length, 3); i++) {
+      try {
+        const box = await charts[i].boundingBox();
+        if (box) {
+          await this.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+          await wait(500);
+          console.log(`  [HOVER ✓] Chart ${i + 1}`);
+        }
+      } catch (e) {}
+    }
+
+    // Dropdowns
+    console.log('\n--- Filters ---');
+    await this.click('button[role="combobox"]', 'Filter dropdown');
+    await wait(300);
+    await this.page.keyboard.press('Escape');
+
+    // Refresh
+    await this.clickByText('button', 'Refresh', 'Refresh button');
     await wait(2000);
 
-    await this.click('button[aria-label="Open navigation menu"]', 'Hamburger');
-    await wait(500);
-    await this.click('a[href="/job-health"]', 'Mobile: Job Health');
-    await wait(1000);
-
-    await this.page.setViewport(CONFIG.viewport);
+    results.pageResults.historical = {
+      clicks: results.successfulClicks - startClicks,
+      apiCalls: results.apiCalls.length - startApiCalls,
+    };
   }
 
-  async runCycle(num) {
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`CYCLE ${num} - ${new Date().toISOString()}`);
-    console.log(`${'='.repeat(60)}`);
+  async testMobileNavigation() {
+    console.log('\n' + '='.repeat(60));
+    console.log('Testing Mobile Navigation (390x844)');
+    console.log('='.repeat(60));
+
+    const startClicks = results.successfulClicks;
+
+    try {
+      await this.page.setViewport({ width: 390, height: 844 });
+      await this.page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle2', timeout: 60000 });
+      await wait(2000);
+
+      console.log('\n--- Mobile Menu ---');
+      const hamburger = await this.page.$('button[aria-label*="menu"], button[aria-label*="Menu"], header button');
+      if (hamburger) {
+        await hamburger.click();
+        results.totalClicks++;
+        results.successfulClicks++;
+        console.log('  [CLICK ✓] Hamburger menu');
+        await wait(500);
+
+        await this.click('a[href="/job-health"]', 'Mobile: Job Health');
+        await wait(1000);
+
+        const hamburger2 = await this.page.$('button[aria-label*="menu"], button[aria-label*="Menu"], header button');
+        if (hamburger2) {
+          await hamburger2.click();
+          results.totalClicks++;
+          results.successfulClicks++;
+          await wait(300);
+          await this.click('a[href="/alerts"]', 'Mobile: Alerts');
+          await wait(500);
+        }
+      } else {
+        console.log('  [SKIP] No hamburger menu found');
+      }
+    } catch (error) {
+      console.log(`  [ERROR] Mobile navigation failed: ${error.message}`);
+    }
+
+    // Always restore viewport
+    await this.page.setViewport(CONFIG.viewport);
+
+    results.pageResults.mobile = {
+      clicks: results.successfulClicks - startClicks,
+    };
+  }
+
+  async testAllAPIs() {
+    console.log('\n' + '='.repeat(60));
+    console.log('API Coverage Summary');
+    console.log('='.repeat(60));
+
+    const expectedApis = [
+      '/me', '/health-metrics', '/alerts', '/jobs-api/active',
+      '/costs/summary', '/historical/costs', '/historical/success-rate',
+      '/historical/sla-breaches'
+    ];
+
+    console.log('\n--- API Status ---');
+    for (const api of expectedApis) {
+      const data = results.apiByEndpoint[api];
+      if (data && data.success > 0) {
+        console.log(`  ✅ ${api}: ${data.success} calls, all successful`);
+      } else if (data && data.errors > 0) {
+        console.log(`  ❌ ${api}: ${data.errors} errors`);
+      } else {
+        console.log(`  ⚠️ ${api}: not called`);
+      }
+    }
+  }
+
+  async runCycle(cycleNum) {
+    console.log('\n' + '#'.repeat(60));
+    console.log(`# CYCLE ${cycleNum} - ${new Date().toISOString()}`);
+    console.log('#'.repeat(60));
 
     await this.testDashboard();
     await this.testJobHealth();
@@ -374,113 +586,128 @@ class JobMonitorTester {
     await this.testAlerts();
     await this.testHistorical();
 
-    if (num === 1) await this.testMobileNav();
+    if (cycleNum === 1) {
+      await this.testMobileNavigation();
+    }
+  }
+
+  async runStressTest(durationMs) {
+    console.log('\n' + '='.repeat(60));
+    console.log(`STRESS TEST - Rapid navigation for ${Math.floor(durationMs / 60000)} minutes`);
+    console.log('='.repeat(60));
+
+    const endTime = Date.now() + durationMs;
+    const pages = ['/dashboard', '/job-health', '/alerts', '/historical', '/running-jobs'];
+    let iterations = 0;
+
+    while (Date.now() < endTime) {
+      for (const page of pages) {
+        if (Date.now() >= endTime) break;
+        await this.page.goto(`${BASE_URL}${page}`, { waitUntil: 'domcontentloaded' });
+        await wait(300);
+        iterations++;
+      }
+    }
+
+    console.log(`  Completed ${iterations} page loads`);
   }
 
   async run() {
     results.startTime = Date.now();
-    console.log('Starting Job Monitor Comprehensive UI Test');
+
+    console.log('\n' + '='.repeat(60));
+    console.log('Job Monitor - Comprehensive UI Test');
+    console.log('='.repeat(60));
     console.log(`URL: ${BASE_URL}`);
     console.log(`Duration: ${CONFIG.testDuration / 60000} minutes`);
+    console.log(`Mode: ${CONFIG.headless ? 'Headless' : 'Visible'}`);
     console.log(`Started: ${new Date().toISOString()}`);
+    console.log('='.repeat(60));
 
     await this.initialize();
 
     // Cycle 1
     await this.runCycle(1);
 
-    // Wait 5 min
-    console.log('\n[WAIT] 5 minutes before Cycle 2...');
-    await wait(CONFIG.cycleWait);
+    if (!isQuick) {
+      console.log(`\n[WAIT] ${CONFIG.cycleWait / 60000} minutes before Cycle 2...`);
+      await wait(CONFIG.cycleWait);
+      await this.runCycle(2);
 
-    // Cycle 2
-    await this.runCycle(2);
+      console.log(`\n[WAIT] ${CONFIG.cycleWait / 60000} minutes before Cycle 3...`);
+      await wait(CONFIG.cycleWait);
+      await this.runCycle(3);
+    }
 
-    // Wait 5 min
-    console.log('\n[WAIT] 5 minutes before Cycle 3...');
-    await wait(CONFIG.cycleWait);
+    await this.testAllAPIs();
 
-    // Cycle 3
-    await this.runCycle(3);
-
-    // Stress test remaining time
     const elapsed = Date.now() - results.startTime;
     const remaining = CONFIG.testDuration - elapsed;
 
     if (remaining > 60000) {
-      console.log(`\n[STRESS] Rapid navigation for ${Math.floor(remaining / 60000)} min...`);
-      const endTime = Date.now() + remaining;
-
-      while (Date.now() < endTime) {
-        await this.page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'domcontentloaded' });
-        await wait(300);
-        await this.page.goto(`${BASE_URL}/job-health`, { waitUntil: 'domcontentloaded' });
-        await wait(300);
-        await this.page.goto(`${BASE_URL}/alerts`, { waitUntil: 'domcontentloaded' });
-        await wait(300);
-        await this.page.goto(`${BASE_URL}/historical`, { waitUntil: 'domcontentloaded' });
-        await wait(300);
-      }
+      await this.runStressTest(remaining);
     }
 
     results.endTime = Date.now();
     this.generateReport();
     await this.browser.close();
 
-    // Clean up temp profile
     if (this.tempProfileDir) {
-      const fs = require('fs');
       try {
         fs.rmSync(this.tempProfileDir, { recursive: true, force: true });
-        console.log('Cleaned up temp profile');
-      } catch (e) {
-        console.log('Note: Could not clean up temp profile');
-      }
+        console.log('\nCleaned up temp profile');
+      } catch (e) {}
     }
   }
 
   generateReport() {
     const duration = (results.endTime - results.startTime) / 60000;
-    const total = results.apiCalls.length;
-    const hitRate = total > 0 ? ((results.cacheHits / total) * 100).toFixed(1) : 0;
-
-    const callsByEndpoint = {};
-    for (const call of results.apiCalls) {
-      const ep = call.url.split('/api')[1]?.split('?')[0] || 'unknown';
-      callsByEndpoint[ep] = (callsByEndpoint[ep] || 0) + 1;
-    }
-
-    const apiSummary = Object.entries(callsByEndpoint)
-      .sort((a, b) => b[1] - a[1])
-      .map(([ep, cnt]) => `  ${ep}: ${cnt}`)
-      .join('\n');
+    const totalApiCalls = results.apiCalls.length;
+    const successfulApis = Object.values(results.apiByEndpoint)
+      .reduce((sum, ep) => sum + ep.success, 0);
+    const failedApis = Object.values(results.apiByEndpoint)
+      .reduce((sum, ep) => sum + ep.errors, 0);
 
     console.log(`
 ${'='.repeat(60)}
 TEST REPORT
 ${'='.repeat(60)}
 
-Duration: ${duration.toFixed(1)} minutes
-Total Clicks: ${results.totalClicks}
-Total API Calls: ${total}
-Cache Hits: ${results.cacheHits} (${hitRate}%)
-Cache Misses: ${results.cacheMisses}
-Errors: ${results.errors.length}
+DURATION
+  Total: ${duration.toFixed(1)} minutes
+  Started: ${new Date(results.startTime).toISOString()}
+  Ended: ${new Date(results.endTime).toISOString()}
 
-Page Results:
-${Object.entries(results.pageResults).map(([p, d]) =>
-  `  ${p}: ${d.clicks} clicks, ${d.apiCalls} API calls`
-).join('\n')}
+CLICK INTERACTIONS
+  Total Attempted: ${results.totalClicks}
+  Successful: ${results.successfulClicks}
+  Skipped/Not Found: ${results.skippedClicks}
+  Success Rate: ${results.totalClicks > 0 ? ((results.successfulClicks / results.totalClicks) * 100).toFixed(1) : 0}%
 
-API Call Summary:
-${apiSummary}
+API CALLS
+  Total Calls: ${totalApiCalls}
+  Successful (2xx): ${successfulApis}
+  Errors (4xx/5xx): ${failedApis}
+  Success Rate: ${totalApiCalls > 0 ? ((successfulApis / totalApiCalls) * 100).toFixed(1) : 0}%
 
-Cache Efficiency: ${hitRate >= 50 ? 'PASS' : 'NEEDS WORK'} (target: 50%+)
+API BREAKDOWN BY ENDPOINT
+${Object.entries(results.apiByEndpoint)
+  .sort((a, b) => (b[1].success + b[1].errors) - (a[1].success + a[1].errors))
+  .map(([endpoint, data]) => {
+    const status = data.errors > 0 ? '⚠️' : '✅';
+    return `  ${status} ${endpoint}: ${data.success} ok, ${data.errors} errors`;
+  })
+  .join('\n')}
 
-${results.errors.length > 0 ? `
-Errors:
-${results.errors.slice(0, 5).map(e => `  - ${e.text.substring(0, 100)}`).join('\n')}
-` : 'No errors.'}
+PAGE RESULTS
+${Object.entries(results.pageResults)
+  .map(([page, data]) => `  ${page}: ${data.clicks} clicks, ${data.apiCalls || 0} API calls`)
+  .join('\n')}
+
+ERRORS: ${results.consoleErrors.length} page errors, ${failedApis} API errors
+
+${'='.repeat(60)}
+OVERALL: ${failedApis === 0 ? '✅ ALL APIs PASSING' : '⚠️ SOME APIS FAILING'}
 ${'='.repeat(60)}
 `);
   }

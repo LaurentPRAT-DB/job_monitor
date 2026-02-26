@@ -20,14 +20,17 @@ TARGET="${1:-e2}"
 case "$TARGET" in
   e2)
     BUNDLE_FILE="databricks.e2.yml"
+    APP_CONFIG="app.e2.yaml"
     PROFILE="DEFAULT"
     ;;
   prod)
     BUNDLE_FILE="databricks.prod.yml"
+    APP_CONFIG="app.prod.yaml"
     PROFILE="DEMO WEST"
     ;;
   dev)
     BUNDLE_FILE="databricks.dev.yml"
+    APP_CONFIG="app.yaml"  # dev uses default app.yaml
     PROFILE="LPT_FREE_EDITION"
     ;;
   *)
@@ -60,13 +63,24 @@ if [ ! -d "job_monitor/ui/dist" ] || [ "$(find job_monitor/ui/src -newer job_mon
   cd ../..
 fi
 
-# Backup existing databricks.yml and use target-specific config
+# Backup existing configs and use target-specific files
 echo ""
-echo "Step 1: Setting up bundle config for $TARGET..."
+echo "Step 1: Setting up config files for $TARGET..."
+
+# Backup and swap databricks.yml
 if [ -f "databricks.yml" ]; then
   cp databricks.yml databricks.yml.bak
 fi
 cp "$BUNDLE_FILE" databricks.yml
+
+# Backup and swap app.yaml (for correct env vars like WAREHOUSE_ID)
+if [ -f "app.yaml" ]; then
+  cp app.yaml app.yaml.bak
+fi
+if [ -f "$APP_CONFIG" ] && [ "$APP_CONFIG" != "app.yaml" ]; then
+  echo "Using app config: $APP_CONFIG"
+  cp "$APP_CONFIG" app.yaml
+fi
 
 # Deploy bundle using DABs
 echo ""
@@ -104,9 +118,12 @@ if [ "$TARGET" != "dev" ]; then
     --profile "$PROFILE"
 fi
 
-# Restore original databricks.yml
+# Restore original config files
 if [ -f "databricks.yml.bak" ]; then
   mv databricks.yml.bak databricks.yml
+fi
+if [ -f "app.yaml.bak" ]; then
+  mv app.yaml.bak app.yaml
 fi
 
 echo ""

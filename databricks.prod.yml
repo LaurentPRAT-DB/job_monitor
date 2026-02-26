@@ -8,13 +8,17 @@ bundle:
 sync:
   include:
     - job_monitor/ui/dist/**
+    - job_monitor/backend/**
     - job_monitor/jobs/**
     - job_monitor/config.yaml
+    - job_monitor/__init__.py
+    - app.yaml
+    - requirements.txt
 
 variables:
   warehouse_id:
     description: "SQL warehouse ID for DEMO WEST"
-    default: "06c1adfd3dbdacde"  # TODO: Update with DEMO WEST warehouse ID
+    default: "75fd8278393d07eb"  # DEMO WEST Shared Endpoint
   cache_catalog:
     default: "job_monitor"
   cache_schema:

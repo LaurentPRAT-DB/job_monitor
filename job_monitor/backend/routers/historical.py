@@ -72,7 +72,7 @@ async def get_historical_costs(
     days: Annotated[int, Query(ge=1, le=90)] = 7,
     team: Annotated[str | None, Query()] = None,
     job_id: Annotated[str | None, Query()] = None,
-    ws=Depends(get_ws),
+    ws=Depends(get_ws_prefer_user),
 ) -> HistoricalResponse:
     """Get historical cost data with auto-granularity and previous period comparison."""
     settings = get_settings()
@@ -162,7 +162,7 @@ async def get_historical_success_rate(
     days: Annotated[int, Query(ge=1, le=90)] = 7,
     team: Annotated[str | None, Query()] = None,
     job_id: Annotated[str | None, Query()] = None,
-    ws=Depends(get_ws),
+    ws=Depends(get_ws_prefer_user),
 ) -> HistoricalResponse:
     """Get historical success rate with auto-granularity and previous period comparison."""
     settings = get_settings()
@@ -244,7 +244,7 @@ async def get_historical_sla_breaches(
     days: Annotated[int, Query(ge=1, le=90)] = 7,
     team: Annotated[str | None, Query()] = None,
     job_id: Annotated[str | None, Query()] = None,
-    ws=Depends(get_ws),
+    ws=Depends(get_ws_prefer_user),
 ) -> HistoricalResponse:
     """Get historical SLA breach count with auto-granularity and previous period comparison."""
     settings = get_settings()

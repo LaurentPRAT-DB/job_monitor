@@ -11,7 +11,7 @@ env:
     valueFrom: workspace-host
   - name: WAREHOUSE_ID
     description: "SQL warehouse ID for system table queries (DEMO WEST)"
-    value: "06c1adfd3dbdacde"  # Update with actual DEMO WEST warehouse ID
+    value: "75fd8278393d07eb"  # DEMO WEST Shared Endpoint
   - name: LOG_LEVEL
     description: "Logging level for debugging"
     value: "INFO"
