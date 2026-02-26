@@ -66,7 +66,13 @@ validate_warehouse() {
   local profile="$2"
 
   # Extract configured warehouse ID from app config
-  CONFIGURED_WH=$(grep -A1 'name: WAREHOUSE_ID' "$config_file" | grep 'value:' | sed 's/.*value:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}/\1/' | tr -d ' ')
+  # Handle YAML format: value: "xxx" or value: xxx (with optional comments)
+  CONFIGURED_WH=$(grep -A2 'name: WAREHOUSE_ID' "$config_file" | grep 'value:' | sed 's/.*value:[[:space:]]*"\([^"]*\)".*/\1/' | head -1)
+
+  # If quoted extraction failed, try unquoted
+  if [ -z "$CONFIGURED_WH" ]; then
+    CONFIGURED_WH=$(grep -A2 'name: WAREHOUSE_ID' "$config_file" | grep 'value:' | sed 's/.*value:[[:space:]]*\([^[:space:]#]*\).*/\1/' | head -1)
+  fi
 
   if [ -z "$CONFIGURED_WH" ]; then
     echo "  [WARN] No WAREHOUSE_ID found in $config_file"
