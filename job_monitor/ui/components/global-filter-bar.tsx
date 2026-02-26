@@ -3,6 +3,7 @@ import { useFilters } from '@/lib/filter-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TimeRangePicker } from './time-range-picker';
 import { FilterPresets } from './filter-presets';
+import { JobPatternInput } from './job-pattern-input';
 import { Button } from '@/components/ui/button';
 import { X, Filter, ChevronDown } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -28,6 +29,7 @@ export function GlobalFilterBar() {
   const activeFilterCount = [
     filters.team,
     filters.jobId,
+    filters.jobNamePatterns.length > 0 ? 'patterns' : null,
     filters.timeRange !== '7d' ? filters.timeRange : null,
   ].filter(Boolean).length;
 
@@ -153,6 +155,9 @@ export function GlobalFilterBar() {
               ))}
             </SelectContent>
           </Select>
+
+          {/* Job name pattern input */}
+          <JobPatternInput />
 
           {/* Time range picker */}
           <TimeRangePicker />

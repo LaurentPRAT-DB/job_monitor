@@ -3,6 +3,7 @@ import { createContext, useContext, ReactNode, useCallback, useMemo, useState, u
 export interface FilterState {
   team: string | null;
   jobId: string | null;
+  jobNamePatterns: string[];  // Wildcard patterns like "ETL-*", "*-daily"
   timeRange: '7d' | '30d' | '90d' | 'custom';
   startDate: string | null;  // ISO date string
   endDate: string | null;    // ISO date string
@@ -19,9 +20,13 @@ const FilterContext = createContext<FilterContextType | null>(null);
 
 function parseSearchParams(): FilterState {
   const searchParams = new URLSearchParams(window.location.search);
+  // Parse jobNamePatterns from comma-separated string
+  const patternsParam = searchParams.get('jobNamePatterns');
+  const jobNamePatterns = patternsParam ? patternsParam.split(',').filter(Boolean) : [];
   return {
     team: searchParams.get('team'),
     jobId: searchParams.get('jobId'),
+    jobNamePatterns,
     timeRange: (searchParams.get('timeRange') as FilterState['timeRange']) ?? '7d',
     startDate: searchParams.get('startDate'),
     endDate: searchParams.get('endDate'),
@@ -45,8 +50,15 @@ export function FilterProvider({ children }: { children: ReactNode }) {
     Object.entries(updates).forEach(([key, value]) => {
       if (value === null || value === undefined) {
         newParams.delete(key);
+      } else if (key === 'jobNamePatterns' && Array.isArray(value)) {
+        // Handle array: serialize as comma-separated or remove if empty
+        if (value.length > 0) {
+          newParams.set(key, value.join(','));
+        } else {
+          newParams.delete(key);
+        }
       } else {
-        newParams.set(key, value);
+        newParams.set(key, String(value));
       }
     });
     const search = newParams.toString();
@@ -63,6 +75,7 @@ export function FilterProvider({ children }: { children: ReactNode }) {
   const hasActiveFilters = useMemo(() => !!(
     filters.team ||
     filters.jobId ||
+    filters.jobNamePatterns.length > 0 ||
     filters.timeRange !== '7d' ||
     filters.startDate ||
     filters.endDate

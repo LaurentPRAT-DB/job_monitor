@@ -44,10 +44,56 @@ export function buildFilterQueryParams(filters: FilterState): URLSearchParams {
 
   if (filters.team) params.set('team', filters.team);
   if (filters.jobId) params.set('job_id', filters.jobId);
+  if (filters.jobNamePatterns.length > 0) {
+    params.set('job_name_patterns', filters.jobNamePatterns.join(','));
+  }
 
   const { start, end } = getDateRangeFromFilters(filters);
   params.set('start_date', formatDateForAPI(start));
   params.set('end_date', formatDateForAPI(end));
 
   return params;
+}
+
+/**
+ * Convert a wildcard pattern to a RegExp.
+ * Supports * (match any characters) and ? (match single character).
+ * Examples:
+ *   "ETL-*" -> /^ETL-.*$/i
+ *   "*-daily" -> /^.*-daily$/i
+ *   "job-?" -> /^job-.$/i
+ */
+export function wildcardToRegex(pattern: string): RegExp {
+  // Escape special regex characters except * and ?
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  // Convert wildcards: * -> .*, ? -> .
+  const regexPattern = escaped.replace(/\*/g, '.*').replace(/\?/g, '.');
+  return new RegExp(`^${regexPattern}$`, 'i');
+}
+
+/**
+ * Check if a job name matches any of the given wildcard patterns.
+ * Returns true if patterns array is empty (no filtering).
+ */
+export function matchesJobPatterns(jobName: string, patterns: string[]): boolean {
+  if (patterns.length === 0) return true;
+  return patterns.some((pattern) => wildcardToRegex(pattern).test(jobName));
+}
+
+/**
+ * Validate a wildcard pattern for basic correctness.
+ * Returns an error message if invalid, or null if valid.
+ */
+export function validateWildcardPattern(pattern: string): string | null {
+  if (!pattern.trim()) {
+    return 'Pattern cannot be empty';
+  }
+  if (pattern.length > 100) {
+    return 'Pattern is too long (max 100 characters)';
+  }
+  // Check for invalid characters
+  if (/[<>|&;`$]/.test(pattern)) {
+    return 'Pattern contains invalid characters';
+  }
+  return null;
 }
