@@ -338,19 +338,33 @@ This test plan validates the job name wildcard filtering feature and preset edit
 
 ## Test Results Summary
 
-| Suite | Tests | Pass | Fail | Blocked |
-|-------|-------|------|------|---------|
-| 1. Wildcard Syntax | 6 | | | |
-| 2. Case-Insensitive | 3 | | | |
-| 3. Multiple Patterns | 4 | | | |
-| 4. Input Validation | 5 | | | |
-| 5. URL Persistence | 4 | | | |
-| 6. Preset Creation | 3 | | | |
-| 7. Preset Edit | 5 | | | |
-| 8. Delete Preset | 1 | | | |
-| 9. Integration | 4 | | | |
-| 10. Edge Cases | 4 | | | |
-| **TOTAL** | **39** | | | |
+| Suite | Tests | Pass | Fail | Blocked | Notes |
+|-------|-------|------|------|---------|-------|
+| 1. Wildcard Syntax | 6 | 3 | | 3 | TC1.1, TC1.2, TC1.3 tested |
+| 2. Case-Insensitive | 3 | | | 3 | Not tested yet |
+| 3. Multiple Patterns | 4 | 2 | | 2 | TC3.1, TC3.3 passed |
+| 4. Input Validation | 5 | | | 5 | Not tested yet |
+| 5. URL Persistence | 4 | 2 | | 2 | TC5.1, TC5.2 passed |
+| 6. Preset Creation | 3 | | | 3 | Dialog interaction issues |
+| 7. Preset Edit | 5 | | | 5 | Not tested yet |
+| 8. Delete Preset | 1 | | | 1 | Not tested yet |
+| 9. Integration | 4 | | | 4 | Not tested yet |
+| 10. Edge Cases | 4 | | | 4 | Not tested yet |
+| **TOTAL** | **39** | **7** | **0** | **32** | Core filtering works |
+
+### Test Session 2026-02-26
+
+**Bug Found & Fixed**: Job Health page was not applying wildcard patterns from global filter.
+- Root cause: `job-health.tsx` did not consume `filters.jobNamePatterns` from context
+- Fix: Added `useFilters()` hook and `matchesJobPatterns()` client-side filtering
+- Commit: `20c2aaf`
+
+**Verified Working**:
+- `aurora*` pattern → 3 matching jobs (aurora_ingestion_demo, aurora_ingestion_pipeline, aurora_lakehouse)
+- `*_demo*` pattern → 108 matching jobs
+- Multiple patterns (`*_demo*` + `*sync*`) → 122 jobs (OR logic)
+- Pattern removal updates filter correctly
+- URL persistence across page reload
 
 ---
 
@@ -368,6 +382,7 @@ This test plan validates the job name wildcard filtering feature and preset edit
 
 _Record any bugs, observations, or improvement suggestions during testing:_
 
-1.
-2.
-3.
+1. **BUG FIXED**: Job Health page was not filtering by wildcard patterns (commit 20c2aaf)
+2. **Save Preset dialog**: Has timing issues with button clicks - may need investigation
+3. **Performance**: Client-side filtering with 3800+ jobs is fast and responsive
+4. **URL encoding**: Multiple patterns use comma separation, URL-encoded as `%2C`
