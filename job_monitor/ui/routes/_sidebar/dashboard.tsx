@@ -148,44 +148,63 @@ function formatTimeAgo(dateString: string): string {
 export default function Dashboard() {
   const { filters } = useFilters()
 
-  // Determine workspace filter - 'all' shows all, otherwise filter to specific workspace
-  // When filters.workspaceId is null, we show all workspaces (default behavior)
-  const workspaceParam = filters.workspaceId === 'all' ? '' : (filters.workspaceId ? `&workspace_id=${filters.workspaceId}` : '')
-
-  // Fetch user info (session preset - rarely changes)
+  // Fetch user info first (session preset - rarely changes)
   const { data: user, isLoading: userLoading } = useQuery<UserInfo>({
     queryKey: queryKeys.user.current(),
     queryFn: getCurrentUser,
     ...queryPresets.session,
   })
 
+  // Determine effective workspace ID:
+  // - 'all' = show all workspaces (no filter)
+  // - specific ID = filter to that workspace
+  // - null/undefined = use current user's workspace (default behavior)
+  // Use user's workspace as default when filter is not set
+  const userWorkspaceId = user?.workspace_id
+  const effectiveWorkspaceId = filters.workspaceId === 'all'
+    ? 'all'
+    : (filters.workspaceId || userWorkspaceId || 'pending')
+
   // Fetch job health metrics (semi-live - updates every 5-15 min)
+  // Query key uses 'pending' when user hasn't loaded yet
   const { data: healthData, isLoading: healthLoading, refetch: refetchHealth } = useQuery<JobHealthResponse>({
-    queryKey: [...queryKeys.healthMetrics.list(7), { workspaceId: filters.workspaceId }],
-    queryFn: async () => {
-      const res = await fetch(`/api/health-metrics?days=7${workspaceParam}`)
+    queryKey: ['health-metrics', 7, effectiveWorkspaceId],
+    queryFn: async ({ queryKey }) => {
+      // Extract workspace ID from queryKey to avoid closure issues
+      const wsId = queryKey[2] as string
+      const param = wsId && wsId !== 'all' && wsId !== 'pending' ? `&workspace_id=${wsId}` : ''
+      const res = await fetch(`/api/health-metrics?days=7${param}`)
       if (!res.ok) throw new Error('Failed to fetch health metrics')
       return res.json()
     },
     ...queryPresets.semiLive,
+    enabled: effectiveWorkspaceId !== 'pending', // Only run when we know the workspace
   })
 
   // Fetch alerts (slow preset - expensive query taking 15-30s)
   const { data: alertsData, isLoading: alertsLoading, refetch: refetchAlerts } = useQuery({
-    queryKey: [...queryKeys.alerts.all, { workspaceId: filters.workspaceId }],
-    queryFn: () => fetchAlerts({ workspaceId: filters.workspaceId || undefined }),
+    queryKey: ['alerts', effectiveWorkspaceId],
+    queryFn: async ({ queryKey }) => {
+      const wsId = queryKey[1] as string
+      const workspaceId = wsId && wsId !== 'all' && wsId !== 'pending' ? wsId : undefined
+      return fetchAlerts({ workspaceId })
+    },
     ...queryPresets.slow,
+    enabled: effectiveWorkspaceId !== 'pending',
   })
 
   // Fetch cost summary (slow preset - expensive query taking 30-40s)
   const { data: costData, isLoading: costLoading, refetch: refetchCosts } = useQuery<CostSummaryResponse>({
-    queryKey: [...queryKeys.costs.summary(), { workspaceId: filters.workspaceId }],
-    queryFn: async () => {
-      const res = await fetch(`/api/costs/summary${workspaceParam ? '?' + workspaceParam.substring(1) : ''}`)
+    queryKey: ['costs', 'summary', effectiveWorkspaceId],
+    queryFn: async ({ queryKey }) => {
+      const wsId = queryKey[2] as string
+      const param = wsId && wsId !== 'all' && wsId !== 'pending' ? `?workspace_id=${wsId}` : ''
+      const res = await fetch(`/api/costs/summary${param}`)
       if (!res.ok) throw new Error('Failed to fetch cost summary')
       return res.json()
     },
     ...queryPresets.slow,
+    enabled: effectiveWorkspaceId !== 'pending',
   })
 
   const isLoading = userLoading || healthLoading || alertsLoading || costLoading

@@ -222,9 +222,11 @@ async def get_cost_summary(
 
     dbu_rate = settings.dbu_rate
 
-    # Try cache first for fast response
-    if settings.use_cache:
-        logger.info("[CACHE] Attempting cache lookup for costs/summary")
+    # Try Delta table cache for fast response
+    # NOTE: Delta cache doesn't support workspace filtering, so skip it when workspace_id is specified
+    use_delta_cache = settings.use_cache and (not workspace_id or workspace_id == "all")
+    if use_delta_cache:
+        logger.info("[CACHE] Attempting Delta cache lookup for costs/summary (no workspace filter)")
         cached_data = await query_cost_cache(ws)
         if cached_data:
             logger.info(f"[CACHE_HIT] costs/summary: returning {len(cached_data)} jobs from cache")
@@ -321,6 +323,8 @@ async def get_cost_summary(
             return result
 
         logger.info("[CACHE_MISS] costs/summary: falling back to live query")
+    elif workspace_id:
+        logger.info(f"[CACHE_SKIP] Skipping Delta cache - workspace filter active: {workspace_id}")
 
     # Build workspace filter clause
     workspace_clause = ""

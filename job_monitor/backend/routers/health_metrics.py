@@ -171,12 +171,14 @@ async def get_health_metrics(
         logger.error("WAREHOUSE_ID not configured - returning 503")
         raise HTTPException(status_code=503, detail="Warehouse ID not configured")
 
-    # Try cache first for fast response
-    if settings.use_cache:
-        logger.info("[CACHE] Attempting cache lookup for health-metrics")
+    # Try Delta table cache first for fast response
+    # NOTE: Delta cache doesn't support workspace filtering, so skip it when workspace_id is specified
+    use_delta_cache = settings.use_cache and (not workspace_id or workspace_id == "all")
+    if use_delta_cache:
+        logger.info("[CACHE] Attempting Delta cache lookup for health-metrics (no workspace filter)")
         cached_data = await query_job_health_cache(ws, days)
         if cached_data:
-            logger.info(f"[CACHE_HIT] health-metrics: returning {len(cached_data)} jobs from cache")
+            logger.info(f"[CACHE_HIT] health-metrics: returning {len(cached_data)} jobs from Delta cache")
             jobs = [
                 JobHealthOut(
                     job_id=row["job_id"],
@@ -201,6 +203,8 @@ async def get_health_metrics(
             logger.info(f"[RESPONSE_CACHE] Cached health metrics from Delta cache ({len(jobs)} jobs)")
             return result
         logger.info("[CACHE_MISS] health-metrics: falling back to live query")
+    elif workspace_id:
+        logger.info(f"[CACHE_SKIP] Skipping Delta cache - workspace filter active: {workspace_id}")
 
     # Build workspace filter clause
     # If workspace_id='all' or None, don't filter by workspace
