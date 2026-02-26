@@ -346,11 +346,11 @@ This test plan validates the job name wildcard filtering feature and preset edit
 | 4. Input Validation | 5 | 5 | | | All passed (TC4.1-TC4.5) |
 | 5. URL Persistence | 4 | 4 | | | All passed |
 | 6. Preset Creation | 3 | 3 | | | All passed (TC6.1-TC6.3) |
-| 7. Preset Edit | 5 | 4 | | 1 | TC7.1, TC7.3, TC7.4, TC7.5 passed; TC7.2 blocked (UX limitation) |
+| 7. Preset Edit | 5 | 5 | | | All passed (TC7.1-TC7.5) - TC7.2 fixed with edit mode redesign |
 | 8. Delete Preset | 1 | 1 | | | TC8.1 passed |
 | 9. Integration | 4 | 2 | | 2 | TC9.3, TC9.4 passed; TC9.2 unexpected; TC9.1 blocked |
 | 10. Edge Cases | 4 | 4 | | | All passed (TC10.1-TC10.4) |
-| **TOTAL** | **39** | **37** | **0** | **2** | Wildcard filtering fully functional |
+| **TOTAL** | **39** | **38** | **0** | **1** | Wildcard filtering fully functional; TC9.1 blocked (no team tags) |
 
 ### Test Session 2026-02-26 (continued)
 
@@ -391,11 +391,11 @@ This test plan validates the job name wildcard filtering feature and preset edit
 
 **Suite 7 - Preset Edit:**
 - TC7.1: Enter edit mode - dialog shows "Update preset", name pre-filled ✅
-- TC7.2: Modify Patterns and Save - BLOCKED (UX limitation)
-  - **Finding**: Edit mode only supports renaming presets, not modifying filter values
-  - Clicking Edit loads the preset's stored values into filters
-  - Filter controls are not accessible while dialog is open
-  - Workaround: Delete old preset and create new one with modified filters
+- TC7.2: Modify Patterns and Save ✅ (fixed with edit mode redesign)
+  - **Fix**: Edit mode redesigned to allow filter modifications before saving
+  - New workflow: Click Edit → "Editing: <name>" indicator appears → Modify filters → Click checkmark → Save dialog opens
+  - Tested: Added `*test*` pattern, saved preset, verified persistence
+  - Tested: Removed pattern, saved again, verified restoration
 - TC7.3: Rename preset - name change persists after reload ✅
 - TC7.4: Cancel edit mode - original values preserved ✅
 - TC7.5: Close Dialog Without Saving (Escape key) ✅ - original values unchanged
@@ -489,4 +489,4 @@ _Record any bugs, observations, or improvement suggestions during testing:_
 7. **Direct URL navigation**: Pattern chips load correctly from URL query parameters
 8. **Team filter limitation**: DEMO WEST workspace has no team tags on jobs - TC9.1, TC9.3 could not be tested
 9. **Filter badge behavior**: Multiple patterns correctly count as 1 filter type; adding different filter types (job selection) increments badge
-10. **Preset edit limitation**: Edit mode only allows renaming presets, not modifying filter values. Clicking Edit loads stored values and filter controls are inaccessible while dialog is open. Future enhancement: allow editing filters before clicking Update.
+10. **Preset edit mode FIXED**: Redesigned edit workflow to allow filter modifications. New UX: Click Edit → Shows "Editing: <name>" indicator badge → Modify filters freely → Click checkmark button to open save dialog → Update preset. Commit: be4ba19
