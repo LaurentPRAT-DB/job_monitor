@@ -10,6 +10,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
+import { Link, useLocation } from '@tanstack/react-router'
 
 // Version from package.json - updated at build time
 const APP_VERSION = '1.0.0'
@@ -30,31 +31,24 @@ const navItems: NavItem[] = [
   { href: '/historical', label: 'Historical', icon: History },
 ]
 
-// Get current path for active highlighting
-function useCurrentPath() {
-  if (typeof window !== 'undefined') {
-    return window.location.pathname
-  }
-  return '/dashboard'
-}
-
 // Shared navigation content component
 function NavigationContent({ onNavigate }: { onNavigate?: () => void }) {
   const { theme, toggleTheme } = useTheme()
   const isDark = theme === 'dark'
-  const currentPath = useCurrentPath()
+  const location = useLocation()
+  const currentPath = location.pathname
 
   return (
     <>
-      {/* Navigation */}
+      {/* Navigation - uses TanStack Router Link for SPA navigation */}
       <nav className="space-y-1 flex-1">
         {navItems.map((item) => {
           const Icon = item.icon
           const isActive = currentPath === item.href
           return (
-            <a
+            <Link
               key={item.href}
-              href={item.href}
+              to={item.href}
               onClick={onNavigate}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
                 isActive
@@ -64,7 +58,7 @@ function NavigationContent({ onNavigate }: { onNavigate?: () => void }) {
             >
               <Icon className="h-5 w-5" />
               {item.label}
-            </a>
+            </Link>
           )
         })}
       </nav>

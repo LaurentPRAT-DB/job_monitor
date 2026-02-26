@@ -8,6 +8,7 @@ import { X, Filter, ChevronDown } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
+import { queryKeys, queryPresets } from '@/lib/query-config';
 
 interface Team {
   team: string;
@@ -30,9 +31,10 @@ export function GlobalFilterBar() {
     filters.timeRange !== '7d' ? filters.timeRange : null,
   ].filter(Boolean).length;
 
-  // Fetch teams for dropdown
+  // Fetch teams for dropdown - uses shared query key with costs page
+  // Only fetch when filter panel is open to avoid unnecessary requests
   const { data: teams = [] } = useQuery<Team[]>({
-    queryKey: ['teams'],
+    queryKey: queryKeys.costs.summary(),
     queryFn: async () => {
       const res = await fetch('/api/costs/summary');
       if (!res.ok) return [];
@@ -42,22 +44,37 @@ export function GlobalFilterBar() {
         job_count: 0,
       })) ?? [];
     },
-    staleTime: 5 * 60 * 1000,
+    ...queryPresets.semiLive,
+    enabled: isOpen, // Only fetch when panel is open
+    select: (data: unknown) => {
+      // Transform costs summary to teams list
+      const summary = data as { teams?: Array<{ team: string; total_dbus: number }> };
+      return summary.teams?.map((t) => ({
+        team: t.team,
+        job_count: 0,
+      })) ?? [];
+    },
   });
 
-  // Fetch jobs for dropdown
+  // Fetch jobs for dropdown - uses shared query key with health page
+  // Only fetch when filter panel is open
   const { data: jobs = [] } = useQuery<Job[]>({
-    queryKey: ['jobs-list'],
+    queryKey: queryKeys.healthMetrics.list(30),
     queryFn: async () => {
       const res = await fetch('/api/health-metrics?days=30');
       if (!res.ok) return [];
-      const data = await res.json();
-      return data.jobs?.map((j: { job_id: string; job_name: string }) => ({
+      return res.json();
+    },
+    ...queryPresets.semiLive,
+    enabled: isOpen, // Only fetch when panel is open
+    select: (data: unknown) => {
+      // Transform health metrics to jobs list
+      const metrics = data as { jobs?: Array<{ job_id: string; job_name: string }> };
+      return metrics.jobs?.map((j) => ({
         job_id: j.job_id,
         job_name: j.job_name,
       })) ?? [];
     },
-    staleTime: 5 * 60 * 1000,
   });
 
   return (

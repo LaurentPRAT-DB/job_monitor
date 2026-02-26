@@ -768,12 +768,20 @@ async def get_alerts(
         logger.info("[CACHE_MISS] alerts: falling back to live query")
 
     # Generate alerts from all sources in parallel (live query fallback)
-    failure_alerts, sla_alerts, cost_alerts, cluster_alerts = await asyncio.gather(
-        _generate_failure_alerts(ws, warehouse_id),
-        _generate_sla_alerts(ws),
-        _generate_cost_alerts(ws, warehouse_id),
-        _generate_cluster_alerts(ws, warehouse_id),
-    )
+    # Add timeout to prevent gateway timeout (504) - fall back to mock data if too slow
+    try:
+        failure_alerts, sla_alerts, cost_alerts, cluster_alerts = await asyncio.wait_for(
+            asyncio.gather(
+                _generate_failure_alerts(ws, warehouse_id),
+                _generate_sla_alerts(ws),
+                _generate_cost_alerts(ws, warehouse_id),
+                _generate_cluster_alerts(ws, warehouse_id),
+            ),
+            timeout=45.0,  # 45 second timeout to avoid 504
+        )
+    except asyncio.TimeoutError:
+        logger.warning("[TIMEOUT] alerts: live query timed out after 45s, falling back to mock data")
+        return get_mock_alerts()
 
     # Check if any generator returned None (permission error) - fall back to mock data
     if failure_alerts is None:
