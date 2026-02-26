@@ -345,12 +345,12 @@ This test plan validates the job name wildcard filtering feature and preset edit
 | 3. Multiple Patterns | 4 | 4 | | | All passed (OR logic works) |
 | 4. Input Validation | 5 | 2 | | 3 | TC4.2, TC4.5 passed |
 | 5. URL Persistence | 4 | 4 | | | All passed |
-| 6. Preset Creation | 3 | | | 3 | Dialog save button interaction issues |
-| 7. Preset Edit | 5 | | | 5 | Blocked by TC6 |
-| 8. Delete Preset | 1 | | | 1 | Blocked by TC6 |
+| 6. Preset Creation | 3 | 1 | | 2 | TC6.1 passed after backend fix |
+| 7. Preset Edit | 5 | | | 5 | Not tested yet |
+| 8. Delete Preset | 1 | | | 1 | Not tested yet |
 | 9. Integration | 4 | | | 4 | Not tested yet |
 | 10. Edge Cases | 4 | 1 | | 3 | TC10.3 passed |
-| **TOTAL** | **39** | **17** | **0** | **22** | Core filtering fully functional |
+| **TOTAL** | **39** | **18** | **0** | **21** | Core filtering + presets working |
 
 ### Test Session 2026-02-26 (continued)
 
@@ -406,7 +406,9 @@ This test plan validates the job name wildcard filtering feature and preset edit
 _Record any bugs, observations, or improvement suggestions during testing:_
 
 1. **BUG FIXED**: Job Health page was not filtering by wildcard patterns (commit 20c2aaf)
-2. **Save Preset dialog**: Has timing issues with button clicks - JavaScript click workaround also failed
+2. **BUG FIXED**: Preset save not persisting - root cause was missing catalog/schema in DEMO WEST (commit f06f269)
+   - Added `CACHE_CATALOG=main`, `CACHE_SCHEMA=job_monitor_cache` to app.prod.yaml
+   - Added CREATE SCHEMA IF NOT EXISTS and result status checking
 3. **Performance**: Client-side filtering with 3800+ jobs is fast and responsive
 4. **URL encoding**: Multiple patterns use comma separation, URL-encoded as `%2C`
 5. **Job name format**: Some job names include " job" suffix in the data (e.g., "test-ga4 job")
