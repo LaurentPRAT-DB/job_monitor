@@ -185,11 +185,15 @@ async def get_health_metrics(
                 )
                 for row in cached_data
             ]
-            return JobHealthListOut(
+            result = JobHealthListOut(
                 jobs=jobs,
                 window_days=days,
                 total_count=len(jobs),
             )
+            # Cache in response cache for instant subsequent requests
+            response_cache.set(cache_key, result, TTL_STANDARD)
+            logger.info(f"[RESPONSE_CACHE] Cached health metrics from Delta cache ({len(jobs)} jobs)")
+            return result
         logger.info("[CACHE_MISS] health-metrics: falling back to live query")
 
     # SQL query using CTEs for consecutive failure detection

@@ -773,7 +773,11 @@ async def get_alerts(
             for alert in all_alerts:
                 by_severity[alert.severity.value] = by_severity.get(alert.severity.value, 0) + 1
 
-            return AlertListOut(alerts=all_alerts, total=len(all_alerts), by_severity=by_severity)
+            result = AlertListOut(alerts=all_alerts, total=len(all_alerts), by_severity=by_severity)
+            # Cache in response cache for instant subsequent requests
+            response_cache.set(cache_key, result, TTL_FAST)
+            logger.info(f"[RESPONSE_CACHE] Cached alerts from Delta cache ({len(all_alerts)} alerts)")
+            return result
 
         logger.info("[CACHE_MISS] alerts: falling back to live query")
 

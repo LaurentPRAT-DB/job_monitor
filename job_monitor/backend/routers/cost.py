@@ -302,7 +302,7 @@ async def get_cost_summary(
             ]
 
             total_dbus = sum(j.total_dbus_30d for j in jobs)
-            return CostSummaryOut(
+            result = CostSummaryOut(
                 jobs=jobs,
                 teams=teams,
                 anomalies=anomalies,
@@ -310,6 +310,10 @@ async def get_cost_summary(
                 total_cost_dollars=total_dbus * dbu_rate if dbu_rate > 0 else None,
                 dbu_rate=dbu_rate,
             )
+            # Cache in response cache for instant subsequent requests
+            response_cache.set(cache_key, result, TTL_SLOW)
+            logger.info(f"[RESPONSE_CACHE] Cached cost summary from Delta cache ({len(jobs)} jobs)")
+            return result
 
         logger.info("[CACHE_MISS] costs/summary: falling back to live query")
 
