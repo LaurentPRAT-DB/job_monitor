@@ -391,7 +391,7 @@ function RunningJobRow({ run }: { run: ActiveRunWithHistory }) {
 export default function RunningJobsPage() {
   const [sortColumn, setSortColumn] = useState<SortColumn>('start_time');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  const [stateFilter, setStateFilter] = useState<StateFilter>('all');
+  const [stateFilter, setStateFilter] = useState<StateFilter>('RUNNING');
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['active-runs'],
