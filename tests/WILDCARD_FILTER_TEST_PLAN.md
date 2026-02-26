@@ -346,11 +346,11 @@ This test plan validates the job name wildcard filtering feature and preset edit
 | 4. Input Validation | 5 | 3 | | 2 | TC4.1, TC4.2, TC4.5 passed |
 | 5. URL Persistence | 4 | 4 | | | All passed |
 | 6. Preset Creation | 3 | 3 | | | All passed (TC6.1-TC6.3) |
-| 7. Preset Edit | 5 | 3 | | 2 | TC7.1, TC7.3, TC7.4 passed |
+| 7. Preset Edit | 5 | 4 | | 1 | TC7.1, TC7.3, TC7.4, TC7.5 passed; TC7.2 blocked (UX limitation) |
 | 8. Delete Preset | 1 | 1 | | | TC8.1 passed |
 | 9. Integration | 4 | 1 | | 3 | TC9.4 passed (adapted for no teams) |
 | 10. Edge Cases | 4 | 4 | | | All passed (TC10.1-TC10.4) |
-| **TOTAL** | **39** | **29** | **0** | **10** | Core filtering + presets fully working |
+| **TOTAL** | **39** | **30** | **0** | **9** | Core filtering + presets fully working |
 
 ### Test Session 2026-02-26 (continued)
 
@@ -391,8 +391,14 @@ This test plan validates the job name wildcard filtering feature and preset edit
 
 **Suite 7 - Preset Edit:**
 - TC7.1: Enter edit mode - dialog shows "Update preset", name pre-filled ✅
+- TC7.2: Modify Patterns and Save - BLOCKED (UX limitation)
+  - **Finding**: Edit mode only supports renaming presets, not modifying filter values
+  - Clicking Edit loads the preset's stored values into filters
+  - Filter controls are not accessible while dialog is open
+  - Workaround: Delete old preset and create new one with modified filters
 - TC7.3: Rename preset - name change persists after reload ✅
 - TC7.4: Cancel edit mode - original values preserved ✅
+- TC7.5: Close Dialog Without Saving (Escape key) ✅ - original values unchanged
 
 **Suite 8 - Delete Preset:**
 - TC8.1: Delete preset - removed from dropdown, persists after reload ✅
@@ -452,3 +458,4 @@ _Record any bugs, observations, or improvement suggestions during testing:_
 7. **Direct URL navigation**: Pattern chips load correctly from URL query parameters
 8. **Team filter limitation**: DEMO WEST workspace has no team tags on jobs - TC9.1, TC9.3 could not be tested
 9. **Filter badge behavior**: Multiple patterns correctly count as 1 filter type; adding different filter types (job selection) increments badge
+10. **Preset edit limitation**: Edit mode only allows renaming presets, not modifying filter values. Clicking Edit loads stored values and filter controls are inaccessible while dialog is open. Future enhancement: allow editing filters before clicking Update.
