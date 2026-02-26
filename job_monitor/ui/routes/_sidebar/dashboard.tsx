@@ -163,14 +163,14 @@ export default function Dashboard() {
     ...queryPresets.semiLive,
   })
 
-  // Fetch alerts (live preset - needs freshness)
+  // Fetch alerts (slow preset - expensive query taking 15-30s)
   const { data: alertsData, isLoading: alertsLoading, refetch: refetchAlerts } = useQuery({
     queryKey: queryKeys.alerts.all,
     queryFn: () => fetchAlerts(),
-    ...queryPresets.live,
+    ...queryPresets.slow,
   })
 
-  // Fetch cost summary (semi-live - updates periodically)
+  // Fetch cost summary (slow preset - expensive query taking 30-40s)
   const { data: costData, isLoading: costLoading, refetch: refetchCosts } = useQuery<CostSummaryResponse>({
     queryKey: queryKeys.costs.summary(),
     queryFn: async () => {
@@ -178,7 +178,7 @@ export default function Dashboard() {
       if (!res.ok) throw new Error('Failed to fetch cost summary')
       return res.json()
     },
-    ...queryPresets.semiLive,
+    ...queryPresets.slow,
   })
 
   const isLoading = userLoading || healthLoading || alertsLoading || costLoading

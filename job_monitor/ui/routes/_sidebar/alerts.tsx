@@ -26,6 +26,7 @@ export default function AlertsPage() {
 
   // Use the same query key as dashboard when no filter is applied
   // This ensures cache hits when navigating from dashboard to alerts
+  // NOTE: Alerts endpoint is slow (15-30s) so use slow preset to reduce API calls
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: categoryFilter === 'all'
       ? queryKeys.alerts.all
@@ -33,8 +34,7 @@ export default function AlertsPage() {
     queryFn: () => fetchAlerts(
       categoryFilter === 'all' ? {} : { category: [categoryFilter] }
     ),
-    ...queryPresets.live, // Alerts need freshness
-    refetchInterval: 60000, // Also poll every minute
+    ...queryPresets.slow, // Alerts query is expensive (15-30s), cache aggressively
   });
 
   const acknowledgeMutation = useMutation({

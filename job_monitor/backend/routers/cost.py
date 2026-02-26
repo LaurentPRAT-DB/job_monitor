@@ -174,6 +174,9 @@ async def get_cost_summary(
     days: Annotated[
         int, Query(ge=7, le=90, description="Time window in days")
     ] = 30,
+    include_teams: Annotated[
+        bool, Query(description="Include team tags lookup (adds 20-30s)")
+    ] = False,
     ws=Depends(get_ws_prefer_user),
 ) -> CostSummaryOut:
     """Get cost summary with per-job breakdown, team rollups, and anomalies.
@@ -247,11 +250,12 @@ async def get_cost_summary(
                     baseline_p90_dbus=row["baseline_p90_dbus"],
                 ))
 
-            # Lookup team tags
-            job_ids = [j.job_id for j in jobs]
-            team_map = await _get_job_teams(ws, job_ids)
-            for job in jobs:
-                job.team = team_map.get(job.job_id)
+            # Lookup team tags only if requested (adds 20-30s)
+            if include_teams:
+                job_ids = [j.job_id for j in jobs]
+                team_map = await _get_job_teams(ws, job_ids)
+                for job in jobs:
+                    job.team = team_map.get(job.job_id)
 
             # Calculate team rollups
             team_costs: dict[str, dict] = {}
@@ -388,13 +392,13 @@ async def get_cost_summary(
     jobs = _parse_job_costs(result, dbu_rate)
     logger.info(f"[cost.get_cost_summary] Parsed {len(jobs)} jobs")
 
-    # Lookup team tags for jobs
-    job_ids = [j.job_id for j in jobs]
-    team_map = await _get_job_teams(ws, job_ids)
-
-    # Apply team tags to jobs
-    for job in jobs:
-        job.team = team_map.get(job.job_id)
+    # Lookup team tags for jobs only if requested (adds 20-30s)
+    if include_teams:
+        job_ids = [j.job_id for j in jobs]
+        team_map = await _get_job_teams(ws, job_ids)
+        # Apply team tags to jobs
+        for job in jobs:
+            job.team = team_map.get(job.job_id)
 
     # Calculate team rollups
     team_costs: dict[str, dict] = {}

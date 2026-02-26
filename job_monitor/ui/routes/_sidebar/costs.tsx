@@ -48,6 +48,8 @@ export default function CostsPage() {
   const [showDollars, setShowDollars] = useState(false);
   const [activeTab, setActiveTab] = useState('by-team');
 
+  // NOTE: Cost endpoints are very slow (30-40s) due to billing table queries
+  // Use slow preset to cache aggressively and reduce API calls
   const {
     data: costSummary,
     isLoading: isLoadingSummary,
@@ -57,7 +59,7 @@ export default function CostsPage() {
   } = useQuery({
     queryKey: queryKeys.costs.summary(),
     queryFn: fetchCostSummary,
-    ...queryPresets.semiLive, // Cost data updates every 5-15 min
+    ...queryPresets.slow, // Cost query is expensive (30-40s), cache for 10 min
   });
 
   const {
@@ -66,7 +68,7 @@ export default function CostsPage() {
   } = useQuery({
     queryKey: queryKeys.costs.anomalies(),
     queryFn: fetchAnomalies,
-    ...queryPresets.semiLive,
+    ...queryPresets.slow, // Anomalies also uses cost data
   });
 
   const dbuRate = costSummary?.dbu_rate ?? 0;

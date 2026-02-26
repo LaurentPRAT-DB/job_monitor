@@ -34,7 +34,7 @@ export const queryPresets = {
 
   /**
    * Semi-live data - updates periodically (every 5-15 min from system tables).
-   * Examples: job health metrics, cost summaries, job lists
+   * Examples: job health metrics, job lists
    *
    * - staleTime: 5 minutes (matches system table latency)
    * - gcTime: 15 minutes (survives navigation)
@@ -46,6 +46,22 @@ export const queryPresets = {
     refetchOnWindowFocus: true,
     refetchOnMount: true,
     refetchOnReconnect: true,
+  } as const,
+
+  /**
+   * Slow data - expensive queries that take 10+ seconds.
+   * Examples: cost summaries, alerts (complex multi-query aggregations)
+   *
+   * - staleTime: 10 minutes (reduce load on slow endpoints)
+   * - gcTime: 30 minutes (keep in cache longer)
+   * - refetchOnWindowFocus: false (don't trigger slow queries on tab switch)
+   */
+  slow: {
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
   } as const,
 
   /**
