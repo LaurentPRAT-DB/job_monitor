@@ -27,6 +27,9 @@ databricks_job_monitoring/
 │   ├── ui/                    # React frontend
 │   │   ├── components/       # React components
 │   │   ├── lib/              # Utilities (API client, hooks)
+│   │   │   ├── api.ts        # API client functions
+│   │   │   ├── query-config.ts  # TanStack Query caching config
+│   │   │   └── ...
 │   │   ├── routes/           # TanStack Router pages
 │   │   └── main.tsx          # App entry point
 │   └── config.yaml           # Centralized configuration
@@ -256,6 +259,82 @@ npm run build
 ```
 
 This creates optimized assets in `ui/dist/` which the backend serves statically.
+
+### Client-Side Caching Strategy
+
+The frontend uses TanStack Query with a **tiered caching strategy** to optimize performance and reduce unnecessary API calls. Configuration is centralized in `ui/lib/query-config.ts`.
+
+#### Cache Tiers
+
+| Preset | staleTime | gcTime | Use Case |
+|--------|-----------|--------|----------|
+| `static` | Infinity | 30 min | Historical data that never changes |
+| `semiLive` | 5 min | 15 min | Job health, costs (matches system table refresh) |
+| `live` | 1 min | 5 min | Alerts, running jobs (needs freshness) |
+| `session` | 30 min | 60 min | User info, workspace config |
+
+#### Using Presets
+
+```tsx
+import { useQuery } from '@tanstack/react-query'
+import { queryPresets, queryKeys } from '@/lib/query-config'
+
+// Semi-live data (job health, costs)
+const { data } = useQuery({
+  queryKey: queryKeys.healthMetrics.list(7),
+  queryFn: fetchHealthMetrics,
+  ...queryPresets.semiLive,
+})
+
+// Live data (alerts)
+const { data: alerts } = useQuery({
+  queryKey: queryKeys.alerts.all,
+  queryFn: fetchAlerts,
+  ...queryPresets.live,
+})
+
+// Static data (historical)
+const { data: history } = useQuery({
+  queryKey: queryKeys.historical.runs(jobId, startDate, endDate),
+  queryFn: fetchHistoricalRuns,
+  ...queryPresets.static,
+})
+```
+
+#### Query Key Factories
+
+Always use `queryKeys` factories to ensure cache hits across components:
+
+```tsx
+// Good - uses shared key factory
+queryKey: queryKeys.alerts.all
+
+// Bad - different components might use different keys
+queryKey: ['alerts']
+queryKey: ['alerts', {}]  // Different key = cache miss!
+```
+
+#### SPA Navigation
+
+The sidebar uses TanStack Router `<Link>` for client-side navigation, which preserves the query cache between pages:
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+// SPA navigation - cache preserved
+<Link to="/alerts">Alerts</Link>
+
+// Full page reload - cache lost (avoid!)
+<a href="/alerts">Alerts</a>
+```
+
+#### Performance Impact
+
+With proper caching:
+- **Initial load**: ~30-60s (system table queries)
+- **Navigation between pages**: **Instant** (data served from cache)
+- **Return to previous page**: **Instant** (cached within gcTime window)
+- **Window focus after idle**: Background refetch (if staleTime exceeded)
 
 ## Testing
 

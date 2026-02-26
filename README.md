@@ -12,6 +12,7 @@ Databricks Job Monitoring Framework - A real-time operational monitoring dashboa
 - **Smart Alerts**: Dynamic alert generation for failures, SLA breaches, cost anomalies
 - **Anomaly Detection**: Identify cost spikes (>2x p90 baseline) and over-provisioned clusters
 - **Metrics Cache**: Pre-aggregated Delta tables for sub-second dashboard loading
+- **Client-Side Caching**: Tiered TanStack Query caching for instant page navigation
 - **Mock Data Mode**: Demo-ready fallback when system tables aren't accessible
 
 > **For Developers**: See [DEVELOPER.md](DEVELOPER.md) for detailed development setup, architecture, and contribution guidelines.
@@ -485,6 +486,9 @@ pytest tests/
 
 - **Backend**: FastAPI + Databricks SDK + Pydantic + APScheduler
 - **Frontend**: React 18 + TypeScript + TanStack (Router, Query) + Tailwind CSS + Recharts
+- **Caching**: Two-tier strategy:
+  - **Server-side**: Pre-aggregated Delta tables refreshed every 10 minutes
+  - **Client-side**: TanStack Query with tiered presets (static/semiLive/live/session)
 - **Deployment**: Databricks Apps via Asset Bundles (DABs)
 
 ## Documentation
