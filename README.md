@@ -266,11 +266,35 @@ The cache refresh job needs permissions to create/write to the cache catalog and
 | `{catalog}.{schema}.cost_cache` | Cost data by job with SKU breakdown |
 | `{catalog}.{schema}.alerts_cache` | Pre-computed alert conditions |
 
+### Databricks Jobs
+
+The project includes background jobs deployed alongside the app via DABs.
+
+#### Jobs Overview
+
+| Job | Name | Purpose | Default Schedule |
+|-----|------|---------|------------------|
+| `refresh-metrics-cache` | `job-monitor-refresh-cache` | Pre-aggregate metrics from system tables into Delta cache tables | Every 15 minutes |
+
 #### Cache Refresh Job
 
-A Databricks job (`job-monitor-refresh-cache`) automatically refreshes the cache tables on a schedule.
+**Purpose**: Pre-computes expensive aggregations from system tables into Delta tables, reducing dashboard load times from 10-30 seconds to <1 second.
 
-**Default schedule**: Every 10 minutes (configurable via `cache.refresh_cron` in config.yaml)
+**What it computes**:
+- Job health metrics (success rates, priorities, consecutive failures)
+- Cost data by job and team with SKU breakdown
+- Pre-computed alert conditions
+
+**Cluster configuration**: Single-node `i3.xlarge` (cost-optimized for aggregation workloads)
+
+**Recommended schedules**:
+
+| Use Case | Cron Expression | Interval |
+|----------|-----------------|----------|
+| Real-time ops | `0 */5 * * * ?` | Every 5 minutes |
+| Standard monitoring | `0 */15 * * * ?` | Every 15 minutes (default) |
+| Cost-conscious | `0 */30 * * * ?` | Every 30 minutes |
+| Hourly reporting | `0 0 * * * ?` | Every hour |
 
 **Run manually**:
 ```bash
@@ -280,6 +304,15 @@ databricks bundle run refresh-metrics-cache -t e2
 **Override schedule at deploy time**:
 ```bash
 databricks bundle deploy -t e2 --var="cache_refresh_cron=0 */30 * * * ?"
+```
+
+**Monitor job runs**:
+```bash
+# View recent runs
+databricks jobs list-runs --job-id JOB_ID --limit 5 -p YOUR_PROFILE
+
+# Check in Databricks UI
+# Workflows → job-monitor-refresh-cache → Runs
 ```
 
 #### Check Cache Status
