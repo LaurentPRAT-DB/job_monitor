@@ -19,10 +19,12 @@ export default function AlertsPage() {
   const [categoryFilter, setCategoryFilter] = useState<AlertCategory | 'all'>('all');
   const queryClient = useQueryClient();
 
+  // Use the same query key as dashboard when no filter is applied
+  // This ensures cache hits when navigating from dashboard to alerts
   const { data, isLoading } = useQuery({
-    queryKey: queryKeys.alerts.list(
-      categoryFilter === 'all' ? undefined : { category: categoryFilter }
-    ),
+    queryKey: categoryFilter === 'all'
+      ? queryKeys.alerts.all
+      : queryKeys.alerts.list({ category: categoryFilter }),
     queryFn: () => fetchAlerts(
       categoryFilter === 'all' ? {} : { category: [categoryFilter] }
     ),

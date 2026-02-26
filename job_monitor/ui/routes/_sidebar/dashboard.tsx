@@ -2,6 +2,7 @@
  * Dashboard page - displays system overview with summary metrics and recent activity.
  */
 import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import {
   Activity,
   Bell,
@@ -88,7 +89,7 @@ function MetricCard({ title, value, subtitle, icon: Icon, iconBg, iconColor, tre
   )
 
   if (href) {
-    return <a href={href}>{content}</a>
+    return <Link to={href}>{content}</Link>
   }
   return content
 }
@@ -278,12 +279,12 @@ export default function Dashboard() {
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Activity</h2>
-            <a
-              href="/alerts"
+            <Link
+              to="/alerts"
               className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
             >
               View all <ArrowRight className="h-3 w-3" />
-            </a>
+            </Link>
           </div>
 
           {alertsLoading ? (
