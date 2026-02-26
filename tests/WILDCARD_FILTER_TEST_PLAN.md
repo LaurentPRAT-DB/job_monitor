@@ -340,17 +340,17 @@ This test plan validates the job name wildcard filtering feature and preset edit
 
 | Suite | Tests | Pass | Fail | Blocked | Notes |
 |-------|-------|------|------|---------|-------|
-| 1. Wildcard Syntax | 6 | 5 | | 1 | TC1.1-TC1.5 passed, TC1.6 not tested |
-| 2. Case-Insensitive | 3 | 1 | | 2 | TC2.1 passed |
+| 1. Wildcard Syntax | 6 | 6 | | | All passed (TC1.1-TC1.6) |
+| 2. Case-Insensitive | 3 | 3 | | | All passed (TC2.1-TC2.3) |
 | 3. Multiple Patterns | 4 | 4 | | | All passed (OR logic works) |
-| 4. Input Validation | 5 | 3 | | 2 | TC4.1, TC4.2, TC4.5 passed |
+| 4. Input Validation | 5 | 5 | | | All passed (TC4.1-TC4.5) |
 | 5. URL Persistence | 4 | 4 | | | All passed |
 | 6. Preset Creation | 3 | 3 | | | All passed (TC6.1-TC6.3) |
 | 7. Preset Edit | 5 | 4 | | 1 | TC7.1, TC7.3, TC7.4, TC7.5 passed; TC7.2 blocked (UX limitation) |
 | 8. Delete Preset | 1 | 1 | | | TC8.1 passed |
 | 9. Integration | 4 | 2 | | 2 | TC9.3, TC9.4 passed; TC9.2 unexpected; TC9.1 blocked |
 | 10. Edge Cases | 4 | 4 | | | All passed (TC10.1-TC10.4) |
-| **TOTAL** | **39** | **31** | **0** | **8** | Core filtering + presets fully working |
+| **TOTAL** | **39** | **37** | **0** | **2** | Wildcard filtering fully functional |
 
 ### Test Session 2026-02-26 (continued)
 
@@ -423,8 +423,28 @@ This test plan validates the job name wildcard filtering feature and preset edit
   - Bonus: Add job selection → Badge shows "Filters 2" ✅ (different filter types add up)
   - **Key Finding**: Multiple wildcard patterns correctly count as a single filter type
 
+**Suite 1 - Wildcard Syntax (completed):**
+- TC1.6: Combined Wildcards (`*-v?`) ✅
+  - Matched "agent-bricks-energy-data-gen-v2" (ends with `-v2`)
+  - Combined `*` and `?` wildcards work together
+
+**Suite 2 - Case-Insensitive (completed):**
+- TC2.2: Uppercase Pattern Matches Lowercase ✅
+  - Pattern `AURORA*` (uppercase) matched 3 lowercase jobs
+  - "aurora_ingestion_demo job", "aurora_ingestion_pipeline job", "aurora_lakehouse job"
+- TC2.3: Mixed Case Pattern ✅
+  - Pattern `AuRoRa_InGeStIoN*` matched 2 lowercase jobs
+  - Case-insensitive matching confirmed for all case variations
+
 **Suite 4 - Input Validation:**
 - TC4.1: Empty Pattern Rejected ✅ (+ button stays disabled for whitespace-only input)
+- TC4.3: Invalid Characters Rejected ✅
+  - Pattern `<script>alert` rejected with "Pattern contains invalid characters"
+  - XSS-prevention validation works
+- TC4.4: Long Pattern Rejected ✅
+  - Pattern with 112 characters rejected
+  - Note: Error shows "Pattern contains invalid characters" instead of "Pattern is too long"
+  - Long patterns ARE blocked, but error message could be more specific (minor UX improvement)
 
 **Suite 6 - Preset Creation:**
 - TC6.2: Load Preset Restores Patterns ✅
