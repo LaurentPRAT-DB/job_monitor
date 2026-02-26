@@ -3,7 +3,7 @@
  * Displays job health metrics with traffic light indicators, priority badges,
  * SLA targets with inline editing, and breach history sparklines.
  */
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearch, useNavigate } from '@tanstack/react-router';
 import { AlertCircle, RefreshCw, X } from 'lucide-react';
@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { JobHealthTable } from '@/components/job-health-table';
 import type { JobWithSla } from '@/lib/health-utils';
 import { queryPresets, queryKeys } from '@/lib/query-config';
+import { useFilters } from '@/lib/filter-context';
+import { matchesJobPatterns } from '@/lib/filter-utils';
 
 // Response type matching backend with SLA data
 interface JobHealthListResponse {
@@ -34,6 +36,7 @@ export default function JobHealthPage() {
   const [days, setDays] = useState<7 | 30>(7);
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
   const navigate = useNavigate();
+  const { filters } = useFilters();
 
   // Read job filter from URL query parameter
   const search = useSearch({ strict: false }) as { job?: string };
@@ -44,6 +47,13 @@ export default function JobHealthPage() {
     queryFn: () => fetchHealthMetrics(days),
     ...queryPresets.semiLive, // System tables have 5-15 min latency
   });
+
+  // Filter jobs by global wildcard patterns (client-side filtering)
+  const filteredJobs = useMemo(() => {
+    if (!data?.jobs) return [];
+    if (filters.jobNamePatterns.length === 0) return data.jobs;
+    return data.jobs.filter((job) => matchesJobPatterns(job.job_name, filters.jobNamePatterns));
+  }, [data?.jobs, filters.jobNamePatterns]);
 
   // Clear job filter from URL
   const clearJobFilter = () => {
@@ -114,7 +124,7 @@ export default function JobHealthPage() {
             }`}
           >
             <div className="text-sm text-gray-500 dark:text-gray-400">Total Jobs</div>
-            <div className="text-xl font-semibold dark:text-white">{data.total_count}</div>
+            <div className="text-xl font-semibold dark:text-white">{filteredJobs.length}</div>
           </button>
           <button
             onClick={() => setPriorityFilter(priorityFilter === 'P1' ? 'all' : 'P1')}
@@ -124,7 +134,7 @@ export default function JobHealthPage() {
           >
             <div className="text-sm text-gray-500 dark:text-gray-400">Critical (P1)</div>
             <div className="text-xl font-semibold text-red-600 dark:text-red-400">
-              {data.jobs.filter((j) => j.priority === 'P1').length}
+              {filteredJobs.filter((j) => j.priority === 'P1').length}
             </div>
           </button>
           <button
@@ -135,7 +145,7 @@ export default function JobHealthPage() {
           >
             <div className="text-sm text-gray-500 dark:text-gray-400">Failing (P2)</div>
             <div className="text-xl font-semibold text-orange-500 dark:text-orange-400">
-              {data.jobs.filter((j) => j.priority === 'P2').length}
+              {filteredJobs.filter((j) => j.priority === 'P2').length}
             </div>
           </button>
           <button
@@ -146,7 +156,7 @@ export default function JobHealthPage() {
           >
             <div className="text-sm text-gray-500 dark:text-gray-400">Warning (P3)</div>
             <div className="text-xl font-semibold text-yellow-600 dark:text-yellow-400">
-              {data.jobs.filter((j) => j.priority === 'P3').length}
+              {filteredJobs.filter((j) => j.priority === 'P3').length}
             </div>
           </button>
         </div>
@@ -183,8 +193,8 @@ export default function JobHealthPage() {
           <JobHealthTable
             jobs={
               priorityFilter === 'all'
-                ? (data?.jobs ?? [])
-                : (data?.jobs ?? []).filter((j) => j.priority === priorityFilter)
+                ? filteredJobs
+                : filteredJobs.filter((j) => j.priority === priorityFilter)
             }
             isLoading={isLoading}
             onRefetch={() => refetch()}
@@ -197,7 +207,7 @@ export default function JobHealthPage() {
       {priorityFilter !== 'all' && data && (
         <div className="mt-2 flex items-center gap-2">
           <span className="text-sm text-gray-500 dark:text-gray-400">
-            Showing {data.jobs.filter((j) => j.priority === priorityFilter).length} {priorityFilter} jobs
+            Showing {filteredJobs.filter((j) => j.priority === priorityFilter).length} {priorityFilter} jobs
           </span>
           <button
             onClick={() => setPriorityFilter('all')}
@@ -211,7 +221,7 @@ export default function JobHealthPage() {
       {/* Footer note about data latency */}
       <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">
         Data refreshes every 5-15 minutes from Databricks system tables.
-        {data && ` Showing ${days}-day window with ${data.total_count} jobs.`}
+        {data && ` Showing ${days}-day window with ${filteredJobs.length} jobs${filters.jobNamePatterns.length > 0 ? ' (filtered)' : ''}.`}
       </p>
     </div>
   );
