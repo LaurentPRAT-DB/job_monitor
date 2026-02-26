@@ -46,6 +46,18 @@ class FilterPreset(BaseModel):
 async def ensure_presets_table(ws) -> bool:
     """Create the filter_presets table if it doesn't exist, and add new columns if needed."""
     try:
+        # First, ensure the schema exists
+        create_schema_sql = f"CREATE SCHEMA IF NOT EXISTS {settings.cache_catalog}.{settings.cache_schema}"
+        schema_result = ws.statement_execution.execute_statement(
+            warehouse_id=settings.warehouse_id,
+            statement=create_schema_sql,
+            wait_timeout="30s",
+        )
+        if schema_result.status.state.value not in ("SUCCEEDED", "CLOSED"):
+            error_msg = schema_result.status.error.message if schema_result.status.error else "Unknown error"
+            logger.warning(f"CREATE SCHEMA failed: {error_msg}")
+            # Continue anyway - schema might already exist
+
         create_sql = f"""
         CREATE TABLE IF NOT EXISTS {PRESETS_TABLE} (
             id STRING,
@@ -61,12 +73,19 @@ async def ensure_presets_table(ws) -> bool:
             is_shared BOOLEAN
         ) USING DELTA
         """
-        ws.statement_execution.execute_statement(
+        result = ws.statement_execution.execute_statement(
             warehouse_id=settings.warehouse_id,
             statement=create_sql,
             wait_timeout="30s",
         )
-        logger.info(f"Ensured {PRESETS_TABLE} exists")
+
+        # Log the result status
+        if result.status.state.value not in ("SUCCEEDED", "CLOSED"):
+            error_msg = result.status.error.message if result.status.error else "Unknown error"
+            logger.error(f"CREATE TABLE failed with state {result.status.state.value}: {error_msg}")
+            return False
+
+        logger.info(f"Ensured {PRESETS_TABLE} exists (state: {result.status.state.value})")
 
         # Try to add job_name_patterns column if it doesn't exist (for migration)
         try:
@@ -105,7 +124,15 @@ async def get_filter_presets(
             wait_timeout="30s",
         )
 
+        # Log query result status
+        logger.debug(f"GET presets query state: {result.status.state.value}")
+        if result.status.state.value not in ("SUCCEEDED", "CLOSED"):
+            error_msg = result.status.error.message if result.status.error else "Unknown error"
+            logger.error(f"SELECT failed with state {result.status.state.value}: {error_msg}")
+            return []
+
         if not result.result or not result.result.data_array:
+            logger.debug("No presets found in database")
             return []
 
         # Map columns to FilterPreset
@@ -177,11 +204,19 @@ async def create_filter_preset(
         )
         """
 
-        ws.statement_execution.execute_statement(
+        result = ws.statement_execution.execute_statement(
             warehouse_id=settings.warehouse_id,
             statement=insert_sql,
             wait_timeout="30s",
         )
+
+        # Check if INSERT actually succeeded
+        if result.status.state.value not in ("SUCCEEDED", "CLOSED"):
+            error_msg = result.status.error.message if result.status.error else "Unknown error"
+            logger.error(f"INSERT failed with state {result.status.state.value}: {error_msg}")
+            raise HTTPException(status_code=500, detail=f"Failed to save preset: {error_msg}")
+
+        logger.info(f"Created filter preset: {preset_id} for user {current_user}")
 
         return FilterPreset(
             id=preset_id,

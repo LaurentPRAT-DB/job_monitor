@@ -1,0 +1,24 @@
+{
+  "passed": 1,
+  "failed": 1,
+  "skipped": 1,
+  "tests": [
+    {
+      "testId": "AUTH",
+      "status": "PASS",
+      "message": "Authenticated successfully"
+    },
+    {
+      "testId": "API-01",
+      "status": "SKIP",
+      "message": "API call not captured"
+    },
+    {
+      "testId": "UI-00",
+      "status": "FAIL",
+      "message": "Table not loaded"
+    }
+  ],
+  "apiCalls": [],
+  "apiByEndpoint": {}
+}

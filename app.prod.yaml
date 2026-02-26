@@ -15,6 +15,12 @@ env:
   - name: LOG_LEVEL
     description: "Logging level for debugging"
     value: "INFO"
+  - name: CACHE_CATALOG
+    description: "Catalog for cache tables and filter presets"
+    value: "main"
+  - name: CACHE_SCHEMA
+    description: "Schema for cache tables and filter presets"
+    value: "job_monitor_cache"
 
 permissions:
   - user_name: "${DATABRICKS_USER}"
