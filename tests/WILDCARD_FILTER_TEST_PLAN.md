@@ -348,9 +348,9 @@ This test plan validates the job name wildcard filtering feature and preset edit
 | 6. Preset Creation | 3 | 3 | | | All passed (TC6.1-TC6.3) |
 | 7. Preset Edit | 5 | 4 | | 1 | TC7.1, TC7.3, TC7.4, TC7.5 passed; TC7.2 blocked (UX limitation) |
 | 8. Delete Preset | 1 | 1 | | | TC8.1 passed |
-| 9. Integration | 4 | 1 | | 3 | TC9.4 passed (adapted for no teams) |
+| 9. Integration | 4 | 2 | | 2 | TC9.3, TC9.4 passed; TC9.2 unexpected; TC9.1 blocked |
 | 10. Edge Cases | 4 | 4 | | | All passed (TC10.1-TC10.4) |
-| **TOTAL** | **39** | **30** | **0** | **9** | Core filtering + presets fully working |
+| **TOTAL** | **39** | **31** | **0** | **8** | Core filtering + presets fully working |
 
 ### Test Session 2026-02-26 (continued)
 
@@ -411,6 +411,10 @@ This test plan validates the job name wildcard filtering feature and preset edit
   - URL has both `jobNamePatterns` and `jobId` parameters
   - **Finding**: Job Health page doesn't filter by `jobId` from global filter context
   - Logged as potential enhancement: job selection should override pattern filtering
+- TC9.3: Pattern + Time Range ✅
+  - Pattern `*sync*` with 7-day window: 14 jobs
+  - Switched to 30-day window: 34 jobs
+  - Pattern filtering works correctly across different time ranges
 - TC9.4: Active Filter Count Badge ✅
   - Step 1: Clear all filters → Badge shows "Filters" (no count) ✅
   - Step 2: Add pattern `*demo*` → Badge shows "Filters 1" ✅
