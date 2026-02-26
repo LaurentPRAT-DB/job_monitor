@@ -53,62 +53,62 @@ const API_ENDPOINTS = [
   { path: '/api/filters/presets', name: 'Filter Presets', method: 'GET' },
 ];
 
-// Pages and click targets
+// Pages and click targets - text is the actual element text to search for
 const PAGES = [
   {
     path: '/dashboard',
     name: 'Dashboard',
     clicks: [
-      { selector: 'button:has-text("Refresh")', name: 'Refresh button' },
+      { text: 'Refresh', name: 'Refresh button' },
     ],
   },
   {
     path: '/running-jobs',
     name: 'Running Jobs',
     clicks: [
-      { selector: 'button:has-text("Refresh")', name: 'Refresh button' },
+      { text: 'Refresh', name: 'Refresh button' },
     ],
   },
   {
     path: '/job-health',
     name: 'Job Health',
     clicks: [
-      { selector: '[role="tab"]:has-text("7 Days")', name: '7 Days tab' },
-      { selector: '[role="tab"]:has-text("30 Days")', name: '30 Days tab' },
-      { selector: 'button:has-text("Total Jobs")', name: 'Total Jobs filter' },
-      { selector: 'button:has-text("Critical")', name: 'Critical filter' },
-      { selector: 'button:has-text("Failing")', name: 'Failing filter' },
-      { selector: 'button:has-text("Warning")', name: 'Warning filter' },
-      { selector: 'button:has-text("Filters")', name: 'Filters toggle' },
-      { selector: 'button:has-text("7D")', name: 'Time 7D' },
-      { selector: 'button:has-text("30D")', name: 'Time 30D' },
-      { selector: 'button:has-text("90D")', name: 'Time 90D' },
-      { selector: 'button:has-text("Refresh")', name: 'Refresh button' },
+      { text: '7 Days', name: '7 Days tab' },
+      { text: '30 Days', name: '30 Days tab' },
+      { text: 'Total Jobs', name: 'Total Jobs filter' },
+      { text: 'Critical', name: 'Critical filter' },
+      { text: 'Failing', name: 'Failing filter' },
+      { text: 'Warning', name: 'Warning filter' },
+      { text: 'Filters', name: 'Filters toggle' },
+      { text: '7D', name: 'Time 7D' },
+      { text: '30D', name: 'Time 30D' },
+      { text: '90D', name: 'Time 90D' },
+      { text: 'Refresh', name: 'Refresh button' },
     ],
   },
   {
     path: '/alerts',
     name: 'Alerts',
     clicks: [
-      { selector: '[role="tab"]:has-text("All")', name: 'All tab' },
-      { selector: '[role="tab"]:has-text("Failures")', name: 'Failures tab' },
-      { selector: '[role="tab"]:has-text("Duration")', name: 'Duration tab' },
-      { selector: '[role="tab"]:has-text("Configuration")', name: 'Config tab' },
-      { selector: 'button:has-text("Total")', name: 'Total filter' },
-      { selector: 'button:has-text("P1")', name: 'P1 filter' },
-      { selector: 'button:has-text("P2")', name: 'P2 filter' },
-      { selector: 'button:has-text("P3")', name: 'P3 filter' },
-      { selector: 'button:has-text("Next page")', name: 'Next page' },
-      { selector: 'button:has-text("Previous page")', name: 'Prev page' },
+      { text: 'All', name: 'All tab' },
+      { text: 'Failures', name: 'Failures tab' },
+      { text: 'Duration', name: 'Duration tab' },
+      { text: 'Configuration', name: 'Config tab' },
+      { text: 'Total', name: 'Total filter' },
+      { text: 'P1', name: 'P1 filter' },
+      { text: 'P2', name: 'P2 filter' },
+      { text: 'P3', name: 'P3 filter' },
+      { text: 'Next page', name: 'Next page' },
+      { text: 'Previous page', name: 'Prev page' },
     ],
   },
   {
     path: '/historical',
     name: 'Historical',
     clicks: [
-      { selector: '[role="tab"]:has-text("7 Days")', name: '7 Days tab' },
-      { selector: '[role="tab"]:has-text("30 Days")', name: '30 Days tab' },
-      { selector: 'button:has-text("Refresh")', name: 'Refresh button' },
+      { text: '7 Days', name: '7 Days tab' },
+      { text: '30 Days', name: '30 Days tab' },
+      { text: 'Refresh', name: 'Refresh button' },
     ],
   },
 ];
@@ -391,14 +391,18 @@ async function runLoadTest() {
               const clickStart = Date.now();
 
               // Try to find and click the element
+              const searchText = click.text.replace(/'/g, "\\'");
               const result = await Runtime.evaluate({
                 expression: `
                   (function() {
-                    const elements = document.querySelectorAll('button, [role="tab"], [role="option"]');
+                    const searchText = '${searchText}';
+                    const elements = document.querySelectorAll('button, [role="tab"], [role="option"], [role="tabpanel"] button');
                     for (const el of elements) {
-                      if (el.textContent.includes('${click.name.replace(/'/g, "\\'")}') ||
-                          el.getAttribute('aria-label')?.includes('${click.name.replace(/'/g, "\\'")}')) {
-                        if (!el.disabled) {
+                      const text = el.textContent?.trim() || '';
+                      const ariaLabel = el.getAttribute('aria-label') || '';
+                      // Check for exact match or text contains search text
+                      if (text === searchText || text.includes(searchText) || ariaLabel.includes(searchText)) {
+                        if (!el.disabled && !el.hasAttribute('disabled')) {
                           el.click();
                           return 'clicked';
                         }
