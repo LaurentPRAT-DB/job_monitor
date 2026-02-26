@@ -208,10 +208,10 @@ async def get_cost_summary(
 
     # Try cache first for fast response
     if settings.use_cache:
-        logger.info("Attempting to load cost data from cache...")
+        logger.info("[CACHE] Attempting cache lookup for costs/summary")
         cached_data = await query_cost_cache(ws)
         if cached_data:
-            logger.info(f"Cost cache hit! {len(cached_data)} jobs from cache")
+            logger.info(f"[CACHE_HIT] costs/summary: returning {len(cached_data)} jobs from cache")
 
             # Parse cached data into JobCostOut models
             jobs = []
@@ -299,7 +299,7 @@ async def get_cost_summary(
                 dbu_rate=dbu_rate,
             )
 
-        logger.info("Cost cache miss, falling back to live query")
+        logger.info("[CACHE_MISS] costs/summary: falling back to live query")
 
     # Main query: Job costs with SKU breakdown and trend calculation
     query = f"""

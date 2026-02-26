@@ -706,10 +706,10 @@ async def get_alerts(
 
     # Try cache first for fast response
     if settings.use_cache:
-        logger.info("Attempting to load alerts from cache...")
+        logger.info("[CACHE] Attempting cache lookup for alerts")
         cached_alerts = await query_alerts_cache(ws)
         if cached_alerts:
-            logger.info(f"Alerts cache hit! {len(cached_alerts)} alerts from cache")
+            logger.info(f"[CACHE_HIT] alerts: returning {len(cached_alerts)} alerts from cache")
             all_alerts = []
             for row in cached_alerts:
                 # Check acknowledgment status
@@ -765,7 +765,7 @@ async def get_alerts(
 
             return AlertListOut(alerts=all_alerts, total=len(all_alerts), by_severity=by_severity)
 
-        logger.info("Alerts cache miss, falling back to live query")
+        logger.info("[CACHE_MISS] alerts: falling back to live query")
 
     # Generate alerts from all sources in parallel (live query fallback)
     failure_alerts, sla_alerts, cost_alerts, cluster_alerts = await asyncio.gather(

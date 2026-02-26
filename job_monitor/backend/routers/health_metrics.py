@@ -159,10 +159,10 @@ async def get_health_metrics(
 
     # Try cache first for fast response
     if settings.use_cache:
-        logger.info("Attempting to load from cache...")
+        logger.info("[CACHE] Attempting cache lookup for health-metrics")
         cached_data = await query_job_health_cache(ws, days)
         if cached_data:
-            logger.info(f"Cache hit! Returning {len(cached_data)} jobs from cache")
+            logger.info(f"[CACHE_HIT] health-metrics: returning {len(cached_data)} jobs from cache")
             jobs = [
                 JobHealthOut(
                     job_id=row["job_id"],
@@ -182,7 +182,7 @@ async def get_health_metrics(
                 window_days=days,
                 total_count=len(jobs),
             )
-        logger.info("Cache miss or unavailable, falling back to live query")
+        logger.info("[CACHE_MISS] health-metrics: falling back to live query")
 
     # SQL query using CTEs for consecutive failure detection
     # Pattern from 02-RESEARCH.md with LAG window function

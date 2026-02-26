@@ -33,13 +33,13 @@ async def check_cache_exists(ws) -> bool:
             wait_timeout="10s",
         )
         if result and result.status and not result.status.error:
-            logger.info(f"Cache table {table} exists and is accessible")
+            logger.info(f"[CACHE] Table {table} exists and is accessible")
             return True
         else:
-            logger.info(f"Cache table {table} not accessible: {result.status.error if result.status else 'unknown'}")
+            logger.info(f"[CACHE] Table {table} not accessible: {result.status.error if result.status else 'unknown'}")
             return False
     except Exception as e:
-        logger.info(f"Cache table check failed: {e}")
+        logger.info(f"[CACHE] Table check failed: {e}")
         return False
 
 
@@ -122,7 +122,7 @@ async def query_job_health_cache(ws, days: int = 7) -> list[dict[str, Any]] | No
     """
 
     try:
-        logger.info(f"Querying job health cache for {days} days")
+        logger.info(f"[CACHE] Querying job_health_cache for {days} days window")
         result = await asyncio.to_thread(
             ws.statement_execution.execute_statement,
             warehouse_id=settings.warehouse_id,
@@ -131,7 +131,7 @@ async def query_job_health_cache(ws, days: int = 7) -> list[dict[str, Any]] | No
         )
 
         if result and result.status and result.status.error:
-            logger.warning(f"Cache query error: {result.status.error}")
+            logger.warning(f"[CACHE_MISS] job_health_cache query error: {result.status.error}")
             return None
 
         if result and result.result and result.result.data_array:
@@ -153,13 +153,14 @@ async def query_job_health_cache(ws, days: int = 7) -> list[dict[str, Any]] | No
                     "max_duration_seconds": float(row[12]) if row[12] else None,
                     "refreshed_at": row[13],
                 })
-            logger.info(f"Cache returned {len(jobs)} jobs")
+            logger.info(f"[CACHE_HIT] job_health_cache returned {len(jobs)} jobs ({days}d window)")
             return jobs
 
+        logger.info(f"[CACHE_MISS] job_health_cache returned empty result ({days}d window)")
         return None
 
     except Exception as e:
-        logger.warning(f"Cache query failed, will fall back to live query: {e}")
+        logger.warning(f"[CACHE_MISS] job_health_cache query failed: {e}")
         return None
 
 
@@ -190,7 +191,7 @@ async def query_cost_cache(ws) -> list[dict[str, Any]] | None:
     """
 
     try:
-        logger.info("Querying cost cache")
+        logger.info("[CACHE] Querying cost_cache")
         result = await asyncio.to_thread(
             ws.statement_execution.execute_statement,
             warehouse_id=settings.warehouse_id,
@@ -199,7 +200,7 @@ async def query_cost_cache(ws) -> list[dict[str, Any]] | None:
         )
 
         if result and result.status and result.status.error:
-            logger.warning(f"Cost cache query error: {result.status.error}")
+            logger.warning(f"[CACHE_MISS] cost_cache query error: {result.status.error}")
             return None
 
         if result and result.result and result.result.data_array:
@@ -217,13 +218,14 @@ async def query_cost_cache(ws) -> list[dict[str, Any]] | None:
                     "is_anomaly": bool(row[8]) if row[8] is not None else False,
                     "refreshed_at": row[9],
                 })
-            logger.info(f"Cost cache returned {len(jobs)} jobs")
+            logger.info(f"[CACHE_HIT] cost_cache returned {len(jobs)} jobs")
             return jobs
 
+        logger.info("[CACHE_MISS] cost_cache returned empty result")
         return None
 
     except Exception as e:
-        logger.warning(f"Cost cache query failed: {e}")
+        logger.warning(f"[CACHE_MISS] cost_cache query failed: {e}")
         return None
 
 
@@ -261,7 +263,7 @@ async def query_alerts_cache(ws) -> list[dict[str, Any]] | None:
     """
 
     try:
-        logger.info("Querying alerts cache")
+        logger.info("[CACHE] Querying alerts_cache")
         result = await asyncio.to_thread(
             ws.statement_execution.execute_statement,
             warehouse_id=settings.warehouse_id,
@@ -270,7 +272,7 @@ async def query_alerts_cache(ws) -> list[dict[str, Any]] | None:
         )
 
         if result and result.status and result.status.error:
-            logger.warning(f"Alerts cache query error: {result.status.error}")
+            logger.warning(f"[CACHE_MISS] alerts_cache query error: {result.status.error}")
             return None
 
         if result and result.result and result.result.data_array:
@@ -290,13 +292,14 @@ async def query_alerts_cache(ws) -> list[dict[str, Any]] | None:
                     "cost_multiplier": float(row[10]) if row[10] else None,
                     "refreshed_at": row[11],
                 })
-            logger.info(f"Alerts cache returned {len(alerts)} alerts")
+            logger.info(f"[CACHE_HIT] alerts_cache returned {len(alerts)} alerts")
             return alerts
 
+        logger.info("[CACHE_MISS] alerts_cache returned empty result")
         return None
 
     except Exception as e:
-        logger.warning(f"Alerts cache query failed: {e}")
+        logger.warning(f"[CACHE_MISS] alerts_cache query failed: {e}")
         return None
 
 
