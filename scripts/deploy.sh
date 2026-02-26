@@ -16,9 +16,13 @@ echo "==> Rebuilding frontend..."
 cd "$PROJECT_DIR/job_monitor/ui"
 npm run build
 
-# Deploy using DABs (handles both bundle and app)
-echo "==> Deploying with DABs..."
+# Deploy using DABs
+echo "==> Deploying bundle with DABs..."
 cd "$PROJECT_DIR"
 databricks bundle deploy -t "$TARGET"
+
+# Run the app resource to trigger deployment
+echo "==> Deploying app..."
+databricks bundle run job-monitor -t "$TARGET"
 
 echo "==> Deployment complete!"
