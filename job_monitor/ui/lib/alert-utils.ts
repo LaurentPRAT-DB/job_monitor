@@ -50,6 +50,7 @@ export async function fetchAlerts(params?: {
   severity?: AlertSeverity[];
   category?: AlertCategory[];
   acknowledged?: boolean;
+  workspaceId?: string | null;  // null = all workspaces, string = specific workspace
 }): Promise<AlertListResponse> {
   const searchParams = new URLSearchParams();
   if (params?.severity) {
@@ -60,6 +61,10 @@ export async function fetchAlerts(params?: {
   }
   if (params?.acknowledged !== undefined) {
     searchParams.set("acknowledged", String(params.acknowledged));
+  }
+  // Pass workspace_id if provided (null means no filter = all workspaces)
+  if (params?.workspaceId) {
+    searchParams.set("workspace_id", params.workspaceId);
   }
   const queryString = searchParams.toString();
   const url = queryString ? `/api/alerts?${queryString}` : "/api/alerts";

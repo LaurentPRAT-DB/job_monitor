@@ -7,6 +7,7 @@ export interface FilterState {
   timeRange: '7d' | '30d' | '90d' | 'custom';
   startDate: string | null;  // ISO date string
   endDate: string | null;    // ISO date string
+  workspaceId: string | null;  // Filter by workspace (null = current workspace)
 }
 
 export interface FilterContextType {
@@ -30,6 +31,7 @@ function parseSearchParams(): FilterState {
     timeRange: (searchParams.get('timeRange') as FilterState['timeRange']) ?? '7d',
     startDate: searchParams.get('startDate'),
     endDate: searchParams.get('endDate'),
+    workspaceId: searchParams.get('workspaceId'),  // null = current workspace, 'all' = all workspaces
   };
 }
 
@@ -78,7 +80,8 @@ export function FilterProvider({ children }: { children: ReactNode }) {
     filters.jobNamePatterns.length > 0 ||
     filters.timeRange !== '7d' ||
     filters.startDate ||
-    filters.endDate
+    filters.endDate ||
+    filters.workspaceId === 'all'  // 'all' is non-default (default is current workspace)
   ), [filters]);
 
   return (

@@ -105,6 +105,10 @@ async def get_health_metrics(
         int,
         Query(description="Time window: 7 or 30 days"),
     ] = 7,
+    workspace_id: Annotated[
+        str | None,
+        Query(description="Filter by workspace ID (omit or null for current, 'all' for all workspaces)"),
+    ] = None,
     ws=Depends(get_ws_prefer_user),
 ) -> JobHealthListOut:
     """Get job health metrics with priority flags and retry counts.
@@ -144,10 +148,12 @@ async def get_health_metrics(
         return get_mock_health_metrics(days)
 
     # Check in-memory response cache first (fastest path)
-    cache_key = f"health_metrics:{days}"
+    # Include workspace_id in cache key ('all' or specific ID)
+    ws_filter = workspace_id if workspace_id else "current"
+    cache_key = f"health_metrics:{days}:{ws_filter}"
     cached_response = response_cache.get(cache_key)
     if cached_response:
-        logger.info(f"[RESPONSE_CACHE] Returning cached health metrics ({days}d)")
+        logger.info(f"[RESPONSE_CACHE] Returning cached health metrics ({days}d, ws={ws_filter})")
         return cached_response
 
     logger.info(f"get_health_metrics called with days={days}")
@@ -196,6 +202,13 @@ async def get_health_metrics(
             return result
         logger.info("[CACHE_MISS] health-metrics: falling back to live query")
 
+    # Build workspace filter clause
+    # If workspace_id='all' or None, don't filter by workspace
+    # If specific workspace_id provided, filter to that workspace
+    workspace_clause = ""
+    if workspace_id and workspace_id != "all":
+        workspace_clause = f"AND workspace_id = '{workspace_id}'"
+
     # SQL query using CTEs for consecutive failure detection
     # Pattern from 02-RESEARCH.md with LAG window function
     query = f"""
@@ -207,7 +220,7 @@ async def get_health_metrics(
                 ORDER BY change_time DESC
             ) as rn
         FROM system.lakeflow.jobs
-        WHERE delete_time IS NULL
+        WHERE delete_time IS NULL {workspace_clause}
     ),
     run_stats AS (
         -- Aggregate run statistics per job
@@ -218,7 +231,7 @@ async def get_health_metrics(
             MAX(period_start_time) as last_run_time,
             MAX(CASE WHEN result_state IS NOT NULL THEN run_duration_seconds END) as last_duration
         FROM system.lakeflow.job_run_timeline
-        WHERE period_start_time >= current_date() - INTERVAL {days} DAYS
+        WHERE period_start_time >= current_date() - INTERVAL {days} DAYS {workspace_clause}
         GROUP BY job_id
     ),
     consecutive_check AS (
@@ -229,7 +242,7 @@ async def get_health_metrics(
             LAG(result_state) OVER (PARTITION BY job_id ORDER BY period_start_time DESC) as prev_state,
             ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY period_start_time DESC) as rn
         FROM system.lakeflow.job_run_timeline
-        WHERE period_start_time >= current_date() - INTERVAL {days} DAYS
+        WHERE period_start_time >= current_date() - INTERVAL {days} DAYS {workspace_clause}
     ),
     priority_flags AS (
         -- Compute priority based on consecutive failures and success rate
@@ -251,7 +264,7 @@ async def get_health_metrics(
         FROM (
             SELECT job_id, DATE(period_start_time) as run_date, COUNT(*) as run_count
             FROM system.lakeflow.job_run_timeline
-            WHERE period_start_time >= current_date() - INTERVAL {days} DAYS
+            WHERE period_start_time >= current_date() - INTERVAL {days} DAYS {workspace_clause}
             GROUP BY job_id, DATE(period_start_time)
         )
         GROUP BY job_id

@@ -5,11 +5,12 @@ import { TimeRangePicker } from './time-range-picker';
 import { FilterPresets } from './filter-presets';
 import { JobPatternInput } from './job-pattern-input';
 import { Button } from '@/components/ui/button';
-import { X, Filter, ChevronDown } from 'lucide-react';
+import { X, Filter, ChevronDown, Globe } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
 import { queryKeys, queryPresets } from '@/lib/query-config';
+import { getCurrentUser, type UserInfo } from '@/lib/api';
 
 interface Team {
   team: string;
@@ -25,12 +26,20 @@ export function GlobalFilterBar() {
   const [isOpen, setIsOpen] = useState(false);
   const { filters, setFilters, clearFilters, hasActiveFilters } = useFilters();
 
+  // Get current user info for workspace name
+  const { data: userInfo } = useQuery<UserInfo>({
+    queryKey: ['user', 'me'],
+    queryFn: getCurrentUser,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
   // Count active filters for badge
   const activeFilterCount = [
     filters.team,
     filters.jobId,
     filters.jobNamePatterns.length > 0 ? 'patterns' : null,
     filters.timeRange !== '7d' ? filters.timeRange : null,
+    filters.workspaceId === 'all' ? 'all-workspaces' : null,
   ].filter(Boolean).length;
 
   // Fetch teams for dropdown - uses shared query key with costs page
@@ -117,6 +126,23 @@ export function GlobalFilterBar() {
       {/* Expandable filter content */}
       <CollapsibleContent>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 px-3 sm:px-4 pb-3 pt-1">
+          {/* Workspace filter - highest level filter */}
+          <Select
+            value={filters.workspaceId ?? 'current'}
+            onValueChange={(v) => setFilters({ workspaceId: v === 'current' ? null : v })}
+          >
+            <SelectTrigger className="w-[140px] sm:w-[180px] h-8 text-sm">
+              <Globe className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+              <SelectValue placeholder="Current Workspace" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="current">
+                {userInfo?.workspace_name || 'Current Workspace'}
+              </SelectItem>
+              <SelectItem value="all">All Workspaces</SelectItem>
+            </SelectContent>
+          </Select>
+
           {/* Presets dropdown */}
           <FilterPresets />
 

@@ -14,6 +14,7 @@ class UserInfo(BaseModel):
     display_name: str | None = None
     workspace_host: str | None = None
     workspace_name: str | None = None
+    workspace_id: str | None = None  # Numeric workspace ID for filtering system tables
 
 
 class HealthResponse(BaseModel):

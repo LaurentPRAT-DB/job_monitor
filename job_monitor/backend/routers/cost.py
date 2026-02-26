@@ -178,6 +178,10 @@ async def get_cost_summary(
     include_teams: Annotated[
         bool, Query(description="Include team tags lookup (adds 20-30s)")
     ] = False,
+    workspace_id: Annotated[
+        str | None,
+        Query(description="Filter by workspace ID (omit or null for all, specific ID for single workspace)"),
+    ] = None,
     ws=Depends(get_ws_prefer_user),
 ) -> CostSummaryOut:
     """Get cost summary with per-job breakdown, team rollups, and anomalies.
@@ -209,10 +213,11 @@ async def get_cost_summary(
         return get_mock_cost_summary()
 
     # Check in-memory response cache first (fastest path)
-    cache_key = f"cost_summary:{days}:{include_teams}"
+    ws_filter = workspace_id if workspace_id else "all"
+    cache_key = f"cost_summary:{days}:{include_teams}:{ws_filter}"
     cached_response = response_cache.get(cache_key)
     if cached_response:
-        logger.info(f"[RESPONSE_CACHE] Returning cached cost summary ({days}d)")
+        logger.info(f"[RESPONSE_CACHE] Returning cached cost summary ({days}d, ws={ws_filter})")
         return cached_response
 
     dbu_rate = settings.dbu_rate
@@ -317,6 +322,11 @@ async def get_cost_summary(
 
         logger.info("[CACHE_MISS] costs/summary: falling back to live query")
 
+    # Build workspace filter clause
+    workspace_clause = ""
+    if workspace_id and workspace_id != "all":
+        workspace_clause = f"AND workspace_id = '{workspace_id}'"
+
     # Main query: Job costs with SKU breakdown and trend calculation
     query = f"""
     WITH job_costs AS (
@@ -328,7 +338,7 @@ async def get_cost_summary(
             SUM(CASE WHEN usage_date >= current_date() - INTERVAL 14 DAYS AND usage_date < current_date() - INTERVAL 7 DAYS THEN usage_quantity ELSE 0 END) as prev_7d
         FROM system.billing.usage
         WHERE usage_date >= current_date() - INTERVAL {days} DAYS
-          AND usage_metadata.job_id IS NOT NULL
+          AND usage_metadata.job_id IS NOT NULL {workspace_clause}
         GROUP BY usage_metadata.job_id, sku_name
         HAVING SUM(usage_quantity) != 0
     ),
@@ -354,7 +364,7 @@ async def get_cost_summary(
                 SUM(usage_quantity) as daily_dbus
             FROM system.billing.usage
             WHERE usage_date >= current_date() - INTERVAL 30 DAYS
-              AND usage_metadata.job_id IS NOT NULL
+              AND usage_metadata.job_id IS NOT NULL {workspace_clause}
             GROUP BY usage_metadata.job_id, usage_date
             HAVING SUM(usage_quantity) != 0
         )
@@ -365,7 +375,7 @@ async def get_cost_summary(
         SELECT job_id, name,
             ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) as rn
         FROM system.lakeflow.jobs
-        WHERE delete_time IS NULL
+        WHERE delete_time IS NULL {workspace_clause}
     )
     SELECT
         jt.job_id,

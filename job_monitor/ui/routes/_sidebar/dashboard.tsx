@@ -19,6 +19,7 @@ import { getCurrentUser, type UserInfo } from '../../lib/api'
 import { fetchAlerts, type Alert } from '@/lib/alert-utils'
 import { Button } from '@/components/ui/button'
 import { queryPresets, queryKeys } from '@/lib/query-config'
+import { useFilters } from '@/lib/filter-context'
 
 // Types for API responses
 interface JobHealthResponse {
@@ -145,6 +146,12 @@ function formatTimeAgo(dateString: string): string {
 }
 
 export default function Dashboard() {
+  const { filters } = useFilters()
+
+  // Determine workspace filter - 'all' shows all, otherwise filter to specific workspace
+  // When filters.workspaceId is null, we show all workspaces (default behavior)
+  const workspaceParam = filters.workspaceId === 'all' ? '' : (filters.workspaceId ? `&workspace_id=${filters.workspaceId}` : '')
+
   // Fetch user info (session preset - rarely changes)
   const { data: user, isLoading: userLoading } = useQuery<UserInfo>({
     queryKey: queryKeys.user.current(),
@@ -154,9 +161,9 @@ export default function Dashboard() {
 
   // Fetch job health metrics (semi-live - updates every 5-15 min)
   const { data: healthData, isLoading: healthLoading, refetch: refetchHealth } = useQuery<JobHealthResponse>({
-    queryKey: queryKeys.healthMetrics.list(7),
+    queryKey: [...queryKeys.healthMetrics.list(7), { workspaceId: filters.workspaceId }],
     queryFn: async () => {
-      const res = await fetch('/api/health-metrics?days=7')
+      const res = await fetch(`/api/health-metrics?days=7${workspaceParam}`)
       if (!res.ok) throw new Error('Failed to fetch health metrics')
       return res.json()
     },
@@ -165,16 +172,16 @@ export default function Dashboard() {
 
   // Fetch alerts (slow preset - expensive query taking 15-30s)
   const { data: alertsData, isLoading: alertsLoading, refetch: refetchAlerts } = useQuery({
-    queryKey: queryKeys.alerts.all,
-    queryFn: () => fetchAlerts(),
+    queryKey: [...queryKeys.alerts.all, { workspaceId: filters.workspaceId }],
+    queryFn: () => fetchAlerts({ workspaceId: filters.workspaceId || undefined }),
     ...queryPresets.slow,
   })
 
   // Fetch cost summary (slow preset - expensive query taking 30-40s)
   const { data: costData, isLoading: costLoading, refetch: refetchCosts } = useQuery<CostSummaryResponse>({
-    queryKey: queryKeys.costs.summary(),
+    queryKey: [...queryKeys.costs.summary(), { workspaceId: filters.workspaceId }],
     queryFn: async () => {
-      const res = await fetch('/api/costs/summary')
+      const res = await fetch(`/api/costs/summary${workspaceParam ? '?' + workspaceParam.substring(1) : ''}`)
       if (!res.ok) throw new Error('Failed to fetch cost summary')
       return res.json()
     },

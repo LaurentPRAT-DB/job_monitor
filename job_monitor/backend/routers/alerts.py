@@ -122,7 +122,7 @@ def _generate_cluster_remediation(utilization: float, runs_analyzed: int) -> str
     return f"Cluster running at ~{utilization:.0f}% utilization across {runs_analyzed} recent runs. Consider reducing workers by {reduction} or using smaller node types."
 
 
-async def _generate_failure_alerts(ws, warehouse_id: str) -> list[Alert] | None:
+async def _generate_failure_alerts(ws, warehouse_id: str, workspace_id: str | None = None) -> list[Alert] | None:
     """Generate alerts from health metrics (failures, yellow zone).
 
     Returns None if permission error detected (signals to use mock data).
@@ -130,8 +130,13 @@ async def _generate_failure_alerts(ws, warehouse_id: str) -> list[Alert] | None:
     alerts = []
     logger.info("[alerts._generate_failure_alerts] Starting")
 
+    # Build workspace filter clause
+    workspace_clause = ""
+    if workspace_id and workspace_id != "all":
+        workspace_clause = f"AND workspace_id = '{workspace_id}'"
+
     # Query job health for 7-day window
-    query = """
+    query = f"""
     WITH run_stats AS (
         SELECT
             job_id,
@@ -139,7 +144,7 @@ async def _generate_failure_alerts(ws, warehouse_id: str) -> list[Alert] | None:
             COUNT(CASE WHEN result_state = 'SUCCESS' THEN 1 END) as success_count,
             MAX(period_start_time) as last_run_time
         FROM system.lakeflow.job_run_timeline
-        WHERE period_start_time >= current_date() - INTERVAL 7 DAYS
+        WHERE period_start_time >= current_date() - INTERVAL 7 DAYS {workspace_clause}
         GROUP BY job_id
     ),
     consecutive_check AS (
@@ -149,21 +154,21 @@ async def _generate_failure_alerts(ws, warehouse_id: str) -> list[Alert] | None:
             LAG(result_state) OVER (PARTITION BY job_id ORDER BY period_start_time DESC) as prev_state,
             ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY period_start_time DESC) as rn
         FROM system.lakeflow.job_run_timeline
-        WHERE period_start_time >= current_date() - INTERVAL 7 DAYS
+        WHERE period_start_time >= current_date() - INTERVAL 7 DAYS {workspace_clause}
     ),
     failure_reasons AS (
         SELECT job_id, COLLECT_SET(termination_code) as reasons
         FROM system.lakeflow.job_run_timeline
         WHERE period_start_time >= current_date() - INTERVAL 7 DAYS
           AND result_state = 'FAILED'
-          AND termination_code IS NOT NULL
+          AND termination_code IS NOT NULL {workspace_clause}
         GROUP BY job_id
     ),
     job_names AS (
         SELECT job_id, name,
             ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) as rn
         FROM system.lakeflow.jobs
-        WHERE delete_time IS NULL
+        WHERE delete_time IS NULL {workspace_clause}
     )
     SELECT
         rs.job_id,
@@ -335,21 +340,26 @@ async def _generate_sla_alerts(ws) -> list[Alert]:
     return alerts
 
 
-async def _generate_cost_alerts(ws, warehouse_id: str) -> list[Alert]:
+async def _generate_cost_alerts(ws, warehouse_id: str, workspace_id: str | None = None) -> list[Alert]:
     """Generate cost spike and budget threshold alerts."""
     alerts = []
     budget_tag_key = settings.budget_tag_key
     team_tag_key = settings.team_tag_key
 
+    # Build workspace filter clause
+    workspace_clause = ""
+    if workspace_id and workspace_id != "all":
+        workspace_clause = f"AND workspace_id = '{workspace_id}'"
+
     # Query for cost spikes (>2x p90 baseline)
-    spike_query = """
+    spike_query = f"""
     WITH job_costs AS (
         SELECT
             usage_metadata.job_id as job_id,
             SUM(usage_quantity) as total_dbus
         FROM system.billing.usage
         WHERE usage_date >= current_date() - INTERVAL 7 DAYS
-          AND usage_metadata.job_id IS NOT NULL
+          AND usage_metadata.job_id IS NOT NULL {workspace_clause}
         GROUP BY usage_metadata.job_id
         HAVING SUM(usage_quantity) > 0
     ),
@@ -364,7 +374,7 @@ async def _generate_cost_alerts(ws, warehouse_id: str) -> list[Alert]:
                 SUM(usage_quantity) as daily_dbus
             FROM system.billing.usage
             WHERE usage_date >= current_date() - INTERVAL 30 DAYS
-              AND usage_metadata.job_id IS NOT NULL
+              AND usage_metadata.job_id IS NOT NULL {workspace_clause}
             GROUP BY usage_metadata.job_id, usage_date
             HAVING SUM(usage_quantity) > 0
         )
@@ -375,7 +385,7 @@ async def _generate_cost_alerts(ws, warehouse_id: str) -> list[Alert]:
         SELECT job_id, name,
             ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) as rn
         FROM system.lakeflow.jobs
-        WHERE delete_time IS NULL
+        WHERE delete_time IS NULL {workspace_clause}
     )
     SELECT
         jc.job_id,
@@ -513,14 +523,19 @@ async def _generate_cost_alerts(ws, warehouse_id: str) -> list[Alert]:
     return alerts
 
 
-async def _generate_cluster_alerts(ws, warehouse_id: str) -> list[Alert]:
+async def _generate_cluster_alerts(ws, warehouse_id: str, workspace_id: str | None = None) -> list[Alert]:
     """Generate over-provisioning alerts from cluster metrics."""
     alerts = []
+
+    # Build workspace filter clause
+    workspace_clause = ""
+    if workspace_id and workspace_id != "all":
+        workspace_clause = f"AND workspace_id = '{workspace_id}'"
 
     # Query for over-provisioned jobs (low utilization across all recent runs)
     # Note: run_duration_seconds can be 0 for serverless jobs, so we calculate
     # effective duration from timestamps as fallback
-    query = """
+    query = f"""
     WITH job_runs_raw AS (
         SELECT
             job_id,
@@ -534,7 +549,7 @@ async def _generate_cluster_alerts(ws, warehouse_id: str) -> list[Alert]:
         FROM system.lakeflow.job_run_timeline
         WHERE period_start_time >= current_date() - INTERVAL 30 DAYS
             AND period_end_time IS NOT NULL
-            AND result_state IS NOT NULL
+            AND result_state IS NOT NULL {workspace_clause}
     ),
     job_runs AS (
         SELECT * FROM job_runs_raw WHERE run_duration_seconds > 0
@@ -546,7 +561,7 @@ async def _generate_cluster_alerts(ws, warehouse_id: str) -> list[Alert]:
             SUM(usage_quantity) as total_dbus
         FROM system.billing.usage
         WHERE usage_date >= current_date() - INTERVAL 30 DAYS
-          AND usage_metadata.job_id IS NOT NULL
+          AND usage_metadata.job_id IS NOT NULL {workspace_clause}
         GROUP BY usage_metadata.job_id, usage_date
         HAVING SUM(usage_quantity) > 0
     ),
@@ -570,7 +585,7 @@ async def _generate_cluster_alerts(ws, warehouse_id: str) -> list[Alert]:
         SELECT job_id, name,
             ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) as rn
         FROM system.lakeflow.jobs
-        WHERE delete_time IS NULL
+        WHERE delete_time IS NULL {workspace_clause}
     )
     SELECT
         ju.job_id,
@@ -670,6 +685,10 @@ async def get_alerts(
         bool | None,
         Query(description="Filter by acknowledged status"),
     ] = None,
+    workspace_id: Annotated[
+        str | None,
+        Query(description="Filter by workspace ID (omit or null for all, specific ID for single workspace)"),
+    ] = None,
     ws=Depends(get_ws_prefer_user),
 ) -> AlertListOut:
     """Get alerts generated from current system state.
@@ -706,7 +725,8 @@ async def get_alerts(
         return get_mock_alerts()
 
     # Build cache key from request parameters
-    cache_key = f"alerts:{','.join(sorted(category or ['all']))}:{','.join(sorted(severity or ['all']))}:{acknowledged}"
+    ws_filter = workspace_id if workspace_id else "all"
+    cache_key = f"alerts:{','.join(sorted(category or ['all']))}:{','.join(sorted(severity or ['all']))}:{acknowledged}:{ws_filter}"
 
     # Check in-memory response cache first (fastest)
     cached_response = response_cache.get(cache_key)
@@ -790,16 +810,16 @@ async def get_alerts(
     tasks = []
     task_names = []
     if "failure" in requested_categories:
-        tasks.append(_generate_failure_alerts(ws, warehouse_id))
+        tasks.append(_generate_failure_alerts(ws, warehouse_id, workspace_id))
         task_names.append("failure")
     if "sla" in requested_categories:
         tasks.append(_generate_sla_alerts(ws))
         task_names.append("sla")
     if "cost" in requested_categories:
-        tasks.append(_generate_cost_alerts(ws, warehouse_id))
+        tasks.append(_generate_cost_alerts(ws, warehouse_id, workspace_id))
         task_names.append("cost")
     if "cluster" in requested_categories:
-        tasks.append(_generate_cluster_alerts(ws, warehouse_id))
+        tasks.append(_generate_cluster_alerts(ws, warehouse_id, workspace_id))
         task_names.append("cluster")
 
     # Generate alerts from selected sources in parallel

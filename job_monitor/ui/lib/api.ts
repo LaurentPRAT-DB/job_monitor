@@ -9,6 +9,7 @@ export interface UserInfo {
   display_name: string | null;
   workspace_host: string | null;
   workspace_name: string | null;
+  workspace_id: string | null;  // Numeric workspace ID for filtering system tables
 }
 
 export interface HealthResponse {
