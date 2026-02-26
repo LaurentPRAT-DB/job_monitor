@@ -49,6 +49,16 @@ targets:
       cache_catalog: "job_monitor"
       cache_schema: "cache"
 
+  # Production (DEMO WEST)
+  prod:
+    mode: development
+    workspace:
+      profile: "DEMO WEST"
+    variables:
+      warehouse_id: "06c1adfd3dbdacde"  # Update with DEMO WEST warehouse ID
+      cache_catalog: "job_monitor"
+      cache_schema: "cache"
+
 resources:
   apps:
     job-monitor:
