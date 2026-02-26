@@ -1,9 +1,9 @@
+# E2 Workspace (DEFAULT profile)
+# Deploy: ./deploy.sh e2
+# App URL: https://job-monitor-1444828305810485.aws.databricksapps.com
+
 bundle:
   name: job-monitor
-
-# Configuration is centralized in job_monitor/config.yaml
-# Both the app and the cache refresh job read from this file.
-# Variables below can override config.yaml values per target.
 
 sync:
   include:
@@ -13,51 +13,22 @@ sync:
 
 variables:
   warehouse_id:
-    description: "SQL warehouse ID for system table queries"
+    description: "SQL warehouse ID (fe-lens)"
     default: "06c1adfd3dbdacde"
-  # These override config.yaml if set. Leave empty to use config.yaml values.
   cache_catalog:
-    description: "Catalog for metrics cache tables (overrides config.yaml)"
-    default: ""
+    default: "job_monitor"
   cache_schema:
-    description: "Schema for metrics cache tables (overrides config.yaml)"
-    default: ""
+    default: "cache"
   cache_refresh_cron:
-    description: "Cron schedule for cache refresh (overrides config.yaml)"
     default: "0 */15 * * * ?"
 
 targets:
-  # E2 is the main deployment (OBO works here)
   e2:
     mode: development
     default: true
     workspace:
       profile: DEFAULT
       host: https://e2-demo-field-eng.cloud.databricks.com
-    variables:
-      warehouse_id: "06c1adfd3dbdacde"
-      cache_catalog: "job_monitor"
-      cache_schema: "cache"
-
-  # Dev workspace (Free Edition - OBO not supported, uses mock data)
-  dev:
-    mode: development
-    workspace:
-      profile: LPT_FREE_EDITION
-    variables:
-      warehouse_id: "58d41113cb262dce"
-      cache_catalog: "job_monitor"
-      cache_schema: "cache"
-
-  # Production (DEMO WEST)
-  prod:
-    mode: development
-    workspace:
-      profile: "DEMO WEST"
-    variables:
-      warehouse_id: "06c1adfd3dbdacde"  # Update with DEMO WEST warehouse ID
-      cache_catalog: "job_monitor"
-      cache_schema: "cache"
 
 resources:
   apps:
@@ -76,14 +47,22 @@ resources:
             python_file: job_monitor/jobs/refresh_metrics_cache.py
             parameters:
               - "--catalog"
-              - "job_monitor"
+              - "${var.cache_catalog}"
               - "--schema"
-              - "cache"
+              - "${var.cache_schema}"
           new_cluster:
             spark_version: "14.3.x-scala2.12"
             node_type_id: "i3.xlarge"
-            num_workers: 1
+            num_workers: 0
+            spark_conf:
+              "spark.master": "local[*]"
+              "spark.databricks.cluster.profile": "singleNode"
+            custom_tags:
+              "ResourceClass": "SingleNode"
             data_security_mode: "SINGLE_USER"
+          libraries:
+            - pypi:
+                package: "pyyaml"
       schedule:
         quartz_cron_expression: "${var.cache_refresh_cron}"
         timezone_id: "UTC"

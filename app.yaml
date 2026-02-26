@@ -10,16 +10,17 @@ env:
   - name: DATABRICKS_HOST
     valueFrom: workspace-host
   - name: WAREHOUSE_ID
-    description: "SQL warehouse ID for system table queries (E2 fe-lens warehouse)"
-    value: "06c1adfd3dbdacde"
+    description: "SQL warehouse ID for system table queries (DEMO WEST)"
+    value: "75fd8278393d07eb"  # DEMO WEST Shared Endpoint
   - name: LOG_LEVEL
     description: "Logging level for debugging"
-    value: "DEBUG"
-  # Cache settings are loaded from job_monitor/config.yaml
-  # Set env vars below to override config.yaml values:
-  # - CACHE_CATALOG: Catalog name for cache tables
-  # - CACHE_SCHEMA: Schema name for cache tables
-  # - USE_CACHE: Set to "false" to bypass cache
+    value: "INFO"
+  - name: CACHE_CATALOG
+    description: "Catalog for cache tables and filter presets"
+    value: "main"
+  - name: CACHE_SCHEMA
+    description: "Schema for cache tables and filter presets"
+    value: "job_monitor_cache"
 
 permissions:
   - user_name: "${DATABRICKS_USER}"

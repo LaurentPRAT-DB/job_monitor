@@ -56,6 +56,9 @@ resources:
               - "${var.cache_schema}"
           # Use existing shared cluster (starts automatically)
           existing_cluster_id: "0730-172948-runts698"
+          libraries:
+            - pypi:
+                package: "pyyaml"
       schedule:
         quartz_cron_expression: "${var.cache_refresh_cron}"
         timezone_id: "UTC"

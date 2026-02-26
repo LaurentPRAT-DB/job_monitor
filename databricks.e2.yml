@@ -53,8 +53,16 @@ resources:
           new_cluster:
             spark_version: "14.3.x-scala2.12"
             node_type_id: "i3.xlarge"
-            num_workers: 1
+            num_workers: 0
+            spark_conf:
+              "spark.master": "local[*]"
+              "spark.databricks.cluster.profile": "singleNode"
+            custom_tags:
+              "ResourceClass": "SingleNode"
             data_security_mode: "SINGLE_USER"
+          libraries:
+            - pypi:
+                package: "pyyaml"
       schedule:
         quartz_cron_expression: "${var.cache_refresh_cron}"
         timezone_id: "UTC"
