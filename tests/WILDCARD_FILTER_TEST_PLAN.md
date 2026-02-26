@@ -346,11 +346,11 @@ This test plan validates the job name wildcard filtering feature and preset edit
 | 4. Input Validation | 5 | 2 | | 3 | TC4.2, TC4.5 passed |
 | 5. URL Persistence | 4 | 4 | | | All passed |
 | 6. Preset Creation | 3 | 1 | | 2 | TC6.1 passed after backend fix |
-| 7. Preset Edit | 5 | | | 5 | Not tested yet |
-| 8. Delete Preset | 1 | | | 1 | Not tested yet |
+| 7. Preset Edit | 5 | 3 | | 2 | TC7.1, TC7.3, TC7.4 passed |
+| 8. Delete Preset | 1 | 1 | | | TC8.1 passed |
 | 9. Integration | 4 | | | 4 | Not tested yet |
 | 10. Edge Cases | 4 | 1 | | 3 | TC10.3 passed |
-| **TOTAL** | **39** | **18** | **0** | **21** | Core filtering + presets working |
+| **TOTAL** | **39** | **22** | **0** | **17** | Core filtering + presets fully working |
 
 ### Test Session 2026-02-26 (continued)
 
@@ -385,6 +385,17 @@ This test plan validates the job name wildcard filtering feature and preset edit
 - TC5.2: Page refresh preserves patterns ✅
 - TC5.3: Direct URL navigation loads pattern from URL ✅
 - TC5.4: Clear button removes `jobNamePatterns` from URL ✅
+
+**Suite 6 - Preset Creation:**
+- TC6.1: Save preset with patterns ✅ (after backend fix)
+
+**Suite 7 - Preset Edit:**
+- TC7.1: Enter edit mode - dialog shows "Update preset", name pre-filled ✅
+- TC7.3: Rename preset - name change persists after reload ✅
+- TC7.4: Cancel edit mode - original values preserved ✅
+
+**Suite 8 - Delete Preset:**
+- TC8.1: Delete preset - removed from dropdown, persists after reload ✅
 
 **Suite 10 - Edge Cases:**
 - TC10.3: Non-matching pattern shows "No jobs found" gracefully ✅
