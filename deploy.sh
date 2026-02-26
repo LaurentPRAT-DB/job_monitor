@@ -1,5 +1,5 @@
 #!/bin/bash
-# Job Monitor Deployment Script
+# Job Monitor Deployment Script (DABs-based)
 # Usage: ./deploy.sh <target>
 #
 # Targets:
@@ -21,20 +21,14 @@ case "$TARGET" in
   e2)
     BUNDLE_FILE="databricks.e2.yml"
     PROFILE="DEFAULT"
-    APP_YAML="app.e2.yaml"
-    WORKSPACE_PATH="/Workspace/Users/laurent.prat@databricks.com/.bundle/job-monitor/e2/files"
     ;;
   prod)
     BUNDLE_FILE="databricks.prod.yml"
     PROFILE="DEMO WEST"
-    APP_YAML="app.prod.yaml"
-    WORKSPACE_PATH="/Workspace/Users/laurent.prat@databricks.com/.bundle/job-monitor/prod/files"
     ;;
   dev)
     BUNDLE_FILE="databricks.dev.yml"
     PROFILE="LPT_FREE_EDITION"
-    APP_YAML="app.yaml"
-    WORKSPACE_PATH="/Workspace/Users/laurent.prat@mailwatcher.net/.bundle/job-monitor/dev/files"
     ;;
   *)
     echo "Unknown target: $TARGET"
@@ -44,12 +38,11 @@ case "$TARGET" in
 esac
 
 echo "=========================================="
-echo "Deploying Job Monitor"
+echo "Deploying Job Monitor via DABs"
 echo "=========================================="
 echo "Target:    $TARGET"
 echo "Profile:   $PROFILE"
 echo "Bundle:    $BUNDLE_FILE"
-echo "App YAML:  $APP_YAML"
 echo "=========================================="
 
 # Check if bundle file exists
@@ -59,7 +52,7 @@ if [ ! -f "$BUNDLE_FILE" ]; then
 fi
 
 # Build frontend if dist doesn't exist or is older than source
-if [ ! -d "job_monitor/ui/dist" ] || [ "$(find job_monitor/ui/src -newer job_monitor/ui/dist -print -quit)" ]; then
+if [ ! -d "job_monitor/ui/dist" ] || [ "$(find job_monitor/ui/src -newer job_monitor/ui/dist -print -quit 2>/dev/null)" ]; then
   echo ""
   echo "Building frontend..."
   cd job_monitor/ui
@@ -67,23 +60,42 @@ if [ ! -d "job_monitor/ui/dist" ] || [ "$(find job_monitor/ui/src -newer job_mon
   cd ../..
 fi
 
-# Deploy bundle
+# Deploy bundle using DABs (this uploads files and updates resources)
 echo ""
-echo "Deploying bundle..."
-databricks bundle deploy -t "$TARGET" --bundle-root . --config-file "$BUNDLE_FILE"
+echo "Step 1: Deploying bundle via DABs..."
+databricks bundle deploy \
+  --target "$TARGET" \
+  --config-file "$BUNDLE_FILE"
 
-# Deploy app
+# Get the source code path from bundle output
+SOURCE_PATH=$(databricks bundle summary --target "$TARGET" --config-file "$BUNDLE_FILE" 2>/dev/null | grep -o '/Workspace[^"]*files' | head -1)
+
+if [ -z "$SOURCE_PATH" ]; then
+  # Fallback: construct path based on target
+  case "$TARGET" in
+    e2|prod)
+      SOURCE_PATH="/Workspace/Users/laurent.prat@databricks.com/.bundle/job-monitor/$TARGET/files"
+      ;;
+    dev)
+      SOURCE_PATH="/Workspace/Users/laurent.prat@mailwatcher.net/.bundle/job-monitor/$TARGET/files"
+      ;;
+  esac
+fi
+
+# Deploy app code via DABs app deployment
 echo ""
-echo "Deploying app..."
+echo "Step 2: Deploying app via DABs..."
 databricks apps deploy job-monitor \
-  --source-code-path "$WORKSPACE_PATH" \
-  -p "$PROFILE"
+  --source-code-path "$SOURCE_PATH" \
+  --profile "$PROFILE"
 
-# Enable OBO (only for non-dev targets)
+# Enable OBO (only for non-dev targets that support it)
 if [ "$TARGET" != "dev" ]; then
   echo ""
-  echo "Enabling OBO..."
-  databricks apps update job-monitor --json '{"user_api_scopes": ["sql"]}' -p "$PROFILE"
+  echo "Step 3: Enabling OBO authentication..."
+  databricks apps update job-monitor \
+    --json '{"user_api_scopes": ["sql"]}' \
+    --profile "$PROFILE"
 fi
 
 echo ""
@@ -91,11 +103,13 @@ echo "=========================================="
 echo "Deployment complete!"
 echo "=========================================="
 
-# Get app URL
-APP_INFO=$(databricks apps get job-monitor -p "$PROFILE" 2>/dev/null)
+# Get app info
+APP_INFO=$(databricks apps get job-monitor --profile "$PROFILE" 2>/dev/null || echo "{}")
 APP_URL=$(echo "$APP_INFO" | grep -o '"url":"[^"]*"' | cut -d'"' -f4)
 APP_STATE=$(echo "$APP_INFO" | grep -o '"state":"[^"]*"' | head -1 | cut -d'"' -f4)
 
 echo "App URL:   $APP_URL"
 echo "Status:    $APP_STATE"
+echo ""
+echo "View logs: ${APP_URL}/logz"
 echo "=========================================="
