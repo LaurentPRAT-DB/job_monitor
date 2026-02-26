@@ -14,27 +14,48 @@ import {
 } from '@/lib/alert-utils';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { queryPresets, queryKeys } from '@/lib/query-config';
+import { queryPresets } from '@/lib/query-config';
 import { RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useFilters } from '@/lib/filter-context';
+import { getCurrentUser, type UserInfo } from '@/lib/api';
 
 export default function AlertsPage() {
   const [categoryFilter, setCategoryFilter] = useState<AlertCategory | 'all'>('all');
   const [severityFilter, setSeverityFilter] = useState<AlertSeverity | 'all'>('all');
   const queryClient = useQueryClient();
+  const { filters } = useFilters();
+
+  // Fetch user info first (session preset - rarely changes)
+  const { data: user } = useQuery<UserInfo>({
+    queryKey: ['user'],
+    queryFn: getCurrentUser,
+    staleTime: Infinity,
+  });
+
+  // Determine effective workspace ID
+  const userWorkspaceId = user?.workspace_id;
+  const effectiveWorkspaceId = filters.workspaceId === 'all'
+    ? 'all'
+    : (filters.workspaceId || userWorkspaceId || 'pending');
 
   // Use the same query key as dashboard when no filter is applied
   // This ensures cache hits when navigating from dashboard to alerts
   // NOTE: Alerts endpoint is slow (15-30s) so use slow preset to reduce API calls
   const { data, isLoading, refetch, isFetching } = useQuery({
-    queryKey: categoryFilter === 'all'
-      ? queryKeys.alerts.all
-      : queryKeys.alerts.list({ category: categoryFilter }),
-    queryFn: () => fetchAlerts(
-      categoryFilter === 'all' ? {} : { category: [categoryFilter] }
-    ),
+    queryKey: ['alerts', categoryFilter, effectiveWorkspaceId],
+    queryFn: () => {
+      const wsId = effectiveWorkspaceId !== 'all' && effectiveWorkspaceId !== 'pending'
+        ? effectiveWorkspaceId
+        : undefined;
+      return fetchAlerts({
+        ...(categoryFilter === 'all' ? {} : { category: [categoryFilter] }),
+        workspaceId: wsId,
+      });
+    },
     ...queryPresets.slow, // Alerts query is expensive (15-30s), cache aggressively
+    enabled: effectiveWorkspaceId !== 'pending',
   });
 
   const acknowledgeMutation = useMutation({

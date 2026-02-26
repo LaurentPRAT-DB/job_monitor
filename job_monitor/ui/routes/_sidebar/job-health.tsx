@@ -11,9 +11,10 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { JobHealthTable } from '@/components/job-health-table';
 import type { JobWithSla } from '@/lib/health-utils';
-import { queryPresets, queryKeys } from '@/lib/query-config';
+import { queryPresets } from '@/lib/query-config';
 import { useFilters } from '@/lib/filter-context';
 import { matchesJobPatterns } from '@/lib/filter-utils';
+import { getCurrentUser, type UserInfo } from '@/lib/api';
 
 // Response type matching backend with SLA data
 interface JobHealthListResponse {
@@ -22,8 +23,12 @@ interface JobHealthListResponse {
   total_count: number;
 }
 
-async function fetchHealthMetrics(days: number): Promise<JobHealthListResponse> {
-  const response = await fetch(`/api/health-metrics?days=${days}`);
+async function fetchHealthMetrics(days: number, workspaceId?: string): Promise<JobHealthListResponse> {
+  const params = new URLSearchParams({ days: String(days) });
+  if (workspaceId) {
+    params.set('workspace_id', workspaceId);
+  }
+  const response = await fetch(`/api/health-metrics?${params}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch health metrics: ${response.statusText}`);
   }
@@ -42,10 +47,29 @@ export default function JobHealthPage() {
   const search = useSearch({ strict: false }) as { job?: string };
   const jobFilterFromUrl = search?.job || null;
 
+  // Fetch user info first (session preset - rarely changes)
+  const { data: user } = useQuery<UserInfo>({
+    queryKey: ['user'],
+    queryFn: getCurrentUser,
+    staleTime: Infinity,
+  });
+
+  // Determine effective workspace ID
+  const userWorkspaceId = user?.workspace_id;
+  const effectiveWorkspaceId = filters.workspaceId === 'all'
+    ? 'all'
+    : (filters.workspaceId || userWorkspaceId || 'pending');
+
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: queryKeys.healthMetrics.list(days),
-    queryFn: () => fetchHealthMetrics(days),
+    queryKey: ['health-metrics', days, effectiveWorkspaceId],
+    queryFn: () => {
+      const wsId = effectiveWorkspaceId !== 'all' && effectiveWorkspaceId !== 'pending'
+        ? effectiveWorkspaceId
+        : undefined;
+      return fetchHealthMetrics(days, wsId);
+    },
     ...queryPresets.semiLive, // System tables have 5-15 min latency
+    enabled: effectiveWorkspaceId !== 'pending',
   });
 
   // Filter jobs by global wildcard patterns (client-side filtering)

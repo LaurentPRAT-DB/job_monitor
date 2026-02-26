@@ -10,6 +10,7 @@ import { MetricSummaryCard } from '@/components/metric-summary-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, TrendingUp, DollarSign, AlertTriangle } from 'lucide-react';
 import { queryPresets } from '@/lib/query-config';
+import { getCurrentUser, type UserInfo } from '@/lib/api';
 
 interface HistoricalData {
   data: { date: string; current: number; previous: number }[];
@@ -23,43 +24,62 @@ export default function HistoricalDashboard() {
   const { filters } = useFilters();
   const days = getDaysFromRange(filters.timeRange);
 
+  // Fetch user info first (session preset - rarely changes)
+  const { data: user } = useQuery<UserInfo>({
+    queryKey: ['user'],
+    queryFn: getCurrentUser,
+    staleTime: Infinity,
+  });
+
+  // Determine effective workspace ID
+  const userWorkspaceId = user?.workspace_id;
+  const effectiveWorkspaceId = filters.workspaceId === 'all'
+    ? 'all'
+    : (filters.workspaceId || userWorkspaceId || 'pending');
+
   // Build query params from filters
   const queryParams = new URLSearchParams();
   queryParams.set('days', String(days));
   if (filters.team) queryParams.set('team', filters.team);
   if (filters.jobId) queryParams.set('job_id', filters.jobId);
+  if (effectiveWorkspaceId && effectiveWorkspaceId !== 'all' && effectiveWorkspaceId !== 'pending') {
+    queryParams.set('workspace_id', effectiveWorkspaceId);
+  }
 
   // Fetch historical cost data (static - past data doesn't change)
   const { data: costData, isLoading: costLoading } = useQuery<HistoricalData>({
-    queryKey: ['historical-costs', days, filters.team, filters.jobId],
+    queryKey: ['historical-costs', days, filters.team, filters.jobId, effectiveWorkspaceId],
     queryFn: async () => {
       const res = await fetch(`/api/historical/costs?${queryParams}`);
       if (!res.ok) throw new Error('Failed to fetch cost data');
       return res.json();
     },
     ...queryPresets.static, // Historical data never changes
+    enabled: effectiveWorkspaceId !== 'pending',
   });
 
   // Fetch historical success rate data (static - past data doesn't change)
   const { data: successData, isLoading: successLoading } = useQuery<HistoricalData>({
-    queryKey: ['historical-success', days, filters.team, filters.jobId],
+    queryKey: ['historical-success', days, filters.team, filters.jobId, effectiveWorkspaceId],
     queryFn: async () => {
       const res = await fetch(`/api/historical/success-rate?${queryParams}`);
       if (!res.ok) throw new Error('Failed to fetch success rate data');
       return res.json();
     },
     ...queryPresets.static,
+    enabled: effectiveWorkspaceId !== 'pending',
   });
 
   // Fetch historical SLA breach data (static - past data doesn't change)
   const { data: slaData, isLoading: slaLoading } = useQuery<HistoricalData>({
-    queryKey: ['historical-sla', days, filters.team, filters.jobId],
+    queryKey: ['historical-sla', days, filters.team, filters.jobId, effectiveWorkspaceId],
     queryFn: async () => {
       const res = await fetch(`/api/historical/sla-breaches?${queryParams}`);
       if (!res.ok) throw new Error('Failed to fetch SLA data');
       return res.json();
     },
     ...queryPresets.static,
+    enabled: effectiveWorkspaceId !== 'pending',
   });
 
   const isLoading = costLoading || successLoading || slaLoading;
