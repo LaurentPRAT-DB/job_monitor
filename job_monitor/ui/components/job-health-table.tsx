@@ -2,7 +2,7 @@
  * Job health table with expandable rows, sortable columns, search, and pagination.
  * Displays all jobs with their health status, supporting expand/collapse for details.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUp, ArrowDown, ArrowUpDown, Search, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import {
@@ -34,6 +34,7 @@ interface JobHealthTableProps {
   jobs: JobWithSla[];
   isLoading: boolean;
   onRefetch?: () => void;
+  initialSearchQuery?: string;
 }
 
 // Priority sort order (P1 highest, null lowest)
@@ -68,13 +69,21 @@ function compareJobs(a: JobWithSla, b: JobWithSla, column: SortColumn, direction
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
-export function JobHealthTable({ jobs, isLoading, onRefetch }: JobHealthTableProps) {
+export function JobHealthTable({ jobs, isLoading, onRefetch, initialSearchQuery }: JobHealthTableProps) {
   const [sortColumn, setSortColumn] = useState<SortColumn>('retry_count');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery || '');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  // Update search query when initialSearchQuery changes (e.g., from URL)
+  useEffect(() => {
+    if (initialSearchQuery) {
+      setSearchQuery(initialSearchQuery);
+      setCurrentPage(1);
+    }
+  }, [initialSearchQuery]);
 
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {

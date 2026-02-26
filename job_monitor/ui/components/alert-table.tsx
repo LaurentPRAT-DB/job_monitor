@@ -3,6 +3,7 @@
  * Provides a compact list view with details on expand.
  */
 import { useState, useMemo, useEffect } from 'react';
+import { Link } from '@tanstack/react-router';
 import {
   ArrowUp,
   ArrowDown,
@@ -246,13 +247,14 @@ function AlertRow({
                     Acknowledged {formatTimeAgo(alert.acknowledged_at)}
                   </span>
                 )}
-                <a
-                  href={`/job-health?job=${alert.job_id}`}
+                <Link
+                  to="/job-health"
+                  search={{ job: alert.job_id }}
                   onClick={(e) => e.stopPropagation()}
                   className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   View Job Details <ExternalLink className="h-3 w-3" />
-                </a>
+                </Link>
               </div>
             </div>
           </TableCell>

@@ -5,7 +5,8 @@
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { useSearch, useNavigate } from '@tanstack/react-router';
+import { AlertCircle, RefreshCw, X } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { JobHealthTable } from '@/components/job-health-table';
@@ -32,12 +33,22 @@ type PriorityFilter = 'all' | 'P1' | 'P2' | 'P3';
 export default function JobHealthPage() {
   const [days, setDays] = useState<7 | 30>(7);
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
+  const navigate = useNavigate();
+
+  // Read job filter from URL query parameter
+  const search = useSearch({ strict: false }) as { job?: string };
+  const jobFilterFromUrl = search?.job || null;
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: queryKeys.healthMetrics.list(days),
     queryFn: () => fetchHealthMetrics(days),
     ...queryPresets.semiLive, // System tables have 5-15 min latency
   });
+
+  // Clear job filter from URL
+  const clearJobFilter = () => {
+    navigate({ to: '/job-health', search: {} });
+  };
 
   return (
     <div className="p-4 md:p-6">
@@ -61,6 +72,24 @@ export default function JobHealthPage() {
           Refresh
         </Button>
       </div>
+
+      {/* Job filter from URL indicator */}
+      {jobFilterFromUrl && (
+        <div className="mb-4 flex items-center gap-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-2">
+          <span className="text-sm text-blue-700 dark:text-blue-300">
+            Filtering by Job ID: <span className="font-mono font-semibold">{jobFilterFromUrl}</span>
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearJobFilter}
+            className="h-6 px-2 text-blue-600 hover:text-blue-800 hover:bg-blue-100"
+          >
+            <X className="h-3 w-3 mr-1" />
+            Clear
+          </Button>
+        </div>
+      )}
 
       {/* Tabs for 7-day / 30-day toggle */}
       <Tabs
@@ -159,6 +188,7 @@ export default function JobHealthPage() {
             }
             isLoading={isLoading}
             onRefetch={() => refetch()}
+            initialSearchQuery={jobFilterFromUrl || undefined}
           />
         </div>
       </div>
