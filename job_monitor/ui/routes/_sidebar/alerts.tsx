@@ -9,16 +9,19 @@ import {
   fetchAlerts,
   acknowledgeAlert,
   type AlertCategory,
+  type AlertSeverity,
   SEVERITY_CONFIG,
 } from '@/lib/alert-utils';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { queryPresets, queryKeys } from '@/lib/query-config';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export default function AlertsPage() {
   const [categoryFilter, setCategoryFilter] = useState<AlertCategory | 'all'>('all');
+  const [severityFilter, setSeverityFilter] = useState<AlertSeverity | 'all'>('all');
   const queryClient = useQueryClient();
 
   // Use the same query key as dashboard when no filter is applied
@@ -71,20 +74,59 @@ export default function AlertsPage() {
         </Tabs>
       </div>
 
-      {/* Summary badges */}
-      <div className="flex flex-wrap gap-2">
-        <Badge className={SEVERITY_CONFIG.P1.className}>
+      {/* Summary badges - clickable to filter */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge
+          className={cn(
+            SEVERITY_CONFIG.P1.className,
+            'cursor-pointer transition-all',
+            severityFilter === 'P1' && 'ring-2 ring-offset-2 ring-red-500'
+          )}
+          onClick={() => setSeverityFilter(severityFilter === 'P1' ? 'all' : 'P1')}
+        >
           {data?.by_severity.P1 || 0} Critical
         </Badge>
-        <Badge className={SEVERITY_CONFIG.P2.className}>
+        <Badge
+          className={cn(
+            SEVERITY_CONFIG.P2.className,
+            'cursor-pointer transition-all',
+            severityFilter === 'P2' && 'ring-2 ring-offset-2 ring-orange-500'
+          )}
+          onClick={() => setSeverityFilter(severityFilter === 'P2' ? 'all' : 'P2')}
+        >
           {data?.by_severity.P2 || 0} Warning
         </Badge>
-        <Badge className={SEVERITY_CONFIG.P3.className}>
+        <Badge
+          className={cn(
+            SEVERITY_CONFIG.P3.className,
+            'cursor-pointer transition-all',
+            severityFilter === 'P3' && 'ring-2 ring-offset-2 ring-yellow-500'
+          )}
+          onClick={() => setSeverityFilter(severityFilter === 'P3' ? 'all' : 'P3')}
+        >
           {data?.by_severity.P3 || 0} Info
         </Badge>
-        <Badge variant="outline" className="ml-2">
+        <Badge
+          variant="outline"
+          className={cn(
+            'ml-2 cursor-pointer transition-all',
+            severityFilter === 'all' && 'ring-2 ring-offset-2 ring-gray-400'
+          )}
+          onClick={() => setSeverityFilter('all')}
+        >
           {data?.total || 0} Total
         </Badge>
+        {severityFilter !== 'all' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSeverityFilter('all')}
+            className="h-6 px-2 text-xs text-muted-foreground"
+          >
+            <X className="h-3 w-3 mr-1" />
+            Clear filter
+          </Button>
+        )}
       </div>
 
       {/* Alert Table */}
@@ -93,6 +135,7 @@ export default function AlertsPage() {
         isLoading={isLoading}
         onAcknowledge={(id) => acknowledgeMutation.mutate(id)}
         isAcknowledging={acknowledgeMutation.isPending}
+        severityFilter={severityFilter}
       />
     </div>
   );

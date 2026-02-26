@@ -2,7 +2,7 @@
  * Alert table with sortable columns, expandable rows, search, and pagination.
  * Provides a compact list view with details on expand.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   ArrowUp,
   ArrowDown,
@@ -53,6 +53,7 @@ interface AlertTableProps {
   isLoading: boolean;
   onAcknowledge?: (alertId: string) => void;
   isAcknowledging?: boolean;
+  severityFilter?: AlertSeverity | 'all';
 }
 
 // Severity sort order (P1 highest)
@@ -266,12 +267,18 @@ export function AlertTable({
   isLoading,
   onAcknowledge,
   isAcknowledging,
+  severityFilter = 'all',
 }: AlertTableProps) {
   const [sortColumn, setSortColumn] = useState<SortColumn>('severity');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+
+  // Reset to page 1 when severity filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [severityFilter]);
 
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
@@ -282,19 +289,29 @@ export function AlertTable({
     }
   };
 
-  // Filter alerts by search query
+  // Filter alerts by search query and severity
   const filteredAlerts = useMemo(() => {
-    if (!searchQuery.trim()) return alerts;
+    let result = alerts;
 
-    const query = searchQuery.toLowerCase();
-    return alerts.filter(
-      (alert) =>
-        alert.job_name.toLowerCase().includes(query) ||
-        alert.title.toLowerCase().includes(query) ||
-        alert.description.toLowerCase().includes(query) ||
-        alert.category.toLowerCase().includes(query)
-    );
-  }, [alerts, searchQuery]);
+    // Apply severity filter
+    if (severityFilter !== 'all') {
+      result = result.filter((alert) => alert.severity === severityFilter);
+    }
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(
+        (alert) =>
+          alert.job_name.toLowerCase().includes(query) ||
+          alert.title.toLowerCase().includes(query) ||
+          alert.description.toLowerCase().includes(query) ||
+          alert.category.toLowerCase().includes(query)
+      );
+    }
+
+    return result;
+  }, [alerts, searchQuery, severityFilter]);
 
   // Sort filtered alerts
   const sortedAlerts = useMemo(() => {
