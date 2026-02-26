@@ -27,6 +27,7 @@ from job_monitor.backend.cache import query_alerts_cache
 from job_monitor.backend.config import settings
 from job_monitor.backend.core import get_ws_prefer_user
 from job_monitor.backend.mock_data import get_mock_alerts, is_mock_mode
+from job_monitor.backend.response_cache import response_cache, TTL_FAST
 from job_monitor.backend.models import (
     Alert,
     AlertCategory,
@@ -704,7 +705,16 @@ async def get_alerts(
         logger.warning("Warehouse ID not configured - falling back to mock alerts")
         return get_mock_alerts()
 
-    # Try cache first for fast response
+    # Build cache key from request parameters
+    cache_key = f"alerts:{','.join(sorted(category or ['all']))}:{','.join(sorted(severity or ['all']))}:{acknowledged}"
+
+    # Check in-memory response cache first (fastest)
+    cached_response = response_cache.get(cache_key)
+    if cached_response:
+        logger.info(f"[RESPONSE_CACHE] Returning cached alerts response")
+        return cached_response
+
+    # Try Delta table cache for fast response
     if settings.use_cache:
         logger.info("[CACHE] Attempting cache lookup for alerts")
         cached_alerts = await query_alerts_cache(ws)
@@ -828,11 +838,17 @@ async def get_alerts(
     for alert in all_alerts:
         by_severity[alert.severity.value] = by_severity.get(alert.severity.value, 0) + 1
 
-    return AlertListOut(
+    result = AlertListOut(
         alerts=all_alerts,
         total=len(all_alerts),
         by_severity=by_severity,
     )
+
+    # Cache the response for 2 minutes
+    response_cache.set(cache_key, result, TTL_FAST)
+    logger.info(f"[RESPONSE_CACHE] Cached alerts response ({len(all_alerts)} alerts)")
+
+    return result
 
 
 @router.post("/{alert_id}/acknowledge", response_model=Alert)

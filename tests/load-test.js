@@ -20,7 +20,8 @@ const CDP = require('chrome-remote-interface');
 const fs = require('fs');
 
 // Configuration
-const BASE_URL = 'https://job-monitor-2556758628403379.aws.databricksapps.com';
+// E2 workspace (DEFAULT profile)
+const BASE_URL = process.env.TEST_URL || 'https://job-monitor-1444828305810485.aws.databricksapps.com';
 const DURATION_HOURS = parseFloat(process.argv[2]) || 1;
 const DURATION_MS = DURATION_HOURS * 60 * 60 * 1000;
 const REPORT_INTERVAL_MS = 5 * 60 * 1000; // Report every 5 minutes

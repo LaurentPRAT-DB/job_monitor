@@ -28,6 +28,7 @@ from job_monitor.backend.mock_data import (
     get_mock_job_details,
     is_mock_mode,
 )
+from job_monitor.backend.response_cache import response_cache, TTL_STANDARD
 from job_monitor.backend.models import (
     DurationStatsOut,
     JobExpandedOut,
@@ -141,6 +142,13 @@ async def get_health_metrics(
     if is_mock_mode():
         logger.info(f"Mock mode enabled - returning mock health metrics for {days} days")
         return get_mock_health_metrics(days)
+
+    # Check in-memory response cache first (fastest path)
+    cache_key = f"health_metrics:{days}"
+    cached_response = response_cache.get(cache_key)
+    if cached_response:
+        logger.info(f"[RESPONSE_CACHE] Returning cached health metrics ({days}d)")
+        return cached_response
 
     logger.info(f"get_health_metrics called with days={days}")
     logger.info(f"WorkspaceClient available: {ws is not None}")
@@ -316,11 +324,17 @@ async def get_health_metrics(
     # Apply secondary sort to ensure consistent ordering
     sorted_jobs = _sort_by_priority(jobs)
 
-    return JobHealthListOut(
+    result_obj = JobHealthListOut(
         jobs=sorted_jobs,
         window_days=days,
         total_count=len(sorted_jobs),
     )
+
+    # Cache the response for 5 minutes
+    response_cache.set(cache_key, result_obj, TTL_STANDARD)
+    logger.info(f"[RESPONSE_CACHE] Cached health metrics ({len(sorted_jobs)} jobs, {days}d)")
+
+    return result_obj
 
 
 # Duration and expanded details endpoint helpers

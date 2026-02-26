@@ -9,6 +9,7 @@ from job_monitor.backend.cache import check_cache_exists, get_cache_freshness
 from job_monitor.backend.config import settings
 from job_monitor.backend.core import get_ws_prefer_user
 from job_monitor.backend.mock_data import is_auto_fallback_enabled, is_mock_mode
+from job_monitor.backend.response_cache import response_cache
 
 router = APIRouter(tags=["health"])
 
@@ -96,4 +97,5 @@ async def cache_status(
         "cache_enabled": settings.use_cache,
         "cache_table_prefix": settings.cache_table_prefix,
         "message": "Cache is fresh and ready" if is_fresh else "Cache exists but may be stale (>1 hour old)",
+        "response_cache": response_cache.stats(),
     }

@@ -24,6 +24,7 @@ from job_monitor.backend.cache import query_cost_cache
 from job_monitor.backend.config import settings
 from job_monitor.backend.core import get_ws_prefer_user
 from job_monitor.backend.mock_data import get_mock_cost_summary, is_mock_mode
+from job_monitor.backend.response_cache import response_cache, TTL_SLOW
 from job_monitor.backend.models import (
     CostAnomalyOut,
     CostBySkuOut,
@@ -206,6 +207,13 @@ async def get_cost_summary(
     if not warehouse_id:
         logger.warning("Warehouse ID not configured - falling back to mock cost summary")
         return get_mock_cost_summary()
+
+    # Check in-memory response cache first (fastest path)
+    cache_key = f"cost_summary:{days}:{include_teams}"
+    cached_response = response_cache.get(cache_key)
+    if cached_response:
+        logger.info(f"[RESPONSE_CACHE] Returning cached cost summary ({days}d)")
+        return cached_response
 
     dbu_rate = settings.dbu_rate
 
@@ -463,7 +471,7 @@ async def get_cost_summary(
     total_dbus = sum(j.total_dbus_30d for j in jobs)
     total_cost = total_dbus * dbu_rate if dbu_rate > 0 else None
 
-    return CostSummaryOut(
+    result = CostSummaryOut(
         jobs=jobs,
         teams=teams,
         anomalies=anomalies,
@@ -471,6 +479,12 @@ async def get_cost_summary(
         total_cost_dollars=total_cost,
         dbu_rate=dbu_rate,
     )
+
+    # Cache the response for 10 minutes
+    response_cache.set(cache_key, result, TTL_SLOW)
+    logger.info(f"[RESPONSE_CACHE] Cached cost summary ({len(jobs)} jobs, {days}d)")
+
+    return result
 
 
 @router.get("/by-team", response_model=list[TeamCostOut])
