@@ -9,6 +9,7 @@ import { HistoricalChart } from '@/components/historical-chart';
 import { MetricSummaryCard } from '@/components/metric-summary-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, TrendingUp, DollarSign, AlertTriangle } from 'lucide-react';
+import { queryPresets } from '@/lib/query-config';
 
 interface HistoricalData {
   data: { date: string; current: number; previous: number }[];
@@ -28,7 +29,7 @@ export default function HistoricalDashboard() {
   if (filters.team) queryParams.set('team', filters.team);
   if (filters.jobId) queryParams.set('job_id', filters.jobId);
 
-  // Fetch historical cost data
+  // Fetch historical cost data (static - past data doesn't change)
   const { data: costData, isLoading: costLoading } = useQuery<HistoricalData>({
     queryKey: ['historical-costs', days, filters.team, filters.jobId],
     queryFn: async () => {
@@ -36,10 +37,10 @@ export default function HistoricalDashboard() {
       if (!res.ok) throw new Error('Failed to fetch cost data');
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
+    ...queryPresets.static, // Historical data never changes
   });
 
-  // Fetch historical success rate data
+  // Fetch historical success rate data (static - past data doesn't change)
   const { data: successData, isLoading: successLoading } = useQuery<HistoricalData>({
     queryKey: ['historical-success', days, filters.team, filters.jobId],
     queryFn: async () => {
@@ -47,10 +48,10 @@ export default function HistoricalDashboard() {
       if (!res.ok) throw new Error('Failed to fetch success rate data');
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
+    ...queryPresets.static,
   });
 
-  // Fetch historical SLA breach data
+  // Fetch historical SLA breach data (static - past data doesn't change)
   const { data: slaData, isLoading: slaLoading } = useQuery<HistoricalData>({
     queryKey: ['historical-sla', days, filters.team, filters.jobId],
     queryFn: async () => {
@@ -58,7 +59,7 @@ export default function HistoricalDashboard() {
       if (!res.ok) throw new Error('Failed to fetch SLA data');
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
+    ...queryPresets.static,
   });
 
   const isLoading = costLoading || successLoading || slaLoading;

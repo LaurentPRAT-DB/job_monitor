@@ -17,6 +17,7 @@ import {
 import { getCurrentUser, type UserInfo } from '../../lib/api'
 import { fetchAlerts, type Alert } from '@/lib/alert-utils'
 import { Button } from '@/components/ui/button'
+import { queryPresets, queryKeys } from '@/lib/query-config'
 
 // Types for API responses
 interface JobHealthResponse {
@@ -143,40 +144,40 @@ function formatTimeAgo(dateString: string): string {
 }
 
 export default function Dashboard() {
-  // Fetch user info
+  // Fetch user info (session preset - rarely changes)
   const { data: user, isLoading: userLoading } = useQuery<UserInfo>({
-    queryKey: ['current-user'],
+    queryKey: queryKeys.user.current(),
     queryFn: getCurrentUser,
-    staleTime: 5 * 60 * 1000,
+    ...queryPresets.session,
   })
 
-  // Fetch job health metrics
+  // Fetch job health metrics (semi-live - updates every 5-15 min)
   const { data: healthData, isLoading: healthLoading, refetch: refetchHealth } = useQuery<JobHealthResponse>({
-    queryKey: ['health-metrics', { days: 7 }],
+    queryKey: queryKeys.healthMetrics.list(7),
     queryFn: async () => {
       const res = await fetch('/api/health-metrics?days=7')
       if (!res.ok) throw new Error('Failed to fetch health metrics')
       return res.json()
     },
-    staleTime: 5 * 60 * 1000,
+    ...queryPresets.semiLive,
   })
 
-  // Fetch alerts
+  // Fetch alerts (live preset - needs freshness)
   const { data: alertsData, isLoading: alertsLoading, refetch: refetchAlerts } = useQuery({
-    queryKey: ['alerts'],
+    queryKey: queryKeys.alerts.all,
     queryFn: () => fetchAlerts(),
-    staleTime: 60 * 1000,
+    ...queryPresets.live,
   })
 
-  // Fetch cost summary
+  // Fetch cost summary (semi-live - updates periodically)
   const { data: costData, isLoading: costLoading, refetch: refetchCosts } = useQuery<CostSummaryResponse>({
-    queryKey: ['costs', 'summary'],
+    queryKey: queryKeys.costs.summary(),
     queryFn: async () => {
       const res = await fetch('/api/costs/summary')
       if (!res.ok) throw new Error('Failed to fetch cost summary')
       return res.json()
     },
-    staleTime: 5 * 60 * 1000,
+    ...queryPresets.semiLive,
   })
 
   const isLoading = userLoading || healthLoading || alertsLoading || costLoading

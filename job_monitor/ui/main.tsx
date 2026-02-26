@@ -4,16 +4,12 @@ import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/toaster'
 import { ThemeProvider } from '@/lib/theme-context'
+import { defaultQueryClientOptions } from '@/lib/query-config'
 import { routeTree } from './routeTree.gen.tsx'
 import './index.css'
 
 const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000,
-      refetchOnWindowFocus: true,
-    },
-  },
+  defaultOptions: defaultQueryClientOptions,
 })
 
 const router = createRouter({ routeTree })

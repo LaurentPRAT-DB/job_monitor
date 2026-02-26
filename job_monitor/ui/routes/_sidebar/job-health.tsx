@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { JobHealthTable } from '@/components/job-health-table';
 import type { JobWithSla } from '@/lib/health-utils';
+import { queryPresets, queryKeys } from '@/lib/query-config';
 
 // Response type matching backend with SLA data
 interface JobHealthListResponse {
@@ -33,10 +34,9 @@ export default function JobHealthPage() {
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ['health-metrics', { days }],
+    queryKey: queryKeys.healthMetrics.list(days),
     queryFn: () => fetchHealthMetrics(days),
-    staleTime: 5 * 60 * 1000, // 5 minutes (system tables have 5-15 min latency)
-    refetchOnWindowFocus: true,
+    ...queryPresets.semiLive, // System tables have 5-15 min latency
   });
 
   return (

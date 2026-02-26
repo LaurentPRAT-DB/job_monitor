@@ -12,6 +12,7 @@ import { TeamCostTable, type TeamCost } from '@/components/team-cost-table';
 import { CostBreakdown, type JobCost } from '@/components/cost-breakdown';
 import { AnomaliesTab, type CostAnomaly } from '@/components/anomalies-tab';
 import { formatCost } from '@/lib/cost-utils';
+import { queryPresets, queryKeys } from '@/lib/query-config';
 
 // Types matching backend models
 interface CostSummaryResponse {
@@ -54,20 +55,18 @@ export default function CostsPage() {
     refetch: refetchSummary,
     isFetching: isFetchingSummary,
   } = useQuery({
-    queryKey: ['costs', 'summary'],
+    queryKey: queryKeys.costs.summary(),
     queryFn: fetchCostSummary,
-    staleTime: 5 * 60 * 1000, // 5 minutes (match system table latency)
-    refetchOnWindowFocus: true,
+    ...queryPresets.semiLive, // Cost data updates every 5-15 min
   });
 
   const {
     data: anomaliesData,
     isLoading: isLoadingAnomalies,
   } = useQuery({
-    queryKey: ['costs', 'anomalies'],
+    queryKey: queryKeys.costs.anomalies(),
     queryFn: fetchAnomalies,
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: true,
+    ...queryPresets.semiLive,
   });
 
   const dbuRate = costSummary?.dbu_rate ?? 0;

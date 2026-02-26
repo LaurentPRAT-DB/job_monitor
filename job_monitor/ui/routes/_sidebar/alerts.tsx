@@ -13,17 +13,21 @@ import {
 } from '@/lib/alert-utils';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { queryPresets, queryKeys } from '@/lib/query-config';
 
 export default function AlertsPage() {
   const [categoryFilter, setCategoryFilter] = useState<AlertCategory | 'all'>('all');
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['alerts', categoryFilter],
+    queryKey: queryKeys.alerts.list(
+      categoryFilter === 'all' ? undefined : { category: categoryFilter }
+    ),
     queryFn: () => fetchAlerts(
       categoryFilter === 'all' ? {} : { category: [categoryFilter] }
     ),
-    refetchInterval: 60000,
+    ...queryPresets.live, // Alerts need freshness
+    refetchInterval: 60000, // Also poll every minute
   });
 
   const acknowledgeMutation = useMutation({
