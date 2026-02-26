@@ -1,5 +1,5 @@
 #!/bin/bash
-# Deploy script - rebuilds frontend and deploys to specified target
+# Deploy script - rebuilds frontend and deploys to specified target using DABs
 # Usage: ./scripts/deploy.sh [target]
 #   target: e2 (default) or dev
 
@@ -16,24 +16,9 @@ echo "==> Rebuilding frontend..."
 cd "$PROJECT_DIR/job_monitor/ui"
 npm run build
 
-# Deploy bundle
-echo "==> Deploying bundle..."
+# Deploy using DABs (handles both bundle and app)
+echo "==> Deploying with DABs..."
 cd "$PROJECT_DIR"
 databricks bundle deploy -t "$TARGET"
-
-# Deploy app
-echo "==> Deploying app..."
-if [ "$TARGET" = "e2" ]; then
-    databricks apps deploy job-monitor \
-        --source-code-path /Workspace/Users/laurent.prat@databricks.com/.bundle/job-monitor/e2/files \
-        -p DEFAULT
-elif [ "$TARGET" = "dev" ]; then
-    databricks apps deploy job-monitor \
-        --source-code-path /Workspace/Users/laurent.prat@mailwatcher.net/.bundle/job-monitor/dev/files \
-        -p LPT_FREE_EDITION
-else
-    echo "Unknown target: $TARGET"
-    exit 1
-fi
 
 echo "==> Deployment complete!"
