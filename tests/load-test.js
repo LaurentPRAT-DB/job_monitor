@@ -54,6 +54,7 @@ const API_ENDPOINTS = [
 ];
 
 // Pages and click targets - text is the actual element text to search for
+// Use partial: true for buttons with dynamic counts (e.g., "Total Jobs 234")
 const PAGES = [
   {
     path: '/dashboard',
@@ -75,10 +76,10 @@ const PAGES = [
     clicks: [
       { text: '7 Days', name: '7 Days tab' },
       { text: '30 Days', name: '30 Days tab' },
-      { text: 'Total Jobs', name: 'Total Jobs filter' },
-      { text: 'Critical', name: 'Critical filter' },
-      { text: 'Failing', name: 'Failing filter' },
-      { text: 'Warning', name: 'Warning filter' },
+      { text: 'Total Jobs', name: 'Total Jobs filter', partial: true },
+      { text: 'Critical', name: 'Critical filter', partial: true },
+      { text: 'Failing', name: 'Failing filter', partial: true },
+      { text: 'Warning', name: 'Warning filter', partial: true },
       { text: 'Filters', name: 'Filters toggle' },
       { text: '7D', name: 'Time 7D' },
       { text: '30D', name: 'Time 30D' },
@@ -91,23 +92,23 @@ const PAGES = [
     name: 'Alerts',
     clicks: [
       { text: 'All', name: 'All tab' },
-      { text: 'Failures', name: 'Failures tab' },
-      { text: 'Duration', name: 'Duration tab' },
-      { text: 'Configuration', name: 'Config tab' },
-      { text: 'Total', name: 'Total filter' },
-      { text: 'P1', name: 'P1 filter' },
-      { text: 'P2', name: 'P2 filter' },
-      { text: 'P3', name: 'P3 filter' },
-      { text: 'Next page', name: 'Next page' },
-      { text: 'Previous page', name: 'Prev page' },
+      { text: 'Failure', name: 'Failure tab' },
+      { text: 'SLA', name: 'SLA tab' },
+      { text: 'Cost', name: 'Cost tab' },
+      { text: 'Cluster', name: 'Cluster tab' },
+      { text: 'Total', name: 'Total filter', partial: true },
+      { text: 'P1', name: 'P1 filter', partial: true },
+      { text: 'P2', name: 'P2 filter', partial: true },
+      { text: 'P3', name: 'P3 filter', partial: true },
     ],
   },
   {
     path: '/historical',
     name: 'Historical',
     clicks: [
-      { text: '7 Days', name: '7 Days tab' },
-      { text: '30 Days', name: '30 Days tab' },
+      { text: 'Cost Trends', name: 'Cost Trends tab' },
+      { text: 'Success Rate', name: 'Success Rate tab' },
+      { text: 'Failures', name: 'Failures tab' },
       { text: 'Refresh', name: 'Refresh button' },
     ],
   },
@@ -392,16 +393,22 @@ async function runLoadTest() {
 
               // Try to find and click the element
               const searchText = click.text.replace(/'/g, "\\'");
+              const usePartial = click.partial || false;
               const result = await Runtime.evaluate({
                 expression: `
                   (function() {
                     const searchText = '${searchText}';
-                    const elements = document.querySelectorAll('button, [role="tab"], [role="option"], [role="tabpanel"] button');
+                    const usePartial = ${usePartial};
+                    const elements = document.querySelectorAll('button, [role="tab"], [role="option"], [role="tabpanel"] button, [data-state]');
                     for (const el of elements) {
                       const text = el.textContent?.trim() || '';
                       const ariaLabel = el.getAttribute('aria-label') || '';
-                      // Check for exact match or text contains search text
-                      if (text === searchText || text.includes(searchText) || ariaLabel.includes(searchText)) {
+                      // For partial matches (buttons with counts), check if text starts with search text
+                      // For exact matches, require exact text or text contains search text
+                      const isMatch = usePartial
+                        ? text.startsWith(searchText) || ariaLabel.includes(searchText)
+                        : text === searchText || text.includes(searchText) || ariaLabel.includes(searchText);
+                      if (isMatch) {
                         if (!el.disabled && !el.hasAttribute('disabled')) {
                           el.click();
                           return 'clicked';
