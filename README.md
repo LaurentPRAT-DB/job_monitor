@@ -383,16 +383,40 @@ pytest tests/
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
+| `/api/me` | GET | Current authenticated user info |
+| `/api/health` | GET | App health check |
+| `/api/cache/status` | GET | Cache availability and freshness |
+| **Job Health** |||
 | `/api/health-metrics` | GET | Job health summary with priorities |
 | `/api/health-metrics/{job_id}/duration` | GET | Duration statistics for a job |
 | `/api/health-metrics/{job_id}/details` | GET | Expanded job details |
+| **Alerts** |||
 | `/api/alerts` | GET | Generated alerts from all sources |
 | `/api/alerts/{id}/acknowledge` | POST | Acknowledge an alert (24h TTL) |
+| **Costs** |||
 | `/api/costs/summary` | GET | Cost summary with job/team breakdown |
 | `/api/costs/by-team` | GET | Costs grouped by team tag |
 | `/api/costs/anomalies` | GET | Cost spikes and zombie jobs |
-| `/api/jobs` | GET | Job list via Databricks Jobs API |
-| `/api/cache/status` | GET | Cache availability and freshness |
+| **Historical** |||
+| `/api/historical/costs` | GET | Historical cost trends |
+| `/api/historical/success-rate` | GET | Historical success rate trends |
+| `/api/historical/sla-breaches` | GET | Historical SLA breach data |
+| **Jobs** |||
+| `/api/jobs` | GET | Job list from system tables |
+| `/api/jobs-api/list` | GET | Jobs via Databricks Jobs API |
+| `/api/jobs-api/active` | GET | Currently running jobs |
+| `/api/jobs-api/runs/{job_id}` | GET | Run history for a job |
+| `/api/job-tags/{job_id}/tags` | GET | Tags for a specific job |
+| **Pipeline Integrity** |||
+| `/api/pipeline/{job_id}/row-counts` | GET | Row count deltas for output tables |
+| `/api/pipeline/{job_id}/schema-drift` | GET | Schema drift detection |
+| **Cluster Metrics** |||
+| `/api/cluster-metrics/{job_id}` | GET | Cluster utilization statistics |
+| **Filter Presets** |||
+| `/api/filters/presets` | GET | List saved filter presets |
+| `/api/filters/presets` | POST | Create a filter preset |
+| `/api/filters/presets/{id}` | PUT | Update a filter preset |
+| `/api/filters/presets/{id}` | DELETE | Delete a filter preset |
 
 ## Troubleshooting
 

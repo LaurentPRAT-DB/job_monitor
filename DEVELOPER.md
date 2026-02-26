@@ -11,17 +11,25 @@ databricks_job_monitoring/
 │   │   ├── app.py            # Main FastAPI application
 │   │   ├── cache.py          # Cache layer for pre-aggregated metrics
 │   │   ├── config.py         # Configuration loader (YAML + env vars)
-│   │   ├── core.py           # Core utilities (SQL client, auth)
+│   │   ├── core.py           # Core utilities (SQL client, auth, OBO)
 │   │   ├── mock_data.py      # Mock data generators for demos
 │   │   ├── models.py         # Pydantic models
 │   │   ├── scheduler.py      # APScheduler for background tasks
-│   │   └── routers/          # API route handlers
+│   │   └── routers/          # API route handlers (14 routers)
 │   │       ├── alerts.py     # Alert generation and management
+│   │       ├── auth.py       # User authentication (/api/me)
+│   │       ├── billing.py    # Billing/usage data
+│   │       ├── cluster_metrics.py  # Cluster utilization stats
 │   │       ├── cost.py       # Cost analysis endpoints
+│   │       ├── filters.py    # Filter presets CRUD
+│   │       ├── health.py     # Health check and cache status
 │   │       ├── health_metrics.py  # Job health dashboard
-│   │       ├── jobs.py       # Job listing via Jobs API
-│   │       ├── pipeline.py   # Pipeline integrity tracking
-│   │       └── ...
+│   │       ├── historical.py # Historical trends (costs, success rate)
+│   │       ├── job_tags.py   # Job tag retrieval
+│   │       ├── jobs.py       # Job listing from system tables
+│   │       ├── jobs_api.py   # Jobs via Databricks Jobs API
+│   │       ├── pipeline.py   # Pipeline integrity (row counts, schema)
+│   │       └── reports.py    # Scheduled reports
 │   ├── jobs/                  # Databricks jobs (Spark)
 │   │   └── refresh_metrics_cache.py  # Cache refresh job
 │   ├── ui/                    # React frontend
@@ -202,18 +210,34 @@ alerts = mock.generate_alerts()
 ```
 ui/
 ├── components/           # Reusable components
-│   ├── ui/              # shadcn/ui primitives
+│   ├── ui/              # shadcn/ui primitives (button, table, badge, etc.)
+│   ├── alert-table.tsx  # Alerts table with sorting/filtering
+│   ├── alert-drawer.tsx # Alert details drawer
+│   ├── cost-breakdown.tsx
+│   ├── duration-chart.tsx
+│   ├── filter-presets.tsx
+│   ├── global-filter-bar.tsx
+│   ├── historical-chart.tsx
 │   ├── job-health-table.tsx
-│   ├── cost-chart.tsx
+│   ├── job-expanded-details.tsx
+│   ├── pipeline-integrity-section.tsx
+│   ├── sidebar.tsx
+│   ├── team-cost-table.tsx
 │   └── ...
 ├── lib/
 │   ├── api.ts           # API client functions
-│   ├── utils.ts         # Utility functions
-│   └── hooks/           # Custom React hooks
+│   ├── query-config.ts  # TanStack Query cache presets
+│   ├── filter-context.tsx  # Global filter state
+│   ├── theme-context.tsx
+│   └── utils.ts         # Utility functions
 ├── routes/
-│   ├── __root.tsx       # Root layout
-│   ├── index.tsx        # Dashboard (/)
-│   └── ...
+│   └── _sidebar/        # Pages with sidebar layout
+│       ├── dashboard.tsx    # Main dashboard (/)
+│       ├── alerts.tsx       # Alerts page
+│       ├── costs.tsx        # Cost analysis
+│       ├── historical.tsx   # Historical trends
+│       ├── job-health.tsx   # Job health table
+│       └── running-jobs.tsx # Active jobs
 └── main.tsx             # App entry point
 ```
 
