@@ -348,9 +348,9 @@ This test plan validates the job name wildcard filtering feature and preset edit
 | 6. Preset Creation | 3 | 1 | | 2 | TC6.1 passed after backend fix |
 | 7. Preset Edit | 5 | 3 | | 2 | TC7.1, TC7.3, TC7.4 passed |
 | 8. Delete Preset | 1 | 1 | | | TC8.1 passed |
-| 9. Integration | 4 | | | 4 | Not tested yet |
+| 9. Integration | 4 | 1 | | 3 | TC9.4 passed (adapted for no teams) |
 | 10. Edge Cases | 4 | 1 | | 3 | TC10.3 passed |
-| **TOTAL** | **39** | **22** | **0** | **17** | Core filtering + presets fully working |
+| **TOTAL** | **39** | **23** | **0** | **16** | Core filtering + presets fully working |
 
 ### Test Session 2026-02-26 (continued)
 
@@ -397,6 +397,15 @@ This test plan validates the job name wildcard filtering feature and preset edit
 **Suite 8 - Delete Preset:**
 - TC8.1: Delete preset - removed from dropdown, persists after reload ✅
 
+**Suite 9 - Integration (Adapted):**
+- TC9.4: Active Filter Count Badge ✅
+  - Step 1: Clear all filters → Badge shows "Filters" (no count) ✅
+  - Step 2: Add pattern `*demo*` → Badge shows "Filters 1" ✅
+  - Step 3: Add team filter → BLOCKED (DEMO WEST has no team tags on jobs)
+  - Step 4: Add pattern `*sync*` → Badge stays at "Filters 1" ✅ (multiple patterns = 1 filter type)
+  - Bonus: Add job selection → Badge shows "Filters 2" ✅ (different filter types add up)
+  - **Key Finding**: Multiple wildcard patterns correctly count as a single filter type
+
 **Suite 10 - Edge Cases:**
 - TC10.3: Non-matching pattern shows "No jobs found" gracefully ✅
 
@@ -425,3 +434,5 @@ _Record any bugs, observations, or improvement suggestions during testing:_
 5. **Job name format**: Some job names include " job" suffix in the data (e.g., "test-ga4 job")
 6. **Question mark wildcard**: Works correctly - `test-??? job` matched exactly "test-ga4 job"
 7. **Direct URL navigation**: Pattern chips load correctly from URL query parameters
+8. **Team filter limitation**: DEMO WEST workspace has no team tags on jobs - TC9.1, TC9.3 could not be tested
+9. **Filter badge behavior**: Multiple patterns correctly count as 1 filter type; adding different filter types (job selection) increments badge
