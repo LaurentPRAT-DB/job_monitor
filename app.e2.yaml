@@ -15,6 +15,12 @@ env:
   - name: LOG_LEVEL
     description: "Logging level for debugging"
     value: "DEBUG"
+  - name: CACHE_CATALOG
+    description: "Catalog for cache tables (from config.yaml)"
+    value: "job_monitor"
+  - name: CACHE_SCHEMA
+    description: "Schema for cache tables (from config.yaml)"
+    value: "cache"
 
 permissions:
   - user_name: "${DATABRICKS_USER}"

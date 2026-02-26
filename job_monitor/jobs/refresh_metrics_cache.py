@@ -402,7 +402,9 @@ def refresh_alerts_cache(spark: SparkSession, catalog: str, schema: str) -> int:
 
 def ensure_schema_exists(spark: SparkSession, catalog: str, schema: str):
     """Create catalog and schema if they don't exist."""
-    spark.sql(f"CREATE CATALOG IF NOT EXISTS {catalog}")
+    # Skip catalog creation for 'main' - it's a system catalog that always exists
+    if catalog.lower() != "main":
+        spark.sql(f"CREATE CATALOG IF NOT EXISTS {catalog}")
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}")
     print(f"[{datetime.now()}] Ensured {catalog}.{schema} exists")
 

@@ -17,10 +17,10 @@ env:
     value: "INFO"
   - name: CACHE_CATALOG
     description: "Catalog for cache tables and filter presets"
-    value: "main"
+    value: "job_monitor"
   - name: CACHE_SCHEMA
     description: "Schema for cache tables and filter presets"
-    value: "job_monitor_cache"
+    value: "cache"
 
 permissions:
   - user_name: "${DATABRICKS_USER}"

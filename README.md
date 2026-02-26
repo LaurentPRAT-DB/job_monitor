@@ -226,6 +226,38 @@ Environment variables override `config.yaml` values. Set these in `app.yaml`:
 
 The app uses pre-aggregated Delta tables for fast dashboard loading (<1 second vs 10-30 seconds with live queries).
 
+#### Required Permissions for Cache
+
+The cache refresh job needs permissions to create/write to the cache catalog and schema. An administrator must:
+
+1. **Create the catalog** (if it doesn't exist):
+   ```sql
+   CREATE CATALOG IF NOT EXISTS job_monitor;
+   ```
+
+2. **Grant permissions to the user/service principal** running the cache refresh job:
+   ```sql
+   -- Grant catalog usage
+   GRANT USE CATALOG ON CATALOG job_monitor TO `user@company.com`;
+
+   -- Grant schema creation and usage
+   GRANT CREATE SCHEMA ON CATALOG job_monitor TO `user@company.com`;
+   GRANT USE SCHEMA ON CATALOG job_monitor TO `user@company.com`;
+
+   -- Or for full ownership (recommended for the job runner)
+   GRANT ALL PRIVILEGES ON CATALOG job_monitor TO `user@company.com`;
+   ```
+
+3. **Alternative: Use an existing catalog** where you have permissions:
+   Update `job_monitor/config.yaml`:
+   ```yaml
+   cache:
+     catalog: "your_catalog"  # e.g., "main" or your personal catalog
+     schema: "job_monitor_cache"
+   ```
+
+> **Note**: The `CREATE CATALOG` permission requires metastore admin privileges. If you cannot create a new catalog, use an existing catalog where you have schema creation rights.
+
 #### Cache Tables
 
 | Table | Contents |
