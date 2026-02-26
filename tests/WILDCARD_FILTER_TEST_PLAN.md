@@ -343,14 +343,14 @@ This test plan validates the job name wildcard filtering feature and preset edit
 | 1. Wildcard Syntax | 6 | 5 | | 1 | TC1.1-TC1.5 passed, TC1.6 not tested |
 | 2. Case-Insensitive | 3 | 1 | | 2 | TC2.1 passed |
 | 3. Multiple Patterns | 4 | 4 | | | All passed (OR logic works) |
-| 4. Input Validation | 5 | 2 | | 3 | TC4.2, TC4.5 passed |
+| 4. Input Validation | 5 | 3 | | 2 | TC4.1, TC4.2, TC4.5 passed |
 | 5. URL Persistence | 4 | 4 | | | All passed |
-| 6. Preset Creation | 3 | 1 | | 2 | TC6.1 passed after backend fix |
+| 6. Preset Creation | 3 | 3 | | | All passed (TC6.1-TC6.3) |
 | 7. Preset Edit | 5 | 3 | | 2 | TC7.1, TC7.3, TC7.4 passed |
 | 8. Delete Preset | 1 | 1 | | | TC8.1 passed |
 | 9. Integration | 4 | 1 | | 3 | TC9.4 passed (adapted for no teams) |
-| 10. Edge Cases | 4 | 1 | | 3 | TC10.3 passed |
-| **TOTAL** | **39** | **23** | **0** | **16** | Core filtering + presets fully working |
+| 10. Edge Cases | 4 | 4 | | | All passed (TC10.1-TC10.4) |
+| **TOTAL** | **39** | **29** | **0** | **10** | Core filtering + presets fully working |
 
 ### Test Session 2026-02-26 (continued)
 
@@ -406,8 +406,24 @@ This test plan validates the job name wildcard filtering feature and preset edit
   - Bonus: Add job selection → Badge shows "Filters 2" ✅ (different filter types add up)
   - **Key Finding**: Multiple wildcard patterns correctly count as a single filter type
 
+**Suite 4 - Input Validation:**
+- TC4.1: Empty Pattern Rejected ✅ (+ button stays disabled for whitespace-only input)
+
+**Suite 6 - Preset Creation:**
+- TC6.2: Load Preset Restores Patterns ✅
+  - Created "Aurora & Sync Jobs" preset with `aurora*` and `*sync*` patterns
+  - Cleared all filters, loaded preset from dropdown
+  - Both pattern chips restored, 17 jobs filtered
+- TC6.3: Preset Persists After Page Reload ✅
+  - Refreshed page with patterns active
+  - URL preserved: `jobNamePatterns=aurora*%2C*sync*`
+  - 17 jobs still showing after reload
+
 **Suite 10 - Edge Cases:**
+- TC10.1: Pattern with Only Wildcards (`*`) ✅ - matches all 3825 jobs
+- TC10.2: Escaped Special Characters (`*.*`) ✅ - literal `.` matched, 52 jobs with dot in name
 - TC10.3: Non-matching pattern shows "No jobs found" gracefully ✅
+- TC10.4: Special Characters in Job Names (`*_prod*`) ✅ - 26 jobs with underscore matched
 
 ---
 
