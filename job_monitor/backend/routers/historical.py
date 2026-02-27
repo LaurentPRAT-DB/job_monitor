@@ -246,11 +246,12 @@ async def get_historical_success_rate(
         filters.append(f"AND job_id = '{job_id}'")
     filter_sql = " ".join(filters)
 
+    # System tables use SUCCEEDED (not SUCCESS) for successful runs
     query = f"""
     WITH current_period AS (
         SELECT
             DATE_TRUNC('{interval}', period_start_time) as period,
-            COUNT(CASE WHEN result_state = 'SUCCESS' THEN 1 END) * 100.0 / COUNT(*) as success_rate
+            COUNT(CASE WHEN UPPER(result_state) = 'SUCCEEDED' THEN 1 END) * 100.0 / COUNT(*) as success_rate
         FROM system.lakeflow.job_run_timeline
         WHERE period_start_time >= current_date() - INTERVAL {days} DAYS
           AND result_state IS NOT NULL
@@ -260,7 +261,7 @@ async def get_historical_success_rate(
     previous_period AS (
         SELECT
             DATE_TRUNC('{interval}', period_start_time + INTERVAL {days} DAYS) as period,
-            COUNT(CASE WHEN result_state = 'SUCCESS' THEN 1 END) * 100.0 / COUNT(*) as success_rate
+            COUNT(CASE WHEN UPPER(result_state) = 'SUCCEEDED' THEN 1 END) * 100.0 / COUNT(*) as success_rate
         FROM system.lakeflow.job_run_timeline
         WHERE period_start_time >= current_date() - INTERVAL {days * 2} DAYS
           AND period_start_time < current_date() - INTERVAL {days} DAYS
