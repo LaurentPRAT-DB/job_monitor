@@ -104,7 +104,7 @@ async def get_historical_costs(
     # Build optional filter clauses
     filters = []
     if workspace_id:
-        filters.append(f"AND workspace_id = '{workspace_id}'")
+        filters.append(f"AND workspace_id = {workspace_id}")
     if team:
         filters.append(
             f"AND usage_metadata.job_id IN (SELECT job_id FROM job_team_map WHERE team = '{team}')"
@@ -197,7 +197,7 @@ async def get_historical_success_rate(
     # Build optional filter clauses
     filters = []
     if workspace_id:
-        filters.append(f"AND workspace_id = '{workspace_id}'")
+        filters.append(f"AND workspace_id = {workspace_id}")
     if job_id:
         filters.append(f"AND job_id = '{job_id}'")
     filter_sql = " ".join(filters)
@@ -281,7 +281,7 @@ async def get_historical_sla_breaches(
 
     filters = []
     if workspace_id:
-        filters.append(f"AND workspace_id = '{workspace_id}'")
+        filters.append(f"AND workspace_id = {workspace_id}")
     if job_id:
         filters.append(f"AND job_id = '{job_id}'")
     filter_sql = " ".join(filters)
