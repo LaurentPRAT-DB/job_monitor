@@ -84,7 +84,7 @@ export function JobPatternInput() {
           }}
           onKeyDown={handleKeyDown}
           className="h-8 text-sm w-[140px] sm:w-[160px] font-mono"
-          title="Type a job name to filter. Press Enter to apply. Wildcards: * matches any, ? matches one character."
+          title="* = any chars, ? = single char"
         />
         <Button
           variant="outline"
