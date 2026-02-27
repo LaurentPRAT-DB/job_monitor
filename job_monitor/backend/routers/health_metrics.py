@@ -309,15 +309,30 @@ async def get_health_metrics(
     try:
         logger.info(f"Executing SQL query on warehouse {warehouse_id}")
         logger.debug(f"SQL Query:\n{query}")
+        # Max allowed wait_timeout is 50s - use async polling for longer queries
         result = await asyncio.to_thread(
             ws.statement_execution.execute_statement,
             warehouse_id=warehouse_id,
             statement=query,
             wait_timeout="50s",
         )
+
+        # If query is still pending after initial wait, poll for completion
+        if result and result.status and result.status.state.value in ("PENDING", "RUNNING"):
+            statement_id = result.statement_id
+            logger.info(f"Query still {result.status.state.value}, polling for completion (statement_id: {statement_id})")
+            for attempt in range(6):  # Poll up to 6 times (additional 60s total)
+                await asyncio.sleep(10)  # Wait 10s between polls
+                result = await asyncio.to_thread(
+                    ws.statement_execution.get_statement,
+                    statement_id=statement_id,
+                )
+                logger.info(f"Poll {attempt + 1}: status = {result.status.state.value if result.status else 'None'}")
+                if result.status and result.status.state.value not in ("PENDING", "RUNNING"):
+                    break
         logger.info(f"SQL query completed, status: {result.status if result else 'None'}")
 
-        # Log detailed result info
+        # Log detailed result info and handle incomplete queries
         if result:
             logger.info(f"Result status state: {result.status.state if result.status else 'None'}")
             if result.status and result.status.error:
@@ -327,6 +342,10 @@ async def get_health_metrics(
                 if "INSUFFICIENT_PERMISSIONS" in error_msg or "USE SCHEMA" in error_msg:
                     logger.warning("Permission denied on system tables - falling back to mock data")
                     return get_mock_health_metrics(days)
+            # Check if query is still pending/running - don't cache incomplete results
+            if result.status and result.status.state.value in ("PENDING", "RUNNING"):
+                logger.warning(f"Query still {result.status.state.value} after timeout - returning empty result (not cached)")
+                return JobHealthListOut(jobs=[], window_days=days, total_count=0)
             if result.result:
                 row_count = len(result.result.data_array) if result.result.data_array else 0
                 logger.info(f"Result row count: {row_count}")

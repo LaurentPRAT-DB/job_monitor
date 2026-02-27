@@ -126,6 +126,18 @@ export default function JobHealthPage() {
         </div>
       )}
 
+      {/* Pattern filter active indicator */}
+      {filters.jobNamePatterns.length > 0 && data && (
+        <div className="mb-4 flex items-center gap-2 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg px-4 py-2">
+          <span className="text-sm text-purple-700 dark:text-purple-300">
+            Job name filter active: <span className="font-mono font-semibold">{filters.jobNamePatterns.join(', ')}</span>
+            <span className="ml-2 text-purple-500">
+              ({filteredJobs.length} of {data.jobs.length} jobs match)
+            </span>
+          </span>
+        </div>
+      )}
+
       {/* Tabs for 7-day / 30-day toggle */}
       <Tabs
         defaultValue="7"
@@ -148,8 +160,17 @@ export default function JobHealthPage() {
               priorityFilter === 'all' ? 'ring-2 ring-blue-500 border-blue-500' : ''
             }`}
           >
-            <div className="text-sm text-gray-500 dark:text-gray-400">Total Jobs</div>
-            <div className="text-xl font-semibold dark:text-white">{filteredJobs.length}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              {filters.jobNamePatterns.length > 0 ? 'Matching Jobs' : 'Total Jobs'}
+            </div>
+            <div className="text-xl font-semibold dark:text-white">
+              {filteredJobs.length}
+              {filters.jobNamePatterns.length > 0 && data && (
+                <span className="text-sm font-normal text-gray-400 dark:text-gray-500 ml-1">
+                  / {data.jobs.length}
+                </span>
+              )}
+            </div>
           </button>
           <button
             onClick={() => setPriorityFilter(priorityFilter === 'P1' ? 'all' : 'P1')}

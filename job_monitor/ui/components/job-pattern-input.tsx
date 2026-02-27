@@ -12,8 +12,13 @@ export function JobPatternInput() {
   const [error, setError] = useState<string | null>(null);
 
   const addPattern = () => {
-    const pattern = inputValue.trim();
+    let pattern = inputValue.trim();
     if (!pattern) return;
+
+    // Auto-wrap with wildcards if no wildcards present (substring search UX)
+    if (!pattern.includes('*') && !pattern.includes('?')) {
+      pattern = `*${pattern}*`;
+    }
 
     const validationError = validateWildcardPattern(pattern);
     if (validationError) {
@@ -71,14 +76,15 @@ export function JobPatternInput() {
       {/* Input field */}
       <div className="flex items-center gap-1.5">
         <Input
-          placeholder="Pattern, e.g., ETL-*"
+          placeholder="Filter jobs..."
           value={inputValue}
           onChange={(e) => {
             setInputValue(e.target.value);
             setError(null);
           }}
           onKeyDown={handleKeyDown}
-          className="h-8 text-sm w-[160px] sm:w-[180px] font-mono"
+          className="h-8 text-sm w-[140px] sm:w-[160px] font-mono"
+          title="Type a job name to filter. Press Enter to apply. Wildcards: * matches any, ? matches one character."
         />
         <Button
           variant="outline"
