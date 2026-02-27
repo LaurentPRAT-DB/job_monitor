@@ -261,35 +261,44 @@ function getStateBadgeVariant(state: string): 'default' | 'secondary' | 'destruc
   }
 }
 
-// Fetch recent runs for a single job
-async function fetchJobHistory(jobId: number): Promise<RecentRunStatus[]> {
+// Batch fetch recent runs for multiple jobs in one request
+// This solves the N+1 query problem (50 requests -> 1 request)
+interface BatchRunsResponse {
+  runs_by_job: Record<string, Array<{ run_id: number; result_state: string | null }>>;
+}
+
+async function fetchBatchJobHistory(jobIds: number[]): Promise<Record<string, RecentRunStatus[]>> {
+  if (jobIds.length === 0) return {};
+
   try {
-    const response = await fetch(`/api/jobs-api/runs/${jobId}?limit=6`);
-    if (!response.ok) return [];
-    const runs = await response.json();
-    // Filter to completed runs and take first 5
-    return runs
-      .filter((r: any) => r.result_state !== null)
-      .slice(0, 5)
-      .map((r: any) => ({
-        run_id: r.run_id,
-        result_state: r.result_state,
-      }));
+    const response = await fetch('/api/jobs-api/runs/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_ids: jobIds, limit: 6 }),
+    });
+    if (!response.ok) return {};
+
+    const data: BatchRunsResponse = await response.json();
+
+    // Process each job's runs: filter to completed and take first 5
+    const result: Record<string, RecentRunStatus[]> = {};
+    for (const [jobId, runs] of Object.entries(data.runs_by_job)) {
+      result[jobId] = runs
+        .filter((r) => r.result_state !== null)
+        .slice(0, 5)
+        .map((r) => ({
+          run_id: r.run_id,
+          result_state: r.result_state,
+        }));
+    }
+    return result;
   } catch {
-    return [];
+    return {};
   }
 }
 
-function RunningJobRow({ run }: { run: ActiveRunWithHistory }) {
+function RunningJobRow({ run, recentRuns }: { run: ActiveRunWithHistory; recentRuns?: RecentRunStatus[] }) {
   const [isOpen, setIsOpen] = useState(false);
-
-  // Lazy-load recent runs history for this job
-  const { data: recentRuns } = useQuery({
-    queryKey: ['job-history', run.job_id],
-    queryFn: () => fetchJobHistory(run.job_id),
-    staleTime: 60000, // Cache for 1 minute
-    refetchOnWindowFocus: false,
-  });
 
   // Detect streaming and long-running
   const streaming = isStreamingJob(run.run_name);
@@ -429,6 +438,21 @@ export default function RunningJobsPage() {
     if (!data?.pages) return [];
     return data.pages.flatMap((page) => page.runs);
   }, [data?.pages]);
+
+  // Get unique job IDs for batch fetching history
+  const uniqueJobIds = useMemo(() => {
+    const ids = new Set(allRuns.map(r => r.job_id));
+    return Array.from(ids);
+  }, [allRuns]);
+
+  // Batch fetch job history for all visible jobs (1 request instead of N)
+  const { data: batchHistory } = useQuery({
+    queryKey: ['batch-job-history', uniqueJobIds],
+    queryFn: () => fetchBatchJobHistory(uniqueJobIds),
+    enabled: uniqueJobIds.length > 0,
+    staleTime: 60000, // Cache for 1 minute
+    refetchOnWindowFocus: false,
+  });
 
   // Get total count from first page
   const totalActive = data?.pages?.[0]?.total_active ?? 0;
@@ -642,7 +666,7 @@ export default function RunningJobsPage() {
                 </TableRow>
               ) : (
                 filteredAndSortedRuns.map((run) => (
-                  <RunningJobRow key={run.run_id} run={run} />
+                  <RunningJobRow key={run.run_id} run={run} recentRuns={batchHistory?.[String(run.job_id)]} />
                 ))
               )}
             </TableBody>

@@ -147,6 +147,103 @@ async def list_jobs_api(
         )
 
 
+class BatchRunsRequest(BaseModel):
+    """Request to fetch runs for multiple jobs in one call."""
+    job_ids: list[int]
+    limit: int = 6  # Runs per job
+
+
+class BatchRunsResponse(BaseModel):
+    """Response with runs keyed by job_id."""
+    runs_by_job: dict[str, list[JobApiRunOut]]
+
+
+@router.post("/runs/batch", response_model=BatchRunsResponse)
+async def batch_job_runs_api(
+    request: BatchRunsRequest,
+    ws=Depends(get_ws),
+) -> BatchRunsResponse:
+    """Batch fetch recent runs for multiple jobs in one request.
+
+    This endpoint solves the N+1 query problem on the Running Jobs page.
+    Instead of making 50 individual requests, the frontend can make 1 batch request.
+
+    Performance optimizations:
+    - High concurrency (20 parallel) to minimize wait time
+    - Short per-job timeout (5s) to fail fast on slow calls
+    - Overall endpoint timeout (15s) to prevent hanging
+    - Results caching (60s TTL)
+
+    Args:
+        request: BatchRunsRequest with job_ids list and optional limit
+        ws: WorkspaceClient dependency
+
+    Returns:
+        BatchRunsResponse with runs keyed by job_id (as string)
+    """
+    start_time = time.time()
+
+    if not ws:
+        raise HTTPException(
+            status_code=503,
+            detail="WorkspaceClient not available. Check Databricks credentials.",
+        )
+
+    # Limit batch size to prevent abuse
+    job_ids = request.job_ids[:100]  # Max 100 jobs per batch
+    logger.info(f"[BATCH] Starting batch fetch for {len(job_ids)} jobs")
+
+    # Higher concurrency for faster response (was 10, now 20)
+    semaphore = asyncio.Semaphore(20)
+
+    async def fetch_job_runs(job_id: int) -> tuple[int, list[JobApiRunOut]]:
+        """Fetch runs for a single job with caching."""
+        # Check cache first
+        cache_key = f"job_runs:{job_id}:{request.limit}"
+        cached = response_cache.get(cache_key)
+        if cached:
+            return (job_id, cached)
+
+        async with semaphore:
+            try:
+                runs = await asyncio.wait_for(
+                    asyncio.to_thread(lambda jid=job_id: list(ws.jobs.list_runs(job_id=jid, limit=request.limit))),
+                    timeout=5,  # Shorter timeout (was 10s, now 5s)
+                )
+                result = [_run_to_model(r) for r in runs]
+                # Cache for 60 seconds
+                response_cache.set(cache_key, result, 60)
+                return (job_id, result)
+            except asyncio.TimeoutError:
+                logger.debug(f"Timeout fetching runs for job {job_id}")
+                return (job_id, [])
+            except Exception as e:
+                logger.debug(f"Failed to fetch runs for job {job_id}: {e}")
+                return (job_id, [])
+
+    try:
+        # Overall timeout for the entire batch operation (15s max)
+        tasks = [fetch_job_runs(job_id) for job_id in job_ids]
+        results = await asyncio.wait_for(
+            asyncio.gather(*tasks),
+            timeout=15,
+        )
+
+        # Build response dict (keys must be strings for JSON)
+        runs_by_job = {str(job_id): runs for job_id, runs in results}
+
+        elapsed = time.time() - start_time
+        logger.info(f"[BATCH] Completed {len(job_ids)} jobs in {elapsed:.1f}s")
+
+        return BatchRunsResponse(runs_by_job=runs_by_job)
+
+    except asyncio.TimeoutError:
+        elapsed = time.time() - start_time
+        logger.warning(f"[BATCH] Overall timeout after {elapsed:.1f}s for {len(job_ids)} jobs")
+        # Return empty result on timeout rather than error
+        return BatchRunsResponse(runs_by_job={})
+
+
 @router.get("/runs/{job_id}", response_model=list[JobApiRunOut])
 async def list_job_runs_api(
     job_id: int,
