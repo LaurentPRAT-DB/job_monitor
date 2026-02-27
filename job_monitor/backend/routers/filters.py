@@ -1,6 +1,7 @@
 """Filter presets API - persisted to Delta table."""
 
 import logging
+import time
 from datetime import datetime
 from typing import Literal
 
@@ -12,6 +13,10 @@ from job_monitor.backend.core import get_ws_prefer_user, get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/filters", tags=["filters"])
+
+# Simple in-memory cache for filter presets (they rarely change)
+_presets_cache: dict = {"data": None, "timestamp": 0}
+PRESETS_CACHE_TTL = 60  # 60 seconds cache for presets
 
 # Table name for filter presets
 PRESETS_TABLE = f"{settings.cache_catalog}.{settings.cache_schema}.filter_presets"
@@ -109,6 +114,14 @@ async def get_filter_presets(
     ws=Depends(get_ws_prefer_user),
 ) -> list[FilterPreset]:
     """Get all saved filter presets."""
+    global _presets_cache
+
+    # Check cache first
+    now = time.time()
+    if _presets_cache["data"] is not None and (now - _presets_cache["timestamp"]) < PRESETS_CACHE_TTL:
+        logger.debug("Returning cached filter presets")
+        return _presets_cache["data"]
+
     if not ws:
         logger.warning("No workspace client available for filter presets")
         return []
@@ -156,11 +169,25 @@ async def get_filter_presets(
                 created_by=row_dict["created_by"] or "unknown",
                 is_shared=row_dict["is_shared"] if row_dict["is_shared"] is not None else True,
             ))
+
+        # Update cache
+        _presets_cache["data"] = presets
+        _presets_cache["timestamp"] = time.time()
+        logger.debug(f"Cached {len(presets)} filter presets")
+
         return presets
 
     except Exception as e:
         logger.error(f"Error fetching filter presets: {e}")
         return []
+
+
+def invalidate_presets_cache():
+    """Invalidate the presets cache when data changes."""
+    global _presets_cache
+    _presets_cache["data"] = None
+    _presets_cache["timestamp"] = 0
+    logger.debug("Filter presets cache invalidated")
 
 
 @router.post("/presets", response_model=FilterPreset)
@@ -217,6 +244,9 @@ async def create_filter_preset(
             raise HTTPException(status_code=500, detail=f"Failed to save preset: {error_msg}")
 
         logger.info(f"Created filter preset: {preset_id} for user {current_user}")
+
+        # Invalidate cache so next GET returns fresh data
+        invalidate_presets_cache()
 
         return FilterPreset(
             id=preset_id,
@@ -288,6 +318,9 @@ async def update_filter_preset(
             if row[1]:
                 created_by = row[1]
 
+        # Invalidate cache so next GET returns fresh data
+        invalidate_presets_cache()
+
         return FilterPreset(
             id=preset_id,
             name=preset_data.name,
@@ -322,6 +355,8 @@ async def delete_filter_preset(
             statement=f"DELETE FROM {PRESETS_TABLE} WHERE id = '{preset_id}'",
             wait_timeout="30s",
         )
+        # Invalidate cache so next GET returns fresh data
+        invalidate_presets_cache()
         return {"deleted": True}
     except Exception as e:
         logger.error(f"Error deleting filter preset: {e}")

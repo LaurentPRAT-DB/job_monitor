@@ -1,5 +1,6 @@
 """FastAPI application entry point for Job Monitor."""
 
+import asyncio
 import json
 import logging
 import os
@@ -94,6 +95,38 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
             raise
 
 
+async def warm_up_caches(app: FastAPI) -> None:
+    """Pre-warm frequently accessed caches on startup.
+
+    This runs in the background after the app starts to reduce
+    cold-start latency for the first users.
+    """
+    logger.info("Starting cache warm-up task...")
+
+    # Wait a few seconds for the app to fully initialize
+    await asyncio.sleep(3)
+
+    try:
+        ws = app.state.workspace_client
+        if not ws:
+            logger.warning("No workspace client available for cache warm-up")
+            return
+
+        # Warm up filter presets cache (frequently accessed, ~3s without cache)
+        try:
+            from job_monitor.backend.routers.filters import get_filter_presets
+            # Call with the workspace client directly
+            presets = await get_filter_presets(ws=ws)
+            logger.info(f"Warmed up filter presets cache: {len(presets)} presets")
+        except Exception as e:
+            logger.warning(f"Failed to warm up filter presets: {e}")
+
+        logger.info("Cache warm-up complete")
+
+    except Exception as e:
+        logger.error(f"Cache warm-up failed: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler for startup and shutdown."""
@@ -135,6 +168,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     setup_scheduler()
     scheduler.start()
     logger.info("Scheduler started with scheduled report jobs")
+
+    # Start cache warm-up task in background (doesn't block startup)
+    asyncio.create_task(warm_up_caches(app))
 
     yield
 

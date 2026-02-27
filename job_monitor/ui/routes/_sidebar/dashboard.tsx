@@ -206,7 +206,12 @@ export default function Dashboard() {
     enabled: effectiveWorkspaceId !== 'pending',
   })
 
-  const isLoading = userLoading || healthLoading || alertsLoading || costLoading
+  // Consider loading if:
+  // 1. User data is still loading (needed to get workspace ID)
+  // 2. Workspace ID is pending (health/alerts/cost queries haven't started yet)
+  // 3. Any of the data queries are actively loading
+  const isWaitingForWorkspace = effectiveWorkspaceId === 'pending'
+  const isLoading = userLoading || isWaitingForWorkspace || healthLoading || alertsLoading || costLoading
 
   // Calculate metrics from summary response (all counts pre-computed server-side)
   const totalJobs = healthData?.total_count ?? 0
