@@ -27,10 +27,11 @@ export function GlobalFilterBar() {
   const { filters, setFilters, clearFilters, hasActiveFilters } = useFilters();
 
   // Get current user info for workspace name
+  // Use standardized queryKey to enable cache sharing across components
   const { data: userInfo } = useQuery<UserInfo>({
-    queryKey: ['user', 'me'],
+    queryKey: queryKeys.user.current(),
     queryFn: getCurrentUser,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    ...queryPresets.session,
   });
 
   // Count active filters for badge

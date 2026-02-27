@@ -9,7 +9,7 @@ import { HistoricalChart } from '@/components/historical-chart';
 import { MetricSummaryCard } from '@/components/metric-summary-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, TrendingUp, DollarSign, AlertTriangle } from 'lucide-react';
-import { queryPresets } from '@/lib/query-config';
+import { queryKeys, queryPresets } from '@/lib/query-config';
 import { getCurrentUser, type UserInfo } from '@/lib/api';
 
 interface HistoricalData {
@@ -25,10 +25,11 @@ export default function HistoricalDashboard() {
   const days = getDaysFromRange(filters.timeRange);
 
   // Fetch user info first (session preset - rarely changes)
+  // Use standardized queryKey to enable cache sharing across components
   const { data: user } = useQuery<UserInfo>({
-    queryKey: ['user'],
+    queryKey: queryKeys.user.current(),
     queryFn: getCurrentUser,
-    staleTime: Infinity,
+    ...queryPresets.session,
   });
 
   // Determine effective workspace ID

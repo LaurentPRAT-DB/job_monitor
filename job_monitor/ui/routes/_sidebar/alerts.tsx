@@ -14,7 +14,7 @@ import {
 } from '@/lib/alert-utils';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { queryPresets } from '@/lib/query-config';
+import { queryKeys, queryPresets } from '@/lib/query-config';
 import { RefreshCw, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -24,16 +24,18 @@ import { getCurrentUser, type UserInfo } from '@/lib/api';
 const PAGE_SIZE = 50;
 
 export default function AlertsPage() {
-  const [categoryFilter, setCategoryFilter] = useState<AlertCategory | 'all'>('all');
+  // Default to 'failure' category - it's the fastest query (~1s vs ~30s for 'all')
+  const [categoryFilter, setCategoryFilter] = useState<AlertCategory | 'all'>('failure');
   const [severityFilter, setSeverityFilter] = useState<AlertSeverity | 'all'>('all');
   const queryClient = useQueryClient();
   const { filters } = useFilters();
 
   // Fetch user info first (session preset - rarely changes)
+  // Use standardized queryKey to enable cache sharing across components
   const { data: user } = useQuery<UserInfo>({
-    queryKey: ['user'],
+    queryKey: queryKeys.user.current(),
     queryFn: getCurrentUser,
-    staleTime: Infinity,
+    ...queryPresets.session,
   });
 
   // Determine effective workspace ID

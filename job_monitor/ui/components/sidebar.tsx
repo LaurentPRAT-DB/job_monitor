@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Link, useLocation } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { getCurrentUser } from '@/lib/api'
+import { queryKeys, queryPresets } from '@/lib/query-config'
 
 // Version from package.json - updated at build time
 const APP_VERSION = '1.1.0'
@@ -93,9 +94,9 @@ function NavigationContent({ onNavigate }: { onNavigate?: () => void }) {
 // Desktop Sidebar - hidden on mobile
 export function Sidebar() {
   const { data: user } = useQuery({
-    queryKey: ['user'],
+    queryKey: queryKeys.user.current(),
     queryFn: getCurrentUser,
-    staleTime: Infinity, // User info doesn't change during session
+    ...queryPresets.session,
   })
 
   return (
@@ -118,9 +119,9 @@ export function Sidebar() {
 export function MobileNav() {
   const [open, setOpen] = useState(false)
   const { data: user } = useQuery({
-    queryKey: ['user'],
+    queryKey: queryKeys.user.current(),
     queryFn: getCurrentUser,
-    staleTime: Infinity,
+    ...queryPresets.session,
   })
 
   return (

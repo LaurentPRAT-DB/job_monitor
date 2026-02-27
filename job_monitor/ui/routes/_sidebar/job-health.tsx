@@ -11,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { JobHealthTable } from '@/components/job-health-table';
 import type { JobWithSla } from '@/lib/health-utils';
-import { queryPresets } from '@/lib/query-config';
+import { queryKeys, queryPresets } from '@/lib/query-config';
 import { useFilters } from '@/lib/filter-context';
 import { matchesJobPatterns } from '@/lib/filter-utils';
 import { getCurrentUser, type UserInfo } from '@/lib/api';
@@ -67,10 +67,11 @@ export default function JobHealthPage() {
   const jobFilterFromUrl = search?.job || null;
 
   // Fetch user info first (session preset - rarely changes)
+  // Use standardized queryKey to enable cache sharing across components
   const { data: user } = useQuery<UserInfo>({
-    queryKey: ['user'],
+    queryKey: queryKeys.user.current(),
     queryFn: getCurrentUser,
-    staleTime: Infinity,
+    ...queryPresets.session,
   });
 
   // Determine effective workspace ID
