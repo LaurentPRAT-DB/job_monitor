@@ -19,6 +19,8 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { JobExpandedDetails } from '@/components/job-expanded-details';
+import { useFilters } from '@/lib/filter-context';
+import { matchesJobPatterns } from '@/lib/filter-utils';
 
 // Sort and filter types
 type SortColumn = 'job_name' | 'state' | 'start_time' | 'duration';
@@ -413,6 +415,7 @@ export default function RunningJobsPage() {
   const [sortColumn, setSortColumn] = useState<SortColumn>('start_time');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [stateFilter, setStateFilter] = useState<StateFilter>('RUNNING');
+  const { filters } = useFilters();
 
   const {
     data,
@@ -463,6 +466,13 @@ export default function RunningJobsPage() {
 
     let result = allRuns;
 
+    // Apply job name pattern filter (wildcard matching)
+    if (filters.jobNamePatterns.length > 0) {
+      result = result.filter(r =>
+        matchesJobPatterns(r.run_name || `Job ${r.job_id}`, filters.jobNamePatterns)
+      );
+    }
+
     // Apply state filter
     if (stateFilter !== 'all') {
       if (stateFilter === 'PENDING') {
@@ -474,7 +484,7 @@ export default function RunningJobsPage() {
 
     // Apply sorting
     return [...result].sort((a, b) => compareRuns(a, b, sortColumn, sortDirection));
-  }, [allRuns, stateFilter, sortColumn, sortDirection]);
+  }, [allRuns, stateFilter, sortColumn, sortDirection, filters.jobNamePatterns]);
 
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
@@ -594,6 +604,18 @@ export default function RunningJobsPage() {
         </div>
       )}
 
+      {/* Pattern filter active indicator */}
+      {filters.jobNamePatterns.length > 0 && totalActive > 0 && (
+        <div className="mb-4 flex items-center gap-2 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg px-4 py-2">
+          <span className="text-sm text-purple-700 dark:text-purple-300">
+            Job name filter active: <span className="font-mono font-semibold">{filters.jobNamePatterns.join(', ')}</span>
+            <span className="ml-2 text-purple-500">
+              ({filteredAndSortedRuns.length} of {allRuns.length} jobs match)
+            </span>
+          </span>
+        </div>
+      )}
+
       {/* Error state */}
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
@@ -654,10 +676,16 @@ export default function RunningJobsPage() {
                     <div className="text-gray-500 dark:text-gray-400">
                       <Play className="h-12 w-12 mx-auto mb-4 opacity-50" />
                       <p className="text-lg font-medium">
-                        {stateFilter !== 'all' ? `No ${stateFilter.toLowerCase()} jobs` : 'No jobs currently running'}
+                        {filters.jobNamePatterns.length > 0
+                          ? 'No jobs match your filter'
+                          : stateFilter !== 'all'
+                          ? `No ${stateFilter.toLowerCase()} jobs`
+                          : 'No jobs currently running'}
                       </p>
                       <p className="text-sm mt-1">
-                        {stateFilter !== 'all'
+                        {filters.jobNamePatterns.length > 0
+                          ? `Pattern "${filters.jobNamePatterns.join(', ')}" doesn't match any running jobs.`
+                          : stateFilter !== 'all'
                           ? 'Try clearing the filter to see all jobs.'
                           : 'All jobs are idle. Check back later or trigger a job run.'}
                       </p>
