@@ -14,10 +14,16 @@
  *   3. Run: node tests/load-test.js [duration_hours]
  *
  * Default duration: 1 hour
+ *
+ * Exit codes:
+ *   0 - All benchmarks passed
+ *   1 - Some benchmarks failed (warnings)
+ *   2 - Critical benchmarks failed
  */
 
 const CDP = require('chrome-remote-interface');
 const fs = require('fs');
+const path = require('path');
 
 // Configuration
 // E2 workspace (DEFAULT profile)
@@ -27,6 +33,56 @@ const DURATION_MS = DURATION_HOURS * 60 * 60 * 1000;
 const REPORT_INTERVAL_MS = 5 * 60 * 1000; // Report every 5 minutes
 const CLICK_DELAY_MS = 2000; // Delay between actions
 const API_POLL_INTERVAL_MS = 30000; // Poll APIs every 30 seconds
+
+// ============================================
+// BENCHMARK THRESHOLDS
+// ============================================
+// These define pass/warn/fail criteria for performance
+const BENCHMARKS = {
+  // Response time thresholds (in milliseconds)
+  responseTime: {
+    // Fast endpoints (auth, simple lookups)
+    fast: {
+      p95_warn: 1000,    // Warn if P95 > 1s
+      p95_fail: 3000,    // Fail if P95 > 3s
+      avg_warn: 500,     // Warn if avg > 500ms
+      avg_fail: 2000,    // Fail if avg > 2s
+      endpoints: ['User Info', 'Filter Presets', 'Active Jobs'],
+    },
+    // Medium endpoints (aggregated data)
+    medium: {
+      p95_warn: 5000,    // Warn if P95 > 5s
+      p95_fail: 15000,   // Fail if P95 > 15s
+      avg_warn: 3000,    // Warn if avg > 3s
+      avg_fail: 10000,   // Fail if avg > 10s
+      endpoints: ['Health Metrics 7d', 'Historical Runs 7d'],
+    },
+    // Slow endpoints (complex queries, large datasets)
+    slow: {
+      p95_warn: 15000,   // Warn if P95 > 15s
+      p95_fail: 45000,   // Fail if P95 > 45s
+      avg_warn: 10000,   // Warn if avg > 10s
+      avg_fail: 30000,   // Fail if avg > 30s
+      endpoints: ['Health Metrics 30d', 'Historical Runs 30d', 'Cost Summary', 'Alerts'],
+    },
+  },
+  // Cache hit rate thresholds (percentage)
+  cacheHitRate: {
+    warn: 30,   // Warn if cache hit rate < 30%
+    target: 50, // Target cache hit rate
+    good: 70,   // Good if cache hit rate > 70%
+  },
+  // Error rate thresholds (percentage)
+  errorRate: {
+    warn: 1,    // Warn if error rate > 1%
+    fail: 5,    // Fail if error rate > 5%
+  },
+  // Page load thresholds (milliseconds)
+  pageLoad: {
+    p95_warn: 5000,   // Warn if P95 > 5s
+    p95_fail: 15000,  // Fail if P95 > 15s
+  },
+};
 
 // Metrics storage
 const metrics = {
@@ -171,6 +227,185 @@ function formatDuration(ms) {
   return `${(ms / 3600000).toFixed(1)}h`;
 }
 
+// Get endpoint category (fast, medium, slow)
+function getEndpointCategory(name) {
+  for (const [category, config] of Object.entries(BENCHMARKS.responseTime)) {
+    if (config.endpoints && config.endpoints.includes(name)) {
+      return category;
+    }
+  }
+  return 'slow'; // Default to slow for unknown endpoints
+}
+
+// Evaluate benchmarks and return results
+function evaluateBenchmarks() {
+  const results = {
+    passed: [],
+    warnings: [],
+    failures: [],
+    summary: {
+      totalChecks: 0,
+      passed: 0,
+      warnings: 0,
+      failures: 0,
+    },
+  };
+
+  // Evaluate API endpoint response times
+  for (const [name, data] of Object.entries(metrics.apiCalls)) {
+    if (data.count === 0) continue;
+
+    const category = getEndpointCategory(name);
+    const thresholds = BENCHMARKS.responseTime[category];
+    const avg = data.totalTime / data.count;
+    const p95 = percentile(data.times, 95);
+
+    results.summary.totalChecks += 2; // avg and p95
+
+    // Check P95
+    if (p95 > thresholds.p95_fail) {
+      results.failures.push({
+        check: `${name} P95`,
+        value: formatDuration(p95),
+        threshold: formatDuration(thresholds.p95_fail),
+        message: `P95 response time exceeds failure threshold`,
+      });
+      results.summary.failures++;
+    } else if (p95 > thresholds.p95_warn) {
+      results.warnings.push({
+        check: `${name} P95`,
+        value: formatDuration(p95),
+        threshold: formatDuration(thresholds.p95_warn),
+        message: `P95 response time exceeds warning threshold`,
+      });
+      results.summary.warnings++;
+    } else {
+      results.passed.push({ check: `${name} P95`, value: formatDuration(p95) });
+      results.summary.passed++;
+    }
+
+    // Check average
+    if (avg > thresholds.avg_fail) {
+      results.failures.push({
+        check: `${name} Avg`,
+        value: formatDuration(avg),
+        threshold: formatDuration(thresholds.avg_fail),
+        message: `Average response time exceeds failure threshold`,
+      });
+      results.summary.failures++;
+    } else if (avg > thresholds.avg_warn) {
+      results.warnings.push({
+        check: `${name} Avg`,
+        value: formatDuration(avg),
+        threshold: formatDuration(thresholds.avg_warn),
+        message: `Average response time exceeds warning threshold`,
+      });
+      results.summary.warnings++;
+    } else {
+      results.passed.push({ check: `${name} Avg`, value: formatDuration(avg) });
+      results.summary.passed++;
+    }
+  }
+
+  // Evaluate cache hit rate
+  const totalCacheOps = metrics.cacheHits + metrics.cacheMisses;
+  if (totalCacheOps > 0) {
+    const cacheHitRate = (metrics.cacheHits / totalCacheOps) * 100;
+    results.summary.totalChecks++;
+
+    if (cacheHitRate < BENCHMARKS.cacheHitRate.warn) {
+      results.warnings.push({
+        check: 'Cache Hit Rate',
+        value: `${cacheHitRate.toFixed(1)}%`,
+        threshold: `${BENCHMARKS.cacheHitRate.warn}%`,
+        message: `Cache hit rate below warning threshold`,
+      });
+      results.summary.warnings++;
+    } else if (cacheHitRate >= BENCHMARKS.cacheHitRate.good) {
+      results.passed.push({
+        check: 'Cache Hit Rate',
+        value: `${cacheHitRate.toFixed(1)}%`,
+        note: 'Excellent',
+      });
+      results.summary.passed++;
+    } else {
+      results.passed.push({
+        check: 'Cache Hit Rate',
+        value: `${cacheHitRate.toFixed(1)}%`,
+      });
+      results.summary.passed++;
+    }
+  }
+
+  // Evaluate overall error rate
+  let totalCalls = 0;
+  let totalErrors = 0;
+  for (const data of Object.values(metrics.apiCalls)) {
+    totalCalls += data.count;
+    totalErrors += data.errors;
+  }
+
+  if (totalCalls > 0) {
+    const errorRate = (totalErrors / totalCalls) * 100;
+    results.summary.totalChecks++;
+
+    if (errorRate > BENCHMARKS.errorRate.fail) {
+      results.failures.push({
+        check: 'Error Rate',
+        value: `${errorRate.toFixed(2)}%`,
+        threshold: `${BENCHMARKS.errorRate.fail}%`,
+        message: `Error rate exceeds failure threshold`,
+      });
+      results.summary.failures++;
+    } else if (errorRate > BENCHMARKS.errorRate.warn) {
+      results.warnings.push({
+        check: 'Error Rate',
+        value: `${errorRate.toFixed(2)}%`,
+        threshold: `${BENCHMARKS.errorRate.warn}%`,
+        message: `Error rate exceeds warning threshold`,
+      });
+      results.summary.warnings++;
+    } else {
+      results.passed.push({
+        check: 'Error Rate',
+        value: `${errorRate.toFixed(2)}%`,
+      });
+      results.summary.passed++;
+    }
+  }
+
+  // Evaluate page load times
+  for (const [name, data] of Object.entries(metrics.pageLoads)) {
+    if (data.count === 0) continue;
+
+    const p95 = percentile(data.times, 95);
+    results.summary.totalChecks++;
+
+    if (p95 > BENCHMARKS.pageLoad.p95_fail) {
+      results.failures.push({
+        check: `${name} Page Load P95`,
+        value: formatDuration(p95),
+        threshold: formatDuration(BENCHMARKS.pageLoad.p95_fail),
+        message: `Page load P95 exceeds failure threshold`,
+      });
+      results.summary.failures++;
+    } else if (p95 > BENCHMARKS.pageLoad.p95_warn) {
+      results.warnings.push({
+        check: `${name} Page Load P95`,
+        value: formatDuration(p95),
+        threshold: formatDuration(BENCHMARKS.pageLoad.p95_warn),
+        message: `Page load P95 exceeds warning threshold`,
+      });
+      results.summary.warnings++;
+    } else {
+      results.passed.push({ check: `${name} Page Load P95`, value: formatDuration(p95) });
+      results.summary.passed++;
+    }
+  }
+
+  return results;
+}
+
 // Generate report
 function generateReport(interim = false) {
   const now = Date.now();
@@ -271,6 +506,53 @@ function generateReport(interim = false) {
     report += '\n';
   }
 
+  // Benchmark Results
+  const benchmarkResults = evaluateBenchmarks();
+
+  report += `${'─'.repeat(80)}\n`;
+  report += `BENCHMARK RESULTS\n`;
+  report += `${'─'.repeat(80)}\n`;
+
+  const { summary } = benchmarkResults;
+  const passRate = summary.totalChecks > 0
+    ? ((summary.passed / summary.totalChecks) * 100).toFixed(1)
+    : '0.0';
+
+  report += `Total Checks: ${summary.totalChecks}\n`;
+  report += `Passed:       ${summary.passed} (${passRate}%)\n`;
+  report += `Warnings:     ${summary.warnings}\n`;
+  report += `Failures:     ${summary.failures}\n\n`;
+
+  if (benchmarkResults.failures.length > 0) {
+    report += `FAILURES:\n`;
+    for (const f of benchmarkResults.failures) {
+      report += `  ❌ ${f.check}: ${f.value} (threshold: ${f.threshold})\n`;
+      report += `     ${f.message}\n`;
+    }
+    report += '\n';
+  }
+
+  if (benchmarkResults.warnings.length > 0) {
+    report += `WARNINGS:\n`;
+    for (const w of benchmarkResults.warnings) {
+      report += `  ⚠️  ${w.check}: ${w.value} (threshold: ${w.threshold})\n`;
+      report += `     ${w.message}\n`;
+    }
+    report += '\n';
+  }
+
+  // Overall status
+  let overallStatus;
+  if (summary.failures > 0) {
+    overallStatus = '❌ FAILED';
+  } else if (summary.warnings > 0) {
+    overallStatus = '⚠️  PASSED WITH WARNINGS';
+  } else {
+    overallStatus = '✅ PASSED';
+  }
+
+  report += `Overall Status: ${overallStatus}\n\n`;
+
   // Recommendations
   report += `${'─'.repeat(80)}\n`;
   report += `RECOMMENDATIONS\n`;
@@ -278,34 +560,40 @@ function generateReport(interim = false) {
 
   const recommendations = [];
 
-  // Check for slow endpoints
-  for (const [name, data] of Object.entries(metrics.apiCalls)) {
-    const avg = data.count > 0 ? data.totalTime / data.count : 0;
-    const p95 = percentile(data.times, 95);
-    if (avg > 2000) {
-      recommendations.push(`⚠️  ${name}: Average response time ${formatDuration(avg)} is high. Consider caching or query optimization.`);
+  // Add recommendations based on benchmark failures
+  for (const f of benchmarkResults.failures) {
+    if (f.check.includes('P95')) {
+      recommendations.push(`❌ ${f.check}: Consider query optimization, caching, or pagination.`);
+    } else if (f.check.includes('Error Rate')) {
+      recommendations.push(`❌ Investigate API errors. Check logs at /logz for details.`);
     }
-    if (p95 > 5000) {
-      recommendations.push(`⚠️  ${name}: P95 response time ${formatDuration(p95)} indicates occasional slowdowns.`);
-    }
-    if (data.errors > 0) {
-      const errorRate = ((data.errors / data.count) * 100).toFixed(1);
-      recommendations.push(`❌ ${name}: ${errorRate}% error rate (${data.errors}/${data.count} calls failed).`);
+  }
+
+  for (const w of benchmarkResults.warnings) {
+    if (w.check.includes('Cache Hit Rate')) {
+      recommendations.push(`⚠️  Low cache hit rate. Increase staleTime in TanStack Query presets.`);
+    } else if (w.check.includes('P95') || w.check.includes('Avg')) {
+      const category = getEndpointCategory(w.check.split(' ')[0]);
+      if (category === 'slow') {
+        recommendations.push(`⚠️  ${w.check}: Consider using cache tables for pre-aggregated data.`);
+      } else {
+        recommendations.push(`⚠️  ${w.check}: Investigate query performance.`);
+      }
     }
   }
 
   // Check cache effectiveness
   if (parseFloat(overallCacheRate) < 30) {
-    recommendations.push(`⚠️  Low cache hit rate (${overallCacheRate}%). Consider increasing staleTime or cacheTime in TanStack Query.`);
+    if (!recommendations.some(r => r.includes('cache'))) {
+      recommendations.push(`⚠️  Low cache hit rate (${overallCacheRate}%). Consider increasing staleTime or cacheTime in TanStack Query.`);
+    }
   } else if (parseFloat(overallCacheRate) > 70) {
-    recommendations.push(`✅ Good cache hit rate (${overallCacheRate}%). Client-side caching is working effectively.`);
+    recommendations.push(`✅ Excellent cache hit rate (${overallCacheRate}%). Client-side caching is working effectively.`);
   }
 
   // Check error rate
   const overallErrorRate = totalApiCalls > 0 ? ((totalApiErrors / totalApiCalls) * 100).toFixed(2) : 0;
-  if (parseFloat(overallErrorRate) > 1) {
-    recommendations.push(`❌ Overall API error rate is ${overallErrorRate}%. Investigate failing endpoints.`);
-  } else if (totalApiErrors === 0) {
+  if (parseFloat(overallErrorRate) === 0 && totalApiErrors === 0) {
     recommendations.push(`✅ No API errors recorded. System is stable.`);
   }
 
@@ -318,6 +606,9 @@ function generateReport(interim = false) {
   }
 
   report += `\n${'='.repeat(80)}\n`;
+
+  // Store benchmark results for JSON export
+  metrics.benchmarks = benchmarkResults;
 
   return report;
 }
@@ -516,14 +807,62 @@ async function runLoadTest() {
   const finalReport = generateReport(false);
   console.log(finalReport);
 
-  const reportFile = `tests/load-test-report-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+  // Create reports directory if it doesn't exist
+  const reportsDir = path.join(__dirname, 'reports');
+  if (!fs.existsSync(reportsDir)) {
+    fs.mkdirSync(reportsDir, { recursive: true });
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const reportFile = path.join(reportsDir, `load-test-${timestamp}.txt`);
   saveReport(finalReport, reportFile);
 
   // Also save JSON metrics for further analysis
   const jsonFile = reportFile.replace('.txt', '.json');
   fs.writeFileSync(jsonFile, JSON.stringify(metrics, null, 2));
   console.log(`JSON metrics saved to: ${jsonFile}`);
+
+  // Save latest results for CI/CD integration
+  const latestFile = path.join(reportsDir, 'latest.json');
+  fs.writeFileSync(latestFile, JSON.stringify({
+    timestamp: new Date().toISOString(),
+    duration: DURATION_HOURS,
+    url: BASE_URL,
+    benchmarks: metrics.benchmarks,
+    summary: {
+      totalApiCalls: Object.values(metrics.apiCalls).reduce((sum, d) => sum + d.count, 0),
+      totalErrors: Object.values(metrics.apiCalls).reduce((sum, d) => sum + d.errors, 0),
+      cacheHitRate: (metrics.cacheHits + metrics.cacheMisses) > 0
+        ? ((metrics.cacheHits / (metrics.cacheHits + metrics.cacheMisses)) * 100).toFixed(1)
+        : '0.0',
+    },
+  }, null, 2));
+  console.log(`Latest results saved to: ${latestFile}`);
+
+  // Return exit code based on benchmark results
+  return metrics.benchmarks;
 }
 
-// Run the test
-runLoadTest().catch(console.error);
+// Run the test and exit with appropriate code
+runLoadTest()
+  .then((benchmarks) => {
+    if (!benchmarks) {
+      console.error('No benchmark results available');
+      process.exit(2);
+    }
+
+    if (benchmarks.summary.failures > 0) {
+      console.log(`\n❌ Load test FAILED: ${benchmarks.summary.failures} benchmark(s) failed`);
+      process.exit(2);
+    } else if (benchmarks.summary.warnings > 0) {
+      console.log(`\n⚠️  Load test PASSED with ${benchmarks.summary.warnings} warning(s)`);
+      process.exit(1);
+    } else {
+      console.log(`\n✅ Load test PASSED: All ${benchmarks.summary.passed} benchmarks passed`);
+      process.exit(0);
+    }
+  })
+  .catch((err) => {
+    console.error('Load test error:', err);
+    process.exit(2);
+  });

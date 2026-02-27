@@ -8,3 +8,8 @@ build/
 node_modules/
 job_monitor/ui/tsconfig.tsbuildinfo
 coverage
+
+# Load test reports
+tests/reports/*.txt
+tests/reports/*.json
+!tests/reports/.gitkeep
