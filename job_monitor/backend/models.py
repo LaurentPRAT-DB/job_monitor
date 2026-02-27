@@ -203,6 +203,23 @@ class JobHealthListOut(BaseModel):
     healthy_count: int = 0
 
 
+class JobHealthSummaryOut(BaseModel):
+    """Lightweight summary of job health counts without full job list.
+
+    Used for fast dashboard loading - returns only aggregate counts,
+    not individual job details. Much faster than full health-metrics query.
+    """
+
+    total_count: int
+    p1_count: int  # Critical - consecutive failures
+    p2_count: int  # Warning - single failure
+    p3_count: int  # Info - yellow zone (70-89% success)
+    healthy_count: int  # Healthy - 90%+ success
+    window_days: int  # 7 or 30
+    from_cache: bool = False
+    avg_success_rate: float = 0.0  # Average success rate across all jobs
+
+
 # Duration and expanded details models for job row expansion
 
 

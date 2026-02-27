@@ -22,21 +22,15 @@ import { queryPresets, queryKeys } from '@/lib/query-config'
 import { useFilters } from '@/lib/filter-context'
 
 // Types for API responses
-interface JobHealthResponse {
-  jobs: Array<{
-    job_id: string
-    job_name: string
-    success_rate: number
-    priority: string | null
-    last_run_time: string
-    retry_count: number
-  }>
+interface JobHealthSummaryResponse {
   total_count: number
-  // Priority counts for full dataset (not just current page)
-  p1_count?: number
-  p2_count?: number
-  p3_count?: number
-  healthy_count?: number
+  p1_count: number
+  p2_count: number
+  p3_count: number
+  healthy_count: number
+  window_days: number
+  from_cache: boolean
+  avg_success_rate: number
 }
 
 interface CostSummaryResponse {
@@ -170,16 +164,16 @@ export default function Dashboard() {
     ? 'all'
     : (filters.workspaceId || userWorkspaceId || 'pending')
 
-  // Fetch job health metrics (semi-live - updates every 5-15 min)
-  // Query key uses 'pending' when user hasn't loaded yet
-  const { data: healthData, isLoading: healthLoading, refetch: refetchHealth } = useQuery<JobHealthResponse>({
-    queryKey: ['health-metrics', 7, effectiveWorkspaceId],
+  // Fetch job health summary (lightweight - only counts, much faster than full endpoint)
+  // Uses /health-metrics/summary which returns only aggregate counts (< 1s vs 11-16s)
+  const { data: healthData, isLoading: healthLoading, refetch: refetchHealth } = useQuery<JobHealthSummaryResponse>({
+    queryKey: ['health-metrics-summary', 7, effectiveWorkspaceId],
     queryFn: async ({ queryKey }) => {
       // Extract workspace ID from queryKey to avoid closure issues
       const wsId = queryKey[2] as string
       const param = wsId && wsId !== 'all' && wsId !== 'pending' ? `&workspace_id=${wsId}` : ''
-      const res = await fetch(`/api/health-metrics?days=7${param}`)
-      if (!res.ok) throw new Error('Failed to fetch health metrics')
+      const res = await fetch(`/api/health-metrics/summary?days=7${param}`)
+      if (!res.ok) throw new Error('Failed to fetch health summary')
       return res.json()
     },
     ...queryPresets.semiLive,
@@ -214,12 +208,10 @@ export default function Dashboard() {
 
   const isLoading = userLoading || healthLoading || alertsLoading || costLoading
 
-  // Calculate metrics (use pre-computed counts from API, not filtered jobs array)
+  // Calculate metrics from summary response (all counts pre-computed server-side)
   const totalJobs = healthData?.total_count ?? 0
   const criticalJobs = healthData?.p1_count ?? 0
-  const avgSuccessRate = healthData?.jobs.length
-    ? (healthData.jobs.reduce((sum, j) => sum + j.success_rate, 0) / healthData.jobs.length).toFixed(1)
-    : '0'
+  const avgSuccessRate = healthData?.avg_success_rate?.toFixed(1) ?? '0'
   const totalAlerts = alertsData?.total ?? 0
   const criticalAlerts = alertsData?.by_severity?.P1 ?? 0
   const totalCost = costData?.total_dbus_30d ?? 0

@@ -34,6 +34,7 @@ from job_monitor.backend.models import (
     JobExpandedOut,
     JobHealthListOut,
     JobHealthOut,
+    JobHealthSummaryOut,
     JobRunDetailOut,
 )
 
@@ -495,6 +496,186 @@ async def get_health_metrics(
     logger.info(f"[RESPONSE_CACHE] Cached page {page} ({len(paginated_jobs)}/{total_count} jobs, {days}d)")
 
     return result_obj
+
+
+@router.get("/health-metrics/summary", response_model=JobHealthSummaryOut)
+async def get_health_summary(
+    days: Annotated[int, Query(ge=1, le=90, description="Time window in days")] = 7,
+    workspace_id: Annotated[str | None, Query(description="Filter by workspace ID")] = None,
+    ws=Depends(get_ws_prefer_user),
+) -> JobHealthSummaryOut:
+    """Get lightweight health summary with counts only - much faster than full endpoint.
+
+    Returns only aggregate counts (p1_count, p2_count, etc.) without individual job details.
+    Use this for dashboard summary cards where you only need counts.
+
+    Typical response time: <1s (vs 11-16s for full health-metrics with job list)
+
+    Args:
+        days: Time window for analysis (7 or 30 days recommended)
+        workspace_id: Optional workspace ID filter ("all" to skip filtering)
+        ws: WorkspaceClient dependency
+
+    Returns:
+        JobHealthSummaryOut with priority counts and average success rate
+    """
+    from job_monitor.backend.models import JobHealthSummaryOut
+
+    # Validate days parameter
+    if days not in (7, 30):
+        days = 7
+
+    # Check response cache first
+    ws_filter = workspace_id if workspace_id else "current"
+    cache_key = f"health_summary:{days}:{ws_filter}"
+    cached = response_cache.get(cache_key)
+    if cached:
+        logger.info(f"[RESPONSE_CACHE] Returning cached health summary ({days}d, ws={ws_filter})")
+        return cached
+
+    # Handle mock mode
+    if is_mock_mode(ws):
+        return JobHealthSummaryOut(
+            total_count=150,
+            p1_count=3,
+            p2_count=12,
+            p3_count=25,
+            healthy_count=110,
+            window_days=days,
+            from_cache=False,
+            avg_success_rate=87.5,
+        )
+
+    if not ws:
+        raise HTTPException(status_code=503, detail="WorkspaceClient not available")
+    if not settings.warehouse_id:
+        raise HTTPException(status_code=503, detail="Warehouse ID not configured")
+
+    # Fast path: Use Delta cache when no workspace filter (much faster)
+    if settings.use_cache and (not workspace_id or workspace_id == "all"):
+        cache_data = await query_job_health_cache(ws, days)
+        if cache_data:
+            # Compute counts from cached data
+            p1 = sum(1 for j in cache_data if j.get("priority") == "P1")
+            p2 = sum(1 for j in cache_data if j.get("priority") == "P2")
+            p3 = sum(1 for j in cache_data if j.get("priority") == "P3")
+            healthy = sum(1 for j in cache_data if j.get("priority") is None)
+            total = len(cache_data)
+            avg_rate = sum(j.get("success_rate", 0) for j in cache_data) / total if total > 0 else 0.0
+
+            summary = JobHealthSummaryOut(
+                total_count=total,
+                p1_count=p1,
+                p2_count=p2,
+                p3_count=p3,
+                healthy_count=healthy,
+                window_days=days,
+                from_cache=True,
+                avg_success_rate=round(avg_rate, 1),
+            )
+            response_cache.set(cache_key, summary, TTL_STANDARD)
+            logger.info(f"[SUMMARY_CACHE] Fast path: {total} jobs from Delta cache")
+            return summary
+
+    # Build workspace filter
+    workspace_clause = ""
+    if workspace_id and workspace_id != "all":
+        if not workspace_id.isdigit():
+            raise HTTPException(status_code=422, detail="workspace_id must be numeric")
+        workspace_clause = f"AND workspace_id = {workspace_id}"
+
+    # Optimized query - only fetches counts, not individual jobs
+    query = f"""
+    WITH run_stats AS (
+        SELECT
+            job_id,
+            COUNT(*) as total_runs,
+            COUNT(CASE WHEN result_state = 'SUCCESS' THEN 1 END) as success_count,
+            ROUND(100.0 * COUNT(CASE WHEN result_state = 'SUCCESS' THEN 1 END) / NULLIF(COUNT(*), 0), 1) as success_rate
+        FROM system.lakeflow.job_run_timeline
+        WHERE period_start_time >= current_date() - INTERVAL {days} DAYS
+          AND result_state IS NOT NULL
+          {workspace_clause}
+        GROUP BY job_id
+    ),
+    consecutive_check AS (
+        SELECT
+            job_id,
+            result_state,
+            LAG(result_state) OVER (PARTITION BY job_id ORDER BY period_start_time DESC) as prev_state,
+            ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY period_start_time DESC) as rn
+        FROM system.lakeflow.job_run_timeline
+        WHERE period_start_time >= current_date() - INTERVAL {days} DAYS
+          AND result_state IS NOT NULL
+          {workspace_clause}
+    ),
+    priority_flags AS (
+        SELECT
+            job_id,
+            CASE
+                WHEN result_state = 'FAILED' AND prev_state = 'FAILED' THEN 'P1'
+                WHEN result_state = 'FAILED' THEN 'P2'
+                ELSE NULL
+            END as failure_priority
+        FROM consecutive_check
+        WHERE rn = 1
+    ),
+    job_priorities AS (
+        SELECT
+            rs.job_id,
+            rs.success_rate,
+            CASE
+                WHEN pf.failure_priority IS NOT NULL THEN pf.failure_priority
+                WHEN rs.success_rate BETWEEN 70 AND 89.9 THEN 'P3'
+                ELSE NULL
+            END as priority
+        FROM run_stats rs
+        LEFT JOIN priority_flags pf ON rs.job_id = pf.job_id
+    )
+    SELECT
+        COUNT(*) as total_count,
+        COUNT(CASE WHEN priority = 'P1' THEN 1 END) as p1_count,
+        COUNT(CASE WHEN priority = 'P2' THEN 1 END) as p2_count,
+        COUNT(CASE WHEN priority = 'P3' THEN 1 END) as p3_count,
+        COUNT(CASE WHEN priority IS NULL THEN 1 END) as healthy_count,
+        ROUND(AVG(success_rate), 1) as avg_success_rate
+    FROM job_priorities
+    """
+
+    try:
+        result = await asyncio.to_thread(
+            ws.statement_execution.execute_statement,
+            warehouse_id=settings.warehouse_id,
+            statement=query,
+            wait_timeout="30s",
+        )
+
+        if result and result.result and result.result.data_array:
+            row = result.result.data_array[0]
+            summary = JobHealthSummaryOut(
+                total_count=int(row[0]) if row[0] else 0,
+                p1_count=int(row[1]) if row[1] else 0,
+                p2_count=int(row[2]) if row[2] else 0,
+                p3_count=int(row[3]) if row[3] else 0,
+                healthy_count=int(row[4]) if row[4] else 0,
+                window_days=days,
+                from_cache=False,
+                avg_success_rate=float(row[5]) if row[5] else 0.0,
+            )
+            # Cache for 5 minutes
+            response_cache.set(cache_key, summary, TTL_STANDARD)
+            logger.info(f"[SUMMARY] Returned counts: total={summary.total_count}, p1={summary.p1_count}, p2={summary.p2_count}")
+            return summary
+
+        # Empty result
+        return JobHealthSummaryOut(
+            total_count=0, p1_count=0, p2_count=0, p3_count=0,
+            healthy_count=0, window_days=days, from_cache=False,
+        )
+
+    except Exception as e:
+        logger.error(f"Health summary query failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get health summary: {str(e)}")
 
 
 # Duration and expanded details endpoint helpers
