@@ -534,7 +534,7 @@ async def get_health_summary(
         return cached
 
     # Handle mock mode
-    if is_mock_mode(ws):
+    if is_mock_mode():
         return JobHealthSummaryOut(
             total_count=150,
             p1_count=3,
