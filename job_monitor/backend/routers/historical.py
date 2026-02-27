@@ -48,23 +48,35 @@ def _get_granularity(days: int) -> tuple[str, Literal["hourly", "daily", "weekly
 
 async def _execute_query(ws, warehouse_id: str, query: str) -> list[dict]:
     """Execute SQL query and return results as list of dicts."""
+    import logging
     from databricks.sdk.service.sql import StatementState
 
-    result = await asyncio.to_thread(
-        ws.statement_execution.execute_statement,
-        warehouse_id=warehouse_id,
-        statement=query,
-        wait_timeout="30s",
-    )
+    logger = logging.getLogger(__name__)
 
-    if result.status.state != StatementState.SUCCEEDED:
+    try:
+        result = await asyncio.to_thread(
+            ws.statement_execution.execute_statement,
+            warehouse_id=warehouse_id,
+            statement=query,
+            wait_timeout="30s",
+        )
+
+        if result.status.state != StatementState.SUCCEEDED:
+            logger.warning(
+                f"Historical query failed with state {result.status.state}: "
+                f"{result.status.error.message if result.status.error else 'Unknown error'}"
+            )
+            return []
+
+        if not result.manifest or not result.result or not result.result.data_array:
+            logger.debug("Historical query returned no data")
+            return []
+
+        columns = [col.name for col in result.manifest.schema.columns]
+        return [dict(zip(columns, row)) for row in result.result.data_array]
+    except Exception as e:
+        logger.error(f"Historical query execution error: {e}")
         return []
-
-    if not result.manifest or not result.result or not result.result.data_array:
-        return []
-
-    columns = [col.name for col in result.manifest.schema.columns]
-    return [dict(zip(columns, row)) for row in result.result.data_array]
 
 
 @router.get("/costs", response_model=HistoricalResponse)
@@ -72,6 +84,7 @@ async def get_historical_costs(
     days: Annotated[int, Query(ge=1, le=90)] = 7,
     team: Annotated[str | None, Query()] = None,
     job_id: Annotated[str | None, Query()] = None,
+    workspace_id: Annotated[str | None, Query()] = None,
     ws=Depends(get_ws_prefer_user),
 ) -> HistoricalResponse:
     """Get historical cost data with auto-granularity and previous period comparison."""
@@ -90,6 +103,8 @@ async def get_historical_costs(
 
     # Build optional filter clauses
     filters = []
+    if workspace_id:
+        filters.append(f"AND workspace_id = '{workspace_id}'")
     if team:
         filters.append(
             f"AND usage_metadata.job_id IN (SELECT job_id FROM job_team_map WHERE team = '{team}')"
@@ -162,6 +177,7 @@ async def get_historical_success_rate(
     days: Annotated[int, Query(ge=1, le=90)] = 7,
     team: Annotated[str | None, Query()] = None,
     job_id: Annotated[str | None, Query()] = None,
+    workspace_id: Annotated[str | None, Query()] = None,
     ws=Depends(get_ws_prefer_user),
 ) -> HistoricalResponse:
     """Get historical success rate with auto-granularity and previous period comparison."""
@@ -180,6 +196,8 @@ async def get_historical_success_rate(
 
     # Build optional filter clauses
     filters = []
+    if workspace_id:
+        filters.append(f"AND workspace_id = '{workspace_id}'")
     if job_id:
         filters.append(f"AND job_id = '{job_id}'")
     filter_sql = " ".join(filters)
@@ -244,6 +262,7 @@ async def get_historical_sla_breaches(
     days: Annotated[int, Query(ge=1, le=90)] = 7,
     team: Annotated[str | None, Query()] = None,
     job_id: Annotated[str | None, Query()] = None,
+    workspace_id: Annotated[str | None, Query()] = None,
     ws=Depends(get_ws_prefer_user),
 ) -> HistoricalResponse:
     """Get historical SLA breach count with auto-granularity and previous period comparison."""
@@ -261,6 +280,8 @@ async def get_historical_sla_breaches(
     interval, granularity = _get_granularity(days)
 
     filters = []
+    if workspace_id:
+        filters.append(f"AND workspace_id = '{workspace_id}'")
     if job_id:
         filters.append(f"AND job_id = '{job_id}'")
     filter_sql = " ".join(filters)

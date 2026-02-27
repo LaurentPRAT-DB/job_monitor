@@ -8,12 +8,18 @@ System tables have 5-15 minute latency, while Jobs API provides instant access t
 """
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from job_monitor.backend.core import get_ws
+
+logger = logging.getLogger(__name__)
+
+# Default timeout for Jobs API calls (seconds)
+JOBS_API_TIMEOUT = 30
 from job_monitor.backend.models import (
     ActiveRunsOut,
     ActiveRunsWithHistoryOut,
@@ -98,8 +104,17 @@ async def list_jobs_api(
         )
 
     try:
-        jobs = await asyncio.to_thread(lambda: list(ws.jobs.list(limit=limit)))
+        jobs = await asyncio.wait_for(
+            asyncio.to_thread(lambda: list(ws.jobs.list(limit=limit))),
+            timeout=JOBS_API_TIMEOUT,
+        )
         return [_job_to_model(j) for j in jobs]
+    except asyncio.TimeoutError:
+        logger.warning(f"Jobs API timeout after {JOBS_API_TIMEOUT}s for list jobs")
+        raise HTTPException(
+            status_code=504,
+            detail=f"Jobs API request timed out after {JOBS_API_TIMEOUT}s",
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -136,10 +151,17 @@ async def list_job_runs_api(
         )
 
     try:
-        runs = await asyncio.to_thread(
-            lambda: list(ws.jobs.list_runs(job_id=job_id, limit=limit))
+        runs = await asyncio.wait_for(
+            asyncio.to_thread(lambda: list(ws.jobs.list_runs(job_id=job_id, limit=limit))),
+            timeout=JOBS_API_TIMEOUT,
         )
         return [_run_to_model(r) for r in runs]
+    except asyncio.TimeoutError:
+        logger.warning(f"Jobs API timeout after {JOBS_API_TIMEOUT}s for job {job_id} runs")
+        raise HTTPException(
+            status_code=504,
+            detail=f"Jobs API request timed out after {JOBS_API_TIMEOUT}s",
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -179,8 +201,9 @@ async def get_active_runs(
         )
 
     try:
-        runs = await asyncio.to_thread(
-            lambda: list(ws.jobs.list_runs(active_only=True))
+        runs = await asyncio.wait_for(
+            asyncio.to_thread(lambda: list(ws.jobs.list_runs(active_only=True))),
+            timeout=JOBS_API_TIMEOUT,
         )
         run_models = [_run_to_model(r) for r in runs]
 
@@ -197,6 +220,12 @@ async def get_active_runs(
             page=page,
             page_size=page_size,
             has_more=has_more,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"Jobs API timeout after {JOBS_API_TIMEOUT}s for active runs")
+        raise HTTPException(
+            status_code=504,
+            detail=f"Jobs API request timed out after {JOBS_API_TIMEOUT}s. Try again later.",
         )
     except Exception as e:
         raise HTTPException(
@@ -231,9 +260,10 @@ async def get_active_runs_with_history(
         )
 
     try:
-        # Get active runs
-        active_runs = await asyncio.to_thread(
-            lambda: list(ws.jobs.list_runs(active_only=True))
+        # Get active runs with timeout
+        active_runs = await asyncio.wait_for(
+            asyncio.to_thread(lambda: list(ws.jobs.list_runs(active_only=True))),
+            timeout=JOBS_API_TIMEOUT,
         )
 
         # Get unique job IDs - limit to 50 to keep response time reasonable
@@ -308,6 +338,12 @@ async def get_active_runs_with_history(
 
         return ActiveRunsWithHistoryOut(
             total_active=len(enriched_runs), runs=enriched_runs
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"Jobs API timeout after {JOBS_API_TIMEOUT}s for active runs with history")
+        raise HTTPException(
+            status_code=504,
+            detail=f"Jobs API request timed out after {JOBS_API_TIMEOUT}s",
         )
     except Exception as e:
         raise HTTPException(
