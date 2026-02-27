@@ -5,21 +5,36 @@ System tables have 5-15 minute latency, while Jobs API provides instant access t
 - Currently running jobs
 - Recent run status
 - Job definitions not yet in system tables (365-day retention limit)
+
+Performance optimizations:
+- Response caching for active runs (30s TTL)
+- Limited pagination to avoid fetching all pages
+- Summary endpoint for count-only dashboard display
 """
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from job_monitor.backend.core import get_ws
+from job_monitor.backend.response_cache import response_cache
 
 logger = logging.getLogger(__name__)
 
 # Default timeout for Jobs API calls (seconds)
 JOBS_API_TIMEOUT = 30
+
+# Cache TTL for active runs (seconds) - short TTL for near-real-time updates
+ACTIVE_RUNS_CACHE_TTL = 30
+
+# Maximum pages to fetch for active runs (each page = 100 runs)
+# This limits the worst case to ~3 pages = 300 runs = ~3-5 seconds
+MAX_ACTIVE_RUNS_PAGES = 3
 from job_monitor.backend.models import (
     ActiveRunsOut,
     ActiveRunsWithHistoryOut,
@@ -28,6 +43,16 @@ from job_monitor.backend.models import (
     JobApiRunOut,
     RecentRunStatus,
 )
+
+
+class ActiveRunsSummary(BaseModel):
+    """Lightweight summary of active runs for dashboard display."""
+    total_active: int
+    running_count: int
+    pending_count: int
+    queued_count: int
+    from_cache: bool = False
+    cache_age_seconds: int = 0
 
 router = APIRouter(prefix="/api/jobs-api", tags=["Jobs API"])
 
@@ -169,6 +194,132 @@ async def list_job_runs_api(
         )
 
 
+async def _fetch_active_runs_cached(ws) -> tuple[list, float]:
+    """Fetch active runs with caching and limited pagination.
+
+    Returns (runs_list, cache_timestamp) tuple.
+    """
+    cache_key = "active_runs_all"
+    cached = response_cache.get(cache_key)
+    if cached:
+        logger.info(f"[CACHE_HIT] Active runs from cache ({len(cached['runs'])} runs)")
+        return cached["runs"], cached["timestamp"]
+
+    # Fetch with limited pagination to avoid long waits
+    # Using iterator with manual pagination control
+    runs = []
+    page_count = 0
+
+    try:
+        # Get the iterator - don't convert to list() which fetches all pages
+        runs_iter = ws.jobs.list_runs(active_only=True)
+
+        # Manually iterate with page limit
+        for run in runs_iter:
+            runs.append(run)
+            # Each "page" from API is ~100 runs
+            if len(runs) >= MAX_ACTIVE_RUNS_PAGES * 100:
+                logger.info(f"[ACTIVE_RUNS] Reached max limit ({len(runs)} runs), stopping pagination")
+                break
+    except Exception as e:
+        logger.error(f"Error fetching active runs: {e}")
+        raise
+
+    # Cache the results
+    cache_data = {"runs": runs, "timestamp": time.time()}
+    response_cache.set(cache_key, cache_data, ACTIVE_RUNS_CACHE_TTL)
+    logger.info(f"[CACHE_SET] Cached {len(runs)} active runs (TTL={ACTIVE_RUNS_CACHE_TTL}s)")
+
+    return runs, time.time()
+
+
+@router.get("/active/summary", response_model=ActiveRunsSummary)
+async def get_active_runs_summary(
+    ws=Depends(get_ws),
+) -> ActiveRunsSummary:
+    """Get a lightweight summary of active runs for dashboard display.
+
+    Returns only counts (not full run details) for fast dashboard loading.
+    Cached for 30 seconds to balance freshness with performance.
+
+    Returns:
+        Summary with total_active, running_count, pending_count, queued_count
+    """
+    if not ws:
+        raise HTTPException(
+            status_code=503,
+            detail="WorkspaceClient not available. Check Databricks credentials.",
+        )
+
+    try:
+        runs, cache_time = await asyncio.wait_for(
+            asyncio.to_thread(lambda: _fetch_active_runs_cached_sync(ws)),
+            timeout=JOBS_API_TIMEOUT,
+        )
+
+        # Count by state
+        running = pending = queued = 0
+        for run in runs:
+            state = run.state.life_cycle_state.value if run.state and run.state.life_cycle_state else ""
+            if state == "RUNNING":
+                running += 1
+            elif state == "PENDING":
+                pending += 1
+            elif state == "QUEUED":
+                queued += 1
+
+        cache_age = int(time.time() - cache_time) if cache_time else 0
+
+        return ActiveRunsSummary(
+            total_active=len(runs),
+            running_count=running,
+            pending_count=pending,
+            queued_count=queued,
+            from_cache=cache_age > 0,
+            cache_age_seconds=cache_age,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"Jobs API timeout after {JOBS_API_TIMEOUT}s for active runs summary")
+        raise HTTPException(
+            status_code=504,
+            detail=f"Jobs API request timed out after {JOBS_API_TIMEOUT}s",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get active runs summary: {str(e)}",
+        )
+
+
+def _fetch_active_runs_cached_sync(ws) -> tuple[list, float]:
+    """Synchronous version for use with asyncio.to_thread."""
+    cache_key = "active_runs_all"
+    cached = response_cache.get(cache_key)
+    if cached:
+        logger.info(f"[CACHE_HIT] Active runs from cache ({len(cached['runs'])} runs)")
+        return cached["runs"], cached["timestamp"]
+
+    # Fetch with limited pagination
+    runs = []
+    try:
+        runs_iter = ws.jobs.list_runs(active_only=True)
+        for run in runs_iter:
+            runs.append(run)
+            if len(runs) >= MAX_ACTIVE_RUNS_PAGES * 100:
+                logger.info(f"[ACTIVE_RUNS] Reached max limit ({len(runs)} runs)")
+                break
+    except Exception as e:
+        logger.error(f"Error fetching active runs: {e}")
+        raise
+
+    # Cache the results
+    cache_data = {"runs": runs, "timestamp": time.time()}
+    response_cache.set(cache_key, cache_data, ACTIVE_RUNS_CACHE_TTL)
+    logger.info(f"[CACHE_SET] Cached {len(runs)} active runs")
+
+    return runs, time.time()
+
+
 @router.get("/active", response_model=ActiveRunsOut)
 async def get_active_runs(
     page: Annotated[int, Query(ge=1, description="Page number (1-indexed)")] = 1,
@@ -177,14 +328,13 @@ async def get_active_runs(
     ] = 50,
     ws=Depends(get_ws),
 ) -> ActiveRunsOut:
-    """Get all currently active/running jobs via Jobs API (real-time).
+    """Get currently active/running jobs via Jobs API (real-time).
 
     Returns jobs that are currently running or pending with pagination support.
-    This is the primary endpoint for real-time monitoring dashboards showing
-    "currently running" status.
+    Results are cached for 30 seconds to balance freshness with performance.
 
-    Note: System tables have 5-15 minute latency, so this endpoint is
-    essential for accurate real-time monitoring.
+    Note: Limited to first 300 active runs for performance. Use filters
+    if you need to see specific jobs in large workspaces.
 
     Args:
         page: Page number (1-indexed, default 1)
@@ -201,8 +351,8 @@ async def get_active_runs(
         )
 
     try:
-        runs = await asyncio.wait_for(
-            asyncio.to_thread(lambda: list(ws.jobs.list_runs(active_only=True))),
+        runs, _ = await asyncio.wait_for(
+            asyncio.to_thread(lambda: _fetch_active_runs_cached_sync(ws)),
             timeout=JOBS_API_TIMEOUT,
         )
         run_models = [_run_to_model(r) for r in runs]
