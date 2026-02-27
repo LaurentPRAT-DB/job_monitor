@@ -8,16 +8,20 @@ import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchAlerts, getUnacknowledgedCount } from "@/lib/alert-utils";
 import { AlertDrawer } from "./alert-drawer";
+import { queryKeys, queryPresets } from "@/lib/query-config";
 
 export function AlertBadge() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [jobFilter, setJobFilter] = useState<{ jobId: string; jobName: string } | null>(null);
 
-  // Fetch alerts for badge count
+  // Fetch alerts for badge count - use slow preset to reduce polling load
+  // The staleTime (10min) prevents refetches on navigation while refetchInterval
+  // ensures periodic updates in the background
   const { data } = useQuery({
-    queryKey: ["alerts"],
+    queryKey: queryKeys.alerts.all,
     queryFn: () => fetchAlerts(),
-    refetchInterval: 60000, // 60 seconds
+    ...queryPresets.slow,
+    refetchInterval: 60000, // 60 seconds - background refresh
   });
 
   const unacknowledgedCount = data ? getUnacknowledgedCount(data.alerts) : 0;

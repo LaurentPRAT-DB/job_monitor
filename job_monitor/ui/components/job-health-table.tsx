@@ -1,9 +1,14 @@
 /**
  * Job health table with expandable rows, sortable columns, search, and pagination.
  * Displays all jobs with their health status, supporting expand/collapse for details.
+ *
+ * Performance optimization: When "All" page size is selected with 100+ items,
+ * the table uses virtualization (@tanstack/react-virtual) to render only
+ * visible rows, significantly improving performance for large datasets (4000+ jobs).
  */
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowUp, ArrowDown, ArrowUpDown, Search, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import {
   Table,
@@ -18,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { JobHealthRow } from '@/components/job-health-row';
 import type { JobWithSla } from '@/lib/health-utils';
 import { fetchAlerts, type Alert } from '@/lib/alert-utils';
+import { queryKeys, queryPresets } from '@/lib/query-config';
 
 type SortColumn = 'job_name' | 'success_rate' | 'priority' | 'sla_minutes' | 'last_run_time' | 'retry_count';
 type SortDirection = 'asc' | 'desc';
@@ -67,7 +73,14 @@ function compareJobs(a: JobWithSla, b: JobWithSla, column: SortColumn, direction
   return direction === 'asc' ? result : -result;
 }
 
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+// Page size options - 'all' triggers virtualization for large datasets
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 'all'] as const;
+type PageSizeOption = typeof PAGE_SIZE_OPTIONS[number];
+
+// Threshold for enabling virtualization (row count)
+const VIRTUALIZATION_THRESHOLD = 100;
+// Estimated row height for virtualization
+const ROW_HEIGHT = 56;
 
 export function JobHealthTable({ jobs, isLoading, onRefetch, initialSearchQuery }: JobHealthTableProps) {
   const [sortColumn, setSortColumn] = useState<SortColumn>('retry_count');
@@ -75,7 +88,10 @@ export function JobHealthTable({ jobs, isLoading, onRefetch, initialSearchQuery 
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery || '');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState<PageSizeOption>(10);
+
+  // Ref for virtualized scrolling container
+  const tableContainerRef = useRef<HTMLDivElement>(null);
 
   // Update search query when initialSearchQuery changes (e.g., from URL)
   useEffect(() => {
@@ -125,12 +141,27 @@ export function JobHealthTable({ jobs, isLoading, onRefetch, initialSearchQuery 
     return [...filteredJobs].sort((a, b) => compareJobs(a, b, sortColumn, sortDirection));
   }, [filteredJobs, sortColumn, sortDirection]);
 
-  // Paginate sorted jobs
-  const totalPages = Math.ceil(sortedJobs.length / pageSize);
+  // Determine if we should use virtualization
+  const useVirtualization = pageSize === 'all' && sortedJobs.length >= VIRTUALIZATION_THRESHOLD;
+
+  // Calculate effective page size for pagination
+  const effectivePageSize = pageSize === 'all' ? sortedJobs.length : pageSize;
+  const totalPages = pageSize === 'all' ? 1 : Math.ceil(sortedJobs.length / effectivePageSize);
+
+  // Paginate sorted jobs (when not using virtualization)
   const paginatedJobs = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return sortedJobs.slice(start, start + pageSize);
-  }, [sortedJobs, currentPage, pageSize]);
+    if (pageSize === 'all') return sortedJobs;
+    const start = (currentPage - 1) * effectivePageSize;
+    return sortedJobs.slice(start, start + effectivePageSize);
+  }, [sortedJobs, currentPage, effectivePageSize, pageSize]);
+
+  // Virtual row virtualizer for large datasets
+  const rowVirtualizer = useVirtualizer({
+    count: useVirtualization ? sortedJobs.length : 0,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 10, // Render 10 extra rows above/below viewport
+  });
 
   // Reset to page 1 when search, time filter, or page size changes
   const handleSearchChange = (value: string) => {
@@ -144,7 +175,7 @@ export function JobHealthTable({ jobs, isLoading, onRefetch, initialSearchQuery 
   };
 
   const handlePageSizeChange = (value: string) => {
-    setPageSize(Number(value));
+    setPageSize(value === 'all' ? 'all' : Number(value) as PageSizeOption);
     setCurrentPage(1);
   };
 
@@ -170,10 +201,12 @@ export function JobHealthTable({ jobs, isLoading, onRefetch, initialSearchQuery 
   );
 
   // Fetch all alerts once at table level to avoid N+1 queries
+  // Uses slow preset to share cache with alert-badge and reduce polling
   const { data: alertsData } = useQuery({
-    queryKey: ['alerts'],
+    queryKey: queryKeys.alerts.all,
     queryFn: () => fetchAlerts(),
-    refetchInterval: 60000,
+    ...queryPresets.slow,
+    refetchInterval: 60000, // Background refresh every 60s
   });
 
   const allAlerts: Alert[] = alertsData?.alerts ?? [];
@@ -288,34 +321,97 @@ export function JobHealthTable({ jobs, isLoading, onRefetch, initialSearchQuery 
         </div>
       </div>
 
-      {/* Table */}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-12"></TableHead>
-            <SortableHeader column="job_name">Job Name</SortableHeader>
-            <SortableHeader column="success_rate">Status</SortableHeader>
-            <SortableHeader column="priority">Priority</SortableHeader>
-            <SortableHeader column="sla_minutes">SLA Target</SortableHeader>
-            <TableHead className="w-[140px] hidden md:table-cell">Breach History</TableHead>
-            <SortableHeader column="last_run_time">Last Run</SortableHeader>
-            <SortableHeader column="retry_count">Retries</SortableHeader>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {paginatedJobs.length > 0 ? (
-            paginatedJobs.map((job) => (
-              <JobHealthRow key={job.job_id} job={job} onRefetch={onRefetch} allAlerts={allAlerts} />
-            ))
-          ) : (
+      {/* Table - with optional virtualization for large datasets */}
+      {useVirtualization ? (
+        // Virtualized table for "All" option with many rows
+        <div className="border rounded-lg overflow-hidden">
+          {/* Sticky header */}
+          <Table>
+            <TableHeader className="sticky top-0 bg-background z-10">
+              <TableRow>
+                <TableHead className="w-12"></TableHead>
+                <SortableHeader column="job_name">Job Name</SortableHeader>
+                <SortableHeader column="success_rate">Status</SortableHeader>
+                <SortableHeader column="priority">Priority</SortableHeader>
+                <SortableHeader column="sla_minutes">SLA Target</SortableHeader>
+                <TableHead className="w-[140px] hidden md:table-cell">Breach History</TableHead>
+                <SortableHeader column="last_run_time">Last Run</SortableHeader>
+                <SortableHeader column="retry_count">Retries</SortableHeader>
+              </TableRow>
+            </TableHeader>
+          </Table>
+          {/* Virtualized scrollable body */}
+          <div
+            ref={tableContainerRef}
+            className="overflow-auto"
+            style={{ maxHeight: '600px' }}
+          >
+            <div
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              <Table>
+                <TableBody>
+                  {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                    const job = sortedJobs[virtualRow.index];
+                    return (
+                      <TableRow
+                        key={job.job_id}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: `${virtualRow.size}px`,
+                          transform: `translateY(${virtualRow.start}px)`,
+                        }}
+                      >
+                        <JobHealthRow
+                          job={job}
+                          onRefetch={onRefetch}
+                          allAlerts={allAlerts}
+                        />
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        // Standard table with pagination
+        <Table>
+          <TableHeader>
             <TableRow>
-              <td colSpan={8} className="text-center py-8 text-gray-500 dark:text-gray-400">
-                No jobs match your search
-              </td>
+              <TableHead className="w-12"></TableHead>
+              <SortableHeader column="job_name">Job Name</SortableHeader>
+              <SortableHeader column="success_rate">Status</SortableHeader>
+              <SortableHeader column="priority">Priority</SortableHeader>
+              <SortableHeader column="sla_minutes">SLA Target</SortableHeader>
+              <TableHead className="w-[140px] hidden md:table-cell">Breach History</TableHead>
+              <SortableHeader column="last_run_time">Last Run</SortableHeader>
+              <SortableHeader column="retry_count">Retries</SortableHeader>
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {paginatedJobs.length > 0 ? (
+              paginatedJobs.map((job) => (
+                <JobHealthRow key={job.job_id} job={job} onRefetch={onRefetch} allAlerts={allAlerts} />
+              ))
+            ) : (
+              <TableRow>
+                <td colSpan={8} className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  No jobs match your search
+                </td>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      )}
 
       {/* Pagination controls */}
       {sortedJobs.length > 0 && (
@@ -324,71 +420,80 @@ export function JobHealthTable({ jobs, isLoading, onRefetch, initialSearchQuery 
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-500 dark:text-gray-400">Rows per page:</span>
             <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
-              <SelectTrigger className="w-[70px] h-8">
+              <SelectTrigger className="w-[80px] h-8">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {PAGE_SIZE_OPTIONS.map((size) => (
                   <SelectItem key={size} value={String(size)}>
-                    {size}
+                    {size === 'all' ? 'All' : size}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {useVirtualization && (
+              <span className="text-xs text-green-600 dark:text-green-400">(virtualized)</span>
+            )}
           </div>
 
           {/* Page info and navigation */}
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-500 dark:text-gray-400">
-              {((currentPage - 1) * pageSize) + 1}–{Math.min(currentPage * pageSize, sortedJobs.length)} of {sortedJobs.length}
+              {pageSize === 'all' ? (
+                <>{sortedJobs.length} jobs</>
+              ) : (
+                <>{((currentPage - 1) * effectivePageSize) + 1}–{Math.min(currentPage * effectivePageSize, sortedJobs.length)} of {sortedJobs.length}</>
+              )}
             </span>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setCurrentPage(1)}
-                disabled={currentPage === 1}
-                title="First page"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                <ChevronLeft className="h-4 w-4 -ml-2" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setCurrentPage(currentPage - 1)}
-                disabled={currentPage === 1}
-                title="Previous page"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-gray-700 dark:text-gray-300 min-w-[80px] text-center">
-                Page {currentPage} of {totalPages || 1}
-              </span>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setCurrentPage(currentPage + 1)}
-                disabled={currentPage >= totalPages}
-                title="Next page"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setCurrentPage(totalPages)}
-                disabled={currentPage >= totalPages}
-                title="Last page"
-              >
-                <ChevronRight className="h-4 w-4" />
-                <ChevronRight className="h-4 w-4 -ml-2" />
-              </Button>
-            </div>
+            {pageSize !== 'all' && (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  title="First page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronLeft className="h-4 w-4 -ml-2" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  title="Previous page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-gray-700 dark:text-gray-300 min-w-[80px] text-center">
+                  Page {currentPage} of {totalPages || 1}
+                </span>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
+                  title="Next page"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage >= totalPages}
+                  title="Last page"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="h-4 w-4 -ml-2" />
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}

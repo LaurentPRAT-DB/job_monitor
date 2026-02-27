@@ -1,8 +1,46 @@
 import { createRootRoute, createRoute, Outlet, redirect } from '@tanstack/react-router'
+import { QueryClient } from '@tanstack/react-query'
 import { AlertBadge } from './components/alert-badge'
 import { FilterProvider } from '@/lib/filter-context'
 import { GlobalFilterBar } from '@/components/global-filter-bar'
 import { Sidebar, MobileNav } from '@/components/sidebar'
+import { queryPresets } from '@/lib/query-config'
+
+// Create a query client reference for prefetching
+// This will be set when the router is created in main.tsx
+let queryClientRef: QueryClient | null = null
+export const setQueryClient = (qc: QueryClient) => { queryClientRef = qc }
+
+/**
+ * Prefetch adjacent page data in the background.
+ * This improves perceived performance when users navigate between pages.
+ */
+const prefetchAdjacentPages = async (currentPath: string) => {
+  if (!queryClientRef) return
+
+  const adjacentPaths: Record<string, string[]> = {
+    '/dashboard': ['/job-health', '/running-jobs'],
+    '/job-health': ['/dashboard', '/alerts'],
+    '/running-jobs': ['/dashboard', '/job-health'],
+    '/alerts': ['/job-health', '/historical'],
+    '/historical': ['/alerts', '/dashboard'],
+  }
+
+  const adjacent = adjacentPaths[currentPath] || []
+
+  // Prefetch health metrics summary for dashboard/job-health
+  if (adjacent.includes('/dashboard') || adjacent.includes('/job-health')) {
+    queryClientRef.prefetchQuery({
+      queryKey: ['health-metrics-summary'],
+      queryFn: async () => {
+        const res = await fetch('/api/health-metrics/summary?days=7')
+        if (!res.ok) throw new Error('Failed to prefetch')
+        return res.json()
+      },
+      ...queryPresets.semiLive,
+    })
+  }
+}
 
 // Root layout
 const rootRoute = createRootRoute({
@@ -52,6 +90,7 @@ const dashboardRoute = createRoute({
   getParentRoute: () => sidebarRoute,
   path: '/dashboard',
   component: Dashboard,
+  loader: () => prefetchAdjacentPages('/dashboard'),
 })
 
 // Running jobs route
@@ -60,6 +99,7 @@ const runningJobsRoute = createRoute({
   getParentRoute: () => sidebarRoute,
   path: '/running-jobs',
   component: RunningJobsPage,
+  loader: () => prefetchAdjacentPages('/running-jobs'),
 })
 
 // Job health route
@@ -68,6 +108,7 @@ const jobHealthRoute = createRoute({
   getParentRoute: () => sidebarRoute,
   path: '/job-health',
   component: JobHealthPage,
+  loader: () => prefetchAdjacentPages('/job-health'),
 })
 
 // Alerts route
@@ -76,6 +117,7 @@ const alertsRoute = createRoute({
   getParentRoute: () => sidebarRoute,
   path: '/alerts',
   component: AlertsPage,
+  loader: () => prefetchAdjacentPages('/alerts'),
 })
 
 // Historical route
@@ -84,6 +126,7 @@ const historicalRoute = createRoute({
   getParentRoute: () => sidebarRoute,
   path: '/historical',
   component: HistoricalDashboard,
+  loader: () => prefetchAdjacentPages('/historical'),
 })
 
 // Export route tree

@@ -5,12 +5,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/toaster'
 import { ThemeProvider } from '@/lib/theme-context'
 import { defaultQueryClientOptions } from '@/lib/query-config'
-import { routeTree } from './routeTree.gen.tsx'
+import { routeTree, setQueryClient } from './routeTree.gen.tsx'
 import './index.css'
 
 const queryClient = new QueryClient({
   defaultOptions: defaultQueryClientOptions,
 })
+
+// Set queryClient for route prefetching
+setQueryClient(queryClient)
 
 const router = createRouter({ routeTree })
 
