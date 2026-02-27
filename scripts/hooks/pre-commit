@@ -1,0 +1,30 @@
+#!/bin/bash
+# Git pre-commit hook for Job Monitor
+#
+# Runs validation on staged files before commit.
+# Install with: ./scripts/install-hooks.sh
+#
+# To bypass (use sparingly): git commit --no-verify
+
+# Get the project root
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Run validation on staged files only (quick mode for faster commits)
+cd "$PROJECT_ROOT"
+
+echo "Running pre-commit validation..."
+if ! ./scripts/validate.sh --staged --quick; then
+  echo ""
+  echo "Pre-commit validation failed."
+  echo "Fix the issues above or use 'git commit --no-verify' to bypass."
+  exit 1
+fi
+
+# If Databricks hook exists, run it too
+DATABRICKS_HOOK="$PROJECT_ROOT/.git/hooks/pre-commit.databricks"
+if [ -f "$DATABRICKS_HOOK" ] && [ -x "$DATABRICKS_HOOK" ]; then
+  "$DATABRICKS_HOOK"
+fi
+
+exit 0
