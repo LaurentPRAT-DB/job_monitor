@@ -1,7 +1,11 @@
 /**
  * Historical dashboard page with trend visualizations.
  * Shows cost, success rate, and failure trends with previous period comparison.
+ *
+ * Performance optimization: Lazy loads chart data - only fetches data for the
+ * currently selected tab. This reduces initial page load from 3 API calls to 1.
  */
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useFilters } from '@/lib/filter-context';
 import { getDaysFromRange } from '@/lib/filter-utils';
@@ -20,9 +24,14 @@ interface HistoricalData {
   change_percent: number;
 }
 
+type HistoricalTab = 'costs' | 'success' | 'failures';
+
 export default function HistoricalDashboard() {
   const { filters } = useFilters();
   const days = getDaysFromRange(filters.timeRange);
+
+  // Track selected tab for lazy loading - only fetch data when tab is active
+  const [selectedTab, setSelectedTab] = useState<HistoricalTab>('costs');
 
   // Fetch user info first (session preset - rarely changes)
   // Use standardized queryKey to enable cache sharing across components
@@ -51,6 +60,7 @@ export default function HistoricalDashboard() {
   };
 
   // Fetch historical cost data (static - past data doesn't change)
+  // Always enabled when workspace is ready (default tab)
   const { data: costData, isLoading: costLoading } = useQuery<HistoricalData>({
     queryKey: ['historical-costs', days, filters.team, filters.jobId, effectiveWorkspaceId],
     queryFn: async ({ queryKey }) => {
@@ -70,6 +80,7 @@ export default function HistoricalDashboard() {
   });
 
   // Fetch historical success rate data (static - past data doesn't change)
+  // Lazy loaded: only fetches when Success Rate tab is selected
   const { data: successData, isLoading: successLoading } = useQuery<HistoricalData>({
     queryKey: ['historical-success', days, filters.team, filters.jobId, effectiveWorkspaceId],
     queryFn: async ({ queryKey }) => {
@@ -84,10 +95,11 @@ export default function HistoricalDashboard() {
       return res.json();
     },
     ...queryPresets.static,
-    enabled: effectiveWorkspaceId !== 'pending',
+    enabled: effectiveWorkspaceId !== 'pending' && selectedTab === 'success',
   });
 
   // Fetch historical SLA breach data (static - past data doesn't change)
+  // Lazy loaded: only fetches when Failures tab is selected
   const { data: slaData, isLoading: slaLoading } = useQuery<HistoricalData>({
     queryKey: ['historical-sla', days, filters.team, filters.jobId, effectiveWorkspaceId],
     queryFn: async ({ queryKey }) => {
@@ -102,10 +114,14 @@ export default function HistoricalDashboard() {
       return res.json();
     },
     ...queryPresets.static,
-    enabled: effectiveWorkspaceId !== 'pending',
+    enabled: effectiveWorkspaceId !== 'pending' && selectedTab === 'failures',
   });
 
-  const isLoading = costLoading || successLoading || slaLoading;
+  // Only show loading for the currently selected tab
+  const isLoading =
+    (selectedTab === 'costs' && costLoading) ||
+    (selectedTab === 'success' && successLoading) ||
+    (selectedTab === 'failures' && slaLoading);
 
   const granularityLabel = costData?.granularity === 'hourly'
     ? 'Hourly'
@@ -137,14 +153,14 @@ export default function HistoricalDashboard() {
         />
         <MetricSummaryCard
           title="Avg Success Rate"
-          currentValue={successData?.current_total ?? 0}
+          currentValue={successData ? successData.current_total : '—'}
           previousValue={successData?.previous_total}
           changePercent={successData?.change_percent}
-          format="percentage"
+          format={successData ? 'percentage' : 'number'}
         />
         <MetricSummaryCard
           title="Total Failures"
-          currentValue={slaData?.current_total ?? 0}
+          currentValue={slaData ? slaData.current_total : '—'}
           previousValue={slaData?.previous_total}
           changePercent={slaData?.change_percent}
           invertColors={true}  // Fewer failures is better
@@ -156,7 +172,11 @@ export default function HistoricalDashboard() {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <Tabs defaultValue="costs" className="space-y-4">
+        <Tabs
+          value={selectedTab}
+          onValueChange={(value) => setSelectedTab(value as HistoricalTab)}
+          className="space-y-4"
+        >
           <TabsList>
             <TabsTrigger value="costs" className="gap-2">
               <DollarSign className="h-4 w-4" />
@@ -197,7 +217,11 @@ export default function HistoricalDashboard() {
               <p className="text-sm text-muted-foreground mb-4">
                 Percentage of successful job runs per time period
               </p>
-              {successData && (
+              {successLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : successData ? (
                 <HistoricalChart
                   data={successData.data}
                   granularity={successData.granularity}
@@ -206,7 +230,7 @@ export default function HistoricalDashboard() {
                   previousLabel={`Previous ${days}d`}
                   color="#22c55e"
                 />
-              )}
+              ) : null}
             </div>
           </TabsContent>
 
@@ -216,7 +240,11 @@ export default function HistoricalDashboard() {
               <p className="text-sm text-muted-foreground mb-4">
                 Count of failed job runs per time period
               </p>
-              {slaData && (
+              {slaLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : slaData ? (
                 <HistoricalChart
                   data={slaData.data}
                   granularity={slaData.granularity}
@@ -225,7 +253,7 @@ export default function HistoricalDashboard() {
                   previousLabel={`Previous ${days}d`}
                   color="#ef4444"
                 />
-              )}
+              ) : null}
             </div>
           </TabsContent>
         </Tabs>
