@@ -182,11 +182,21 @@ class JobHealthOut(BaseModel):
 
 
 class JobHealthListOut(BaseModel):
-    """Wrapper for job health list response."""
+    """Wrapper for job health list response with pagination support."""
 
     jobs: list[JobHealthOut]
     window_days: int  # 7 or 30
     total_count: int
+    # Pagination fields (optional for backward compatibility)
+    page: int = 1
+    page_size: int = 50
+    has_more: bool = False
+    from_cache: bool = False  # True if served from cache table
+    # Priority counts for summary stats (computed from full dataset)
+    p1_count: int = 0
+    p2_count: int = 0
+    p3_count: int = 0
+    healthy_count: int = 0
 
 
 # Duration and expanded details models for job row expansion

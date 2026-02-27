@@ -99,6 +99,61 @@ def _sort_by_priority(jobs: list[JobHealthOut]) -> list[JobHealthOut]:
     )
 
 
+def _compute_priority_counts(jobs: list[JobHealthOut]) -> dict:
+    """Compute priority counts from a list of jobs."""
+    p1_count = sum(1 for j in jobs if j.priority == "P1")
+    p2_count = sum(1 for j in jobs if j.priority == "P2")
+    p3_count = sum(1 for j in jobs if j.priority == "P3")
+    healthy_count = sum(1 for j in jobs if j.priority is None)
+    return {
+        "p1_count": p1_count,
+        "p2_count": p2_count,
+        "p3_count": p3_count,
+        "healthy_count": healthy_count,
+    }
+
+
+def _paginate_from_cache(
+    cache_data: list[dict], days: int, page: int, page_size: int
+) -> JobHealthListOut:
+    """Convert cache data to paginated JobHealthListOut.
+
+    Used for cache fallback when live queries fail or timeout.
+    """
+    all_jobs = [
+        JobHealthOut(
+            job_id=row["job_id"],
+            job_name=row["job_name"],
+            total_runs=row["total_runs"],
+            success_count=row["success_count"],
+            success_rate=row["success_rate"],
+            last_run_time=row["last_run_time"],
+            last_duration_seconds=row["last_duration_seconds"],
+            priority=row["priority"],
+            retry_count=row["retry_count"],
+        )
+        for row in cache_data
+    ]
+    total_count = len(all_jobs)
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_jobs = all_jobs[start_idx:end_idx]
+
+    # Compute priority counts from full dataset
+    counts = _compute_priority_counts(all_jobs)
+
+    return JobHealthListOut(
+        jobs=paginated_jobs,
+        window_days=days,
+        total_count=total_count,
+        page=page,
+        page_size=page_size,
+        has_more=end_idx < total_count,
+        from_cache=True,
+        **counts,
+    )
+
+
 @router.get("/health-metrics", response_model=JobHealthListOut)
 async def get_health_metrics(
     days: Annotated[
@@ -109,6 +164,14 @@ async def get_health_metrics(
         str | None,
         Query(description="Filter by workspace ID (omit or null for current, 'all' for all workspaces)"),
     ] = None,
+    page: Annotated[
+        int,
+        Query(description="Page number (1-indexed)", ge=1),
+    ] = 1,
+    page_size: Annotated[
+        int,
+        Query(description="Number of jobs per page", ge=10, le=500),
+    ] = 50,
     ws=Depends(get_ws_prefer_user),
 ) -> JobHealthListOut:
     """Get job health metrics with priority flags and retry counts.
@@ -145,15 +208,28 @@ async def get_health_metrics(
     # Check for mock data mode
     if is_mock_mode():
         logger.info(f"Mock mode enabled - returning mock health metrics for {days} days")
-        return get_mock_health_metrics(days)
+        mock_result = get_mock_health_metrics(days)
+        # Apply pagination to mock data
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paginated_jobs = mock_result.jobs[start_idx:end_idx]
+        return JobHealthListOut(
+            jobs=paginated_jobs,
+            window_days=days,
+            total_count=mock_result.total_count,
+            page=page,
+            page_size=page_size,
+            has_more=end_idx < mock_result.total_count,
+            from_cache=False,
+        )
 
     # Check in-memory response cache first (fastest path)
-    # Include workspace_id in cache key ('all' or specific ID)
+    # Include workspace_id and pagination in cache key
     ws_filter = workspace_id if workspace_id else "current"
-    cache_key = f"health_metrics:{days}:{ws_filter}"
+    cache_key = f"health_metrics:{days}:{ws_filter}:p{page}:s{page_size}"
     cached_response = response_cache.get(cache_key)
     if cached_response:
-        logger.info(f"[RESPONSE_CACHE] Returning cached health metrics ({days}d, ws={ws_filter})")
+        logger.info(f"[RESPONSE_CACHE] Returning cached health metrics ({days}d, ws={ws_filter}, page={page})")
         return cached_response
 
     logger.info(f"get_health_metrics called with days={days}")
@@ -174,12 +250,13 @@ async def get_health_metrics(
     # Try Delta table cache first for fast response
     # NOTE: Delta cache doesn't support workspace filtering, so skip it when workspace_id is specified
     use_delta_cache = settings.use_cache and (not workspace_id or workspace_id == "all")
+    delta_cache_data = None
     if use_delta_cache:
         logger.info("[CACHE] Attempting Delta cache lookup for health-metrics (no workspace filter)")
-        cached_data = await query_job_health_cache(ws, days)
-        if cached_data:
-            logger.info(f"[CACHE_HIT] health-metrics: returning {len(cached_data)} jobs from Delta cache")
-            jobs = [
+        delta_cache_data = await query_job_health_cache(ws, days)
+        if delta_cache_data:
+            logger.info(f"[CACHE_HIT] health-metrics: {len(delta_cache_data)} jobs from Delta cache")
+            all_jobs = [
                 JobHealthOut(
                     job_id=row["job_id"],
                     job_name=row["job_name"],
@@ -191,16 +268,30 @@ async def get_health_metrics(
                     priority=row["priority"],
                     retry_count=row["retry_count"],
                 )
-                for row in cached_data
+                for row in delta_cache_data
             ]
+            # Apply pagination
+            total_count = len(all_jobs)
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            paginated_jobs = all_jobs[start_idx:end_idx]
+
+            # Compute priority counts from full dataset
+            counts = _compute_priority_counts(all_jobs)
+
             result = JobHealthListOut(
-                jobs=jobs,
+                jobs=paginated_jobs,
                 window_days=days,
-                total_count=len(jobs),
+                total_count=total_count,
+                page=page,
+                page_size=page_size,
+                has_more=end_idx < total_count,
+                from_cache=True,
+                **counts,
             )
             # Cache in response cache for instant subsequent requests
             response_cache.set(cache_key, result, TTL_STANDARD)
-            logger.info(f"[RESPONSE_CACHE] Cached health metrics from Delta cache ({len(jobs)} jobs)")
+            logger.info(f"[RESPONSE_CACHE] Cached page {page} from Delta cache ({len(paginated_jobs)}/{total_count} jobs)")
             return result
         logger.info("[CACHE_MISS] health-metrics: falling back to live query")
     elif workspace_id:
@@ -338,14 +429,22 @@ async def get_health_metrics(
             if result.status and result.status.error:
                 error_msg = str(result.status.error)
                 logger.error(f"SQL Error: {error_msg}")
-                # Check for permission errors - fall back to mock data
+                # Check for permission errors - fall back to cache or mock data
                 if "INSUFFICIENT_PERMISSIONS" in error_msg or "USE SCHEMA" in error_msg:
-                    logger.warning("Permission denied on system tables - falling back to mock data")
+                    logger.warning("Permission denied on system tables - trying cache fallback")
+                    # Try cache fallback before mock data
+                    if delta_cache_data:
+                        logger.info("[CACHE_FALLBACK] Using Delta cache after permission error")
+                        return _paginate_from_cache(delta_cache_data, days, page, page_size)
                     return get_mock_health_metrics(days)
-            # Check if query is still pending/running - don't cache incomplete results
+            # Check if query is still pending/running - use cache fallback
             if result.status and result.status.state.value in ("PENDING", "RUNNING"):
-                logger.warning(f"Query still {result.status.state.value} after timeout - returning empty result (not cached)")
-                return JobHealthListOut(jobs=[], window_days=days, total_count=0)
+                logger.warning(f"Query still {result.status.state.value} after timeout - trying cache fallback")
+                # Try cache fallback
+                if delta_cache_data:
+                    logger.info("[CACHE_FALLBACK] Using Delta cache after query timeout")
+                    return _paginate_from_cache(delta_cache_data, days, page, page_size)
+                return JobHealthListOut(jobs=[], window_days=days, total_count=0, page=page, page_size=page_size)
             if result.result:
                 row_count = len(result.result.data_array) if result.result.data_array else 0
                 logger.info(f"Result row count: {row_count}")
@@ -359,7 +458,10 @@ async def get_health_metrics(
         logger.error(f"SQL execution failed: {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
-        # Fall back to mock data on any SQL error
+        # Try cache fallback before mock data
+        if delta_cache_data:
+            logger.warning("[CACHE_FALLBACK] SQL execution failed - using Delta cache")
+            return _paginate_from_cache(delta_cache_data, days, page, page_size)
         logger.warning("SQL execution failed - falling back to mock data")
         return get_mock_health_metrics(days)
 
@@ -368,15 +470,29 @@ async def get_health_metrics(
     # Apply secondary sort to ensure consistent ordering
     sorted_jobs = _sort_by_priority(jobs)
 
+    # Compute priority counts from full dataset
+    counts = _compute_priority_counts(sorted_jobs)
+
+    # Apply pagination
+    total_count = len(sorted_jobs)
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_jobs = sorted_jobs[start_idx:end_idx]
+
     result_obj = JobHealthListOut(
-        jobs=sorted_jobs,
+        jobs=paginated_jobs,
         window_days=days,
-        total_count=len(sorted_jobs),
+        total_count=total_count,
+        page=page,
+        page_size=page_size,
+        has_more=end_idx < total_count,
+        from_cache=False,
+        **counts,
     )
 
     # Cache the response for 5 minutes
     response_cache.set(cache_key, result_obj, TTL_STANDARD)
-    logger.info(f"[RESPONSE_CACHE] Cached health metrics ({len(sorted_jobs)} jobs, {days}d)")
+    logger.info(f"[RESPONSE_CACHE] Cached page {page} ({len(paginated_jobs)}/{total_count} jobs, {days}d)")
 
     return result_obj
 

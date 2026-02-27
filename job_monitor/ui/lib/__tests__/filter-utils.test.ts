@@ -199,6 +199,7 @@ describe('getDateRangeFromFilters', () => {
     team: null,
     jobId: null,
     jobNamePatterns: [],
+    workspaceId: null,
   };
 
   it('returns 7 days before end date for 7d range', () => {
@@ -259,6 +260,7 @@ describe('buildFilterQueryParams', () => {
     team: null,
     jobId: null,
     jobNamePatterns: [],
+    workspaceId: null,
   };
 
   it('includes start_date and end_date always', () => {

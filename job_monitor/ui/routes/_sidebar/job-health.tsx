@@ -4,9 +4,9 @@
  * SLA targets with inline editing, and breach history sparklines.
  */
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useSearch, useNavigate } from '@tanstack/react-router';
-import { AlertCircle, RefreshCw, X } from 'lucide-react';
+import { AlertCircle, RefreshCw, X, Loader2 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { JobHealthTable } from '@/components/job-health-table';
@@ -16,15 +16,34 @@ import { useFilters } from '@/lib/filter-context';
 import { matchesJobPatterns } from '@/lib/filter-utils';
 import { getCurrentUser, type UserInfo } from '@/lib/api';
 
-// Response type matching backend with SLA data
+// Response type matching backend with SLA data and pagination
 interface JobHealthListResponse {
   jobs: JobWithSla[];
   window_days: number;
   total_count: number;
+  // Pagination fields
+  page: number;
+  page_size: number;
+  has_more: boolean;
+  from_cache: boolean;
+  // Priority counts for summary stats
+  p1_count: number;
+  p2_count: number;
+  p3_count: number;
+  healthy_count: number;
 }
 
-async function fetchHealthMetrics(days: number, workspaceId?: string): Promise<JobHealthListResponse> {
-  const params = new URLSearchParams({ days: String(days) });
+async function fetchHealthMetrics(
+  days: number,
+  workspaceId?: string,
+  page: number = 1,
+  pageSize: number = 50
+): Promise<JobHealthListResponse> {
+  const params = new URLSearchParams({
+    days: String(days),
+    page: String(page),
+    page_size: String(pageSize),
+  });
   if (workspaceId) {
     params.set('workspace_id', workspaceId);
   }
@@ -60,25 +79,47 @@ export default function JobHealthPage() {
     ? 'all'
     : (filters.workspaceId || userWorkspaceId || 'pending');
 
-  const { data, isLoading, error, refetch, isFetching } = useQuery({
+  const PAGE_SIZE = 50;
+
+  const {
+    data,
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['health-metrics', days, effectiveWorkspaceId],
-    queryFn: async ({ queryKey }) => {
+    queryFn: async ({ queryKey, pageParam = 1 }) => {
       // Extract from queryKey to avoid closure issues
       const daysParam = queryKey[1] as number;
       const wsId = queryKey[2] as string;
       const workspaceId = wsId && wsId !== 'all' && wsId !== 'pending' ? wsId : undefined;
-      return fetchHealthMetrics(daysParam, workspaceId);
+      return fetchHealthMetrics(daysParam, workspaceId, pageParam, PAGE_SIZE);
     },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.has_more ? lastPage.page + 1 : undefined,
     ...queryPresets.semiLive, // System tables have 5-15 min latency
     enabled: effectiveWorkspaceId !== 'pending',
   });
 
+  // Flatten all pages into a single array of jobs
+  const allJobs = useMemo(() => {
+    if (!data?.pages) return [];
+    return data.pages.flatMap((page) => page.jobs);
+  }, [data?.pages]);
+
+  // Get summary stats from first page (contains counts for full dataset)
+  const summaryStats = data?.pages?.[0];
+
   // Filter jobs by global wildcard patterns (client-side filtering)
   const filteredJobs = useMemo(() => {
-    if (!data?.jobs) return [];
-    if (filters.jobNamePatterns.length === 0) return data.jobs;
-    return data.jobs.filter((job) => matchesJobPatterns(job.job_name, filters.jobNamePatterns));
-  }, [data?.jobs, filters.jobNamePatterns]);
+    if (allJobs.length === 0) return [];
+    if (filters.jobNamePatterns.length === 0) return allJobs;
+    return allJobs.filter((job) => matchesJobPatterns(job.job_name, filters.jobNamePatterns));
+  }, [allJobs, filters.jobNamePatterns]);
 
   // Clear job filter from URL
   const clearJobFilter = () => {
@@ -127,12 +168,12 @@ export default function JobHealthPage() {
       )}
 
       {/* Pattern filter active indicator */}
-      {filters.jobNamePatterns.length > 0 && data && (
+      {filters.jobNamePatterns.length > 0 && summaryStats && (
         <div className="mb-4 flex items-center gap-2 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg px-4 py-2">
           <span className="text-sm text-purple-700 dark:text-purple-300">
             Job name filter active: <span className="font-mono font-semibold">{filters.jobNamePatterns.join(', ')}</span>
             <span className="ml-2 text-purple-500">
-              ({filteredJobs.length} of {data.jobs.length} jobs match)
+              ({filteredJobs.length} of {summaryStats.total_count} jobs match)
             </span>
           </span>
         </div>
@@ -152,7 +193,7 @@ export default function JobHealthPage() {
       </Tabs>
 
       {/* Summary stats - clickable to filter (responsive grid) */}
-      {data && !isLoading && (
+      {summaryStats && !isLoading && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <button
             onClick={() => setPriorityFilter(priorityFilter === 'all' ? 'all' : 'all')}
@@ -164,10 +205,10 @@ export default function JobHealthPage() {
               {filters.jobNamePatterns.length > 0 ? 'Matching Jobs' : 'Total Jobs'}
             </div>
             <div className="text-xl font-semibold dark:text-white">
-              {filteredJobs.length}
-              {filters.jobNamePatterns.length > 0 && data && (
+              {filters.jobNamePatterns.length > 0 ? filteredJobs.length : summaryStats.total_count}
+              {filters.jobNamePatterns.length > 0 && (
                 <span className="text-sm font-normal text-gray-400 dark:text-gray-500 ml-1">
-                  / {data.jobs.length}
+                  / {summaryStats.total_count}
                 </span>
               )}
             </div>
@@ -180,7 +221,9 @@ export default function JobHealthPage() {
           >
             <div className="text-sm text-gray-500 dark:text-gray-400">Critical (P1)</div>
             <div className="text-xl font-semibold text-red-600 dark:text-red-400">
-              {filteredJobs.filter((j) => j.priority === 'P1').length}
+              {filters.jobNamePatterns.length > 0
+                ? filteredJobs.filter((j) => j.priority === 'P1').length
+                : summaryStats.p1_count}
             </div>
           </button>
           <button
@@ -191,7 +234,9 @@ export default function JobHealthPage() {
           >
             <div className="text-sm text-gray-500 dark:text-gray-400">Failing (P2)</div>
             <div className="text-xl font-semibold text-orange-500 dark:text-orange-400">
-              {filteredJobs.filter((j) => j.priority === 'P2').length}
+              {filters.jobNamePatterns.length > 0
+                ? filteredJobs.filter((j) => j.priority === 'P2').length
+                : summaryStats.p2_count}
             </div>
           </button>
           <button
@@ -202,7 +247,9 @@ export default function JobHealthPage() {
           >
             <div className="text-sm text-gray-500 dark:text-gray-400">Warning (P3)</div>
             <div className="text-xl font-semibold text-yellow-600 dark:text-yellow-400">
-              {filteredJobs.filter((j) => j.priority === 'P3').length}
+              {filters.jobNamePatterns.length > 0
+                ? filteredJobs.filter((j) => j.priority === 'P3').length
+                : summaryStats.p3_count}
             </div>
           </button>
         </div>
@@ -249,8 +296,28 @@ export default function JobHealthPage() {
         </div>
       </div>
 
+      {/* Load More button */}
+      {hasNextPage && (
+        <div className="flex justify-center mt-4">
+          <Button
+            variant="outline"
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+          >
+            {isFetchingNextPage ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              `Load More (${allJobs.length} of ${summaryStats?.total_count || 0})`
+            )}
+          </Button>
+        </div>
+      )}
+
       {/* Active filter indicator */}
-      {priorityFilter !== 'all' && data && (
+      {priorityFilter !== 'all' && summaryStats && (
         <div className="mt-2 flex items-center gap-2">
           <span className="text-sm text-gray-500 dark:text-gray-400">
             Showing {filteredJobs.filter((j) => j.priority === priorityFilter).length} {priorityFilter} jobs
@@ -267,7 +334,8 @@ export default function JobHealthPage() {
       {/* Footer note about data latency */}
       <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">
         Data refreshes every 5-15 minutes from Databricks system tables.
-        {data && ` Showing ${days}-day window with ${filteredJobs.length} jobs${filters.jobNamePatterns.length > 0 ? ' (filtered)' : ''}.`}
+        {summaryStats && ` Showing ${days}-day window with ${allJobs.length}${summaryStats.total_count > allJobs.length ? ` of ${summaryStats.total_count}` : ''} jobs${filters.jobNamePatterns.length > 0 ? ' (filtered)' : ''}.`}
+        {summaryStats?.from_cache && ' (from cache)'}
       </p>
     </div>
   );
