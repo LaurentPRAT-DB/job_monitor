@@ -45,13 +45,14 @@ export default function AlertsPage() {
   // NOTE: Alerts endpoint is slow (15-30s) so use slow preset to reduce API calls
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['alerts', categoryFilter, effectiveWorkspaceId],
-    queryFn: () => {
-      const wsId = effectiveWorkspaceId !== 'all' && effectiveWorkspaceId !== 'pending'
-        ? effectiveWorkspaceId
-        : undefined;
+    queryFn: async ({ queryKey }) => {
+      // Extract from queryKey to avoid closure issues
+      const category = queryKey[1] as AlertCategory | 'all';
+      const wsId = queryKey[2] as string;
+      const workspaceId = wsId && wsId !== 'all' && wsId !== 'pending' ? wsId : undefined;
       return fetchAlerts({
-        ...(categoryFilter === 'all' ? {} : { category: [categoryFilter] }),
-        workspaceId: wsId,
+        ...(category === 'all' ? {} : { category: [category] }),
+        workspaceId,
       });
     },
     ...queryPresets.slow, // Alerts query is expensive (15-30s), cache aggressively

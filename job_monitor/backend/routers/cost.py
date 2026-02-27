@@ -327,9 +327,10 @@ async def get_cost_summary(
         logger.info(f"[CACHE_SKIP] Skipping Delta cache - workspace filter active: {workspace_id}")
 
     # Build workspace filter clause
+    # workspace_id in system tables is BIGINT, not string - don't quote it
     workspace_clause = ""
     if workspace_id and workspace_id != "all":
-        workspace_clause = f"AND workspace_id = '{workspace_id}'"
+        workspace_clause = f"AND workspace_id = {workspace_id}"
 
     # Main query: Job costs with SKU breakdown and trend calculation
     query = f"""

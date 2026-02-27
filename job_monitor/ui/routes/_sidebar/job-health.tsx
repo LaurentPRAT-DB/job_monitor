@@ -62,11 +62,12 @@ export default function JobHealthPage() {
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['health-metrics', days, effectiveWorkspaceId],
-    queryFn: () => {
-      const wsId = effectiveWorkspaceId !== 'all' && effectiveWorkspaceId !== 'pending'
-        ? effectiveWorkspaceId
-        : undefined;
-      return fetchHealthMetrics(days, wsId);
+    queryFn: async ({ queryKey }) => {
+      // Extract from queryKey to avoid closure issues
+      const daysParam = queryKey[1] as number;
+      const wsId = queryKey[2] as string;
+      const workspaceId = wsId && wsId !== 'all' && wsId !== 'pending' ? wsId : undefined;
+      return fetchHealthMetrics(daysParam, workspaceId);
     },
     ...queryPresets.semiLive, // System tables have 5-15 min latency
     enabled: effectiveWorkspaceId !== 'pending',

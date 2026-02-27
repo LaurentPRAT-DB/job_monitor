@@ -211,7 +211,11 @@ async def get_health_metrics(
     # If specific workspace_id provided, filter to that workspace
     workspace_clause = ""
     if workspace_id and workspace_id != "all":
-        workspace_clause = f"AND workspace_id = '{workspace_id}'"
+        # workspace_id in system tables is BIGINT, not string - don't quote it
+        # Validate it's numeric to prevent SQL injection
+        if not workspace_id.isdigit():
+            raise HTTPException(status_code=422, detail="workspace_id must be numeric")
+        workspace_clause = f"AND workspace_id = {workspace_id}"
 
     # SQL query using CTEs for consecutive failure detection
     # Pattern from 02-RESEARCH.md with LAG window function

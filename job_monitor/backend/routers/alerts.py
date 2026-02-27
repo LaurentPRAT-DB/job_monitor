@@ -131,9 +131,10 @@ async def _generate_failure_alerts(ws, warehouse_id: str, workspace_id: str | No
     logger.info("[alerts._generate_failure_alerts] Starting")
 
     # Build workspace filter clause
+    # workspace_id in system tables is BIGINT, not string - don't quote it
     workspace_clause = ""
     if workspace_id and workspace_id != "all":
-        workspace_clause = f"AND workspace_id = '{workspace_id}'"
+        workspace_clause = f"AND workspace_id = {workspace_id}"
 
     # Query job health for 7-day window
     query = f"""
@@ -347,9 +348,10 @@ async def _generate_cost_alerts(ws, warehouse_id: str, workspace_id: str | None 
     team_tag_key = settings.team_tag_key
 
     # Build workspace filter clause
+    # workspace_id in system tables is BIGINT, not string - don't quote it
     workspace_clause = ""
     if workspace_id and workspace_id != "all":
-        workspace_clause = f"AND workspace_id = '{workspace_id}'"
+        workspace_clause = f"AND workspace_id = {workspace_id}"
 
     # Query for cost spikes (>2x p90 baseline)
     spike_query = f"""
@@ -528,9 +530,10 @@ async def _generate_cluster_alerts(ws, warehouse_id: str, workspace_id: str | No
     alerts = []
 
     # Build workspace filter clause
+    # workspace_id in system tables is BIGINT, not string - don't quote it
     workspace_clause = ""
     if workspace_id and workspace_id != "all":
-        workspace_clause = f"AND workspace_id = '{workspace_id}'"
+        workspace_clause = f"AND workspace_id = {workspace_id}"
 
     # Query for over-provisioned jobs (low utilization across all recent runs)
     # Note: run_duration_seconds can be 0 for serverless jobs, so we calculate

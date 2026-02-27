@@ -37,20 +37,30 @@ export default function HistoricalDashboard() {
     ? 'all'
     : (filters.workspaceId || userWorkspaceId || 'pending');
 
-  // Build query params from filters
-  const queryParams = new URLSearchParams();
-  queryParams.set('days', String(days));
-  if (filters.team) queryParams.set('team', filters.team);
-  if (filters.jobId) queryParams.set('job_id', filters.jobId);
-  if (effectiveWorkspaceId && effectiveWorkspaceId !== 'all' && effectiveWorkspaceId !== 'pending') {
-    queryParams.set('workspace_id', effectiveWorkspaceId);
-  }
+  // Helper to build query params from queryKey values (avoids closure issues)
+  const buildQueryParams = (daysVal: number, team: string | null, jobId: string | null, wsId: string) => {
+    const params = new URLSearchParams();
+    params.set('days', String(daysVal));
+    if (team) params.set('team', team);
+    if (jobId) params.set('job_id', jobId);
+    if (wsId && wsId !== 'all' && wsId !== 'pending') {
+      params.set('workspace_id', wsId);
+    }
+    return params;
+  };
 
   // Fetch historical cost data (static - past data doesn't change)
   const { data: costData, isLoading: costLoading } = useQuery<HistoricalData>({
     queryKey: ['historical-costs', days, filters.team, filters.jobId, effectiveWorkspaceId],
-    queryFn: async () => {
-      const res = await fetch(`/api/historical/costs?${queryParams}`);
+    queryFn: async ({ queryKey }) => {
+      // Extract from queryKey to avoid closure issues
+      const params = buildQueryParams(
+        queryKey[1] as number,
+        queryKey[2] as string | null,
+        queryKey[3] as string | null,
+        queryKey[4] as string
+      );
+      const res = await fetch(`/api/historical/costs?${params}`);
       if (!res.ok) throw new Error('Failed to fetch cost data');
       return res.json();
     },
@@ -61,8 +71,14 @@ export default function HistoricalDashboard() {
   // Fetch historical success rate data (static - past data doesn't change)
   const { data: successData, isLoading: successLoading } = useQuery<HistoricalData>({
     queryKey: ['historical-success', days, filters.team, filters.jobId, effectiveWorkspaceId],
-    queryFn: async () => {
-      const res = await fetch(`/api/historical/success-rate?${queryParams}`);
+    queryFn: async ({ queryKey }) => {
+      const params = buildQueryParams(
+        queryKey[1] as number,
+        queryKey[2] as string | null,
+        queryKey[3] as string | null,
+        queryKey[4] as string
+      );
+      const res = await fetch(`/api/historical/success-rate?${params}`);
       if (!res.ok) throw new Error('Failed to fetch success rate data');
       return res.json();
     },
@@ -73,8 +89,14 @@ export default function HistoricalDashboard() {
   // Fetch historical SLA breach data (static - past data doesn't change)
   const { data: slaData, isLoading: slaLoading } = useQuery<HistoricalData>({
     queryKey: ['historical-sla', days, filters.team, filters.jobId, effectiveWorkspaceId],
-    queryFn: async () => {
-      const res = await fetch(`/api/historical/sla-breaches?${queryParams}`);
+    queryFn: async ({ queryKey }) => {
+      const params = buildQueryParams(
+        queryKey[1] as number,
+        queryKey[2] as string | null,
+        queryKey[3] as string | null,
+        queryKey[4] as string
+      );
+      const res = await fetch(`/api/historical/sla-breaches?${params}`);
       if (!res.ok) throw new Error('Failed to fetch SLA data');
       return res.json();
     },
