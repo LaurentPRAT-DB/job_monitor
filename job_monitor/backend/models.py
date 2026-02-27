@@ -85,10 +85,14 @@ class JobApiRunOut(BaseModel):
 
 
 class ActiveRunsOut(BaseModel):
-    """Active runs response model."""
+    """Active runs response model with pagination support."""
 
     total_active: int
     runs: list[JobApiRunOut]
+    # Pagination fields
+    page: int = 1
+    page_size: int = 50
+    has_more: bool = False
 
 
 class RecentRunStatus(BaseModel):

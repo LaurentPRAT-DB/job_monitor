@@ -4,8 +4,8 @@
  * Features: sortable columns, clickable filter cards, expandable rows.
  */
 import { useState, useMemo, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, RefreshCw, Play, ExternalLink, Clock, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, CheckCircle, XCircle, MinusCircle, Radio, AlertTriangle } from 'lucide-react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { AlertCircle, RefreshCw, Play, ExternalLink, Clock, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, CheckCircle, XCircle, MinusCircle, Radio, AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -45,11 +45,20 @@ interface ActiveRunWithHistory {
 interface ActiveRunsResponse {
   total_active: number;
   runs: ActiveRunWithHistory[];
+  page: number;
+  page_size: number;
+  has_more: boolean;
 }
 
-async function fetchActiveRuns(): Promise<ActiveRunsResponse> {
-  // Use fast endpoint, fetch history separately per-row
-  const response = await fetch('/api/jobs-api/active');
+const PAGE_SIZE = 50;
+
+async function fetchActiveRuns(page: number = 1): Promise<ActiveRunsResponse> {
+  // Use paginated endpoint, fetch history separately per-row
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(PAGE_SIZE),
+  });
+  const response = await fetch(`/api/jobs-api/active?${params}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch active runs: ${response.statusText}`);
   }
@@ -61,6 +70,9 @@ async function fetchActiveRuns(): Promise<ActiveRunsResponse> {
       ...run,
       recent_runs: [], // Will be fetched per-row
     })),
+    page: data.page,
+    page_size: data.page_size,
+    has_more: data.has_more,
   };
 }
 
@@ -393,19 +405,39 @@ export default function RunningJobsPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [stateFilter, setStateFilter] = useState<StateFilter>('RUNNING');
 
-  const { data, isLoading, error, refetch, isFetching } = useQuery({
+  const {
+    data,
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['active-runs'],
-    queryFn: fetchActiveRuns,
+    queryFn: ({ pageParam = 1 }) => fetchActiveRuns(pageParam),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.has_more ? lastPage.page + 1 : undefined,
     refetchInterval: 30000, // Refresh every 30 seconds for real-time updates
     staleTime: 10000, // Consider data stale after 10 seconds
     refetchOnWindowFocus: true,
   });
 
+  // Flatten all pages into a single array of runs
+  const allRuns = useMemo(() => {
+    if (!data?.pages) return [];
+    return data.pages.flatMap((page) => page.runs);
+  }, [data?.pages]);
+
+  // Get total count from first page
+  const totalActive = data?.pages?.[0]?.total_active ?? 0;
+
   // Filter and sort runs
   const filteredAndSortedRuns = useMemo(() => {
-    if (!data?.runs) return [];
+    if (allRuns.length === 0) return [];
 
-    let result = data.runs;
+    let result = allRuns;
 
     // Apply state filter
     if (stateFilter !== 'all') {
@@ -418,7 +450,7 @@ export default function RunningJobsPage() {
 
     // Apply sorting
     return [...result].sort((a, b) => compareRuns(a, b, sortColumn, sortDirection));
-  }, [data?.runs, stateFilter, sortColumn, sortDirection]);
+  }, [allRuns, stateFilter, sortColumn, sortDirection]);
 
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
@@ -451,10 +483,10 @@ export default function RunningJobsPage() {
     </TableHead>
   );
 
-  // Count by state for filter cards
-  const runningCount = data?.runs.filter(r => r.state === 'RUNNING').length ?? 0;
-  const pendingCount = data?.runs.filter(r => r.state === 'PENDING' || r.state === 'QUEUED').length ?? 0;
-  const terminatingCount = data?.runs.filter(r => r.state === 'TERMINATING').length ?? 0;
+  // Count by state for filter cards (from loaded runs)
+  const runningCount = allRuns.filter(r => r.state === 'RUNNING').length;
+  const pendingCount = allRuns.filter(r => r.state === 'PENDING' || r.state === 'QUEUED').length;
+  const terminatingCount = allRuns.filter(r => r.state === 'TERMINATING').length;
 
   return (
     <div className="p-4 md:p-6">
@@ -485,7 +517,7 @@ export default function RunningJobsPage() {
       </div>
 
       {/* Summary stats - clickable to filter */}
-      {data && !isLoading && (
+      {totalActive > 0 && !isLoading && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <button
             onClick={() => setStateFilter(stateFilter === 'all' ? 'all' : 'all')}
@@ -496,7 +528,7 @@ export default function RunningJobsPage() {
           >
             <div className="text-sm text-gray-500 dark:text-gray-400">Total Active</div>
             <div className="text-2xl font-semibold text-green-600 dark:text-green-400">
-              {data.total_active}
+              {totalActive}
             </div>
           </button>
           <button
@@ -618,8 +650,28 @@ export default function RunningJobsPage() {
         </div>
       </div>
 
+      {/* Load More button */}
+      {hasNextPage && (
+        <div className="flex justify-center mt-4">
+          <Button
+            variant="outline"
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+          >
+            {isFetchingNextPage ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              `Load More (${allRuns.length} of ${totalActive})`
+            )}
+          </Button>
+        </div>
+      )}
+
       {/* Active filter indicator */}
-      {stateFilter !== 'all' && data && (
+      {stateFilter !== 'all' && totalActive > 0 && (
         <div className="mt-2 flex items-center gap-2">
           <span className="text-sm text-gray-500 dark:text-gray-400">
             Showing {filteredAndSortedRuns.length} {stateFilter.toLowerCase()} job{filteredAndSortedRuns.length !== 1 ? 's' : ''}
@@ -636,7 +688,7 @@ export default function RunningJobsPage() {
       {/* Footer note */}
       <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">
         Data refreshes automatically every 30 seconds from Databricks Jobs API.
-        {data && ` Currently ${data.total_active} active job${data.total_active !== 1 ? 's' : ''}.`}
+        {totalActive > 0 && ` Showing ${allRuns.length}${totalActive > allRuns.length ? ` of ${totalActive}` : ''} active job${totalActive !== 1 ? 's' : ''}.`}
       </p>
     </div>
   );

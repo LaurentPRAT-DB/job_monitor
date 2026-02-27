@@ -149,22 +149,28 @@ async def list_job_runs_api(
 
 @router.get("/active", response_model=ActiveRunsOut)
 async def get_active_runs(
+    page: Annotated[int, Query(ge=1, description="Page number (1-indexed)")] = 1,
+    page_size: Annotated[
+        int, Query(ge=10, le=200, description="Number of runs per page")
+    ] = 50,
     ws=Depends(get_ws),
 ) -> ActiveRunsOut:
     """Get all currently active/running jobs via Jobs API (real-time).
 
-    Returns all jobs that are currently running or pending. This is the
-    primary endpoint for real-time monitoring dashboards showing
+    Returns jobs that are currently running or pending with pagination support.
+    This is the primary endpoint for real-time monitoring dashboards showing
     "currently running" status.
 
     Note: System tables have 5-15 minute latency, so this endpoint is
     essential for accurate real-time monitoring.
 
     Args:
+        page: Page number (1-indexed, default 1)
+        page_size: Number of runs per page (10-200, default 50)
         ws: WorkspaceClient dependency
 
     Returns:
-        Count and list of all active runs
+        Paginated list of active runs with total count
     """
     if not ws:
         raise HTTPException(
@@ -177,7 +183,21 @@ async def get_active_runs(
             lambda: list(ws.jobs.list_runs(active_only=True))
         )
         run_models = [_run_to_model(r) for r in runs]
-        return ActiveRunsOut(total_active=len(run_models), runs=run_models)
+
+        # Paginate the results
+        total_active = len(run_models)
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paginated_runs = run_models[start_idx:end_idx]
+        has_more = end_idx < total_active
+
+        return ActiveRunsOut(
+            total_active=total_active,
+            runs=paginated_runs,
+            page=page,
+            page_size=page_size,
+            has_more=has_more,
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,

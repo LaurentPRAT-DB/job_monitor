@@ -7,6 +7,7 @@
 | Endpoint | Response Size | Change |
 |----------|--------------|--------|
 | `/api/health-metrics` | 12KB (50 jobs) | ✅ **Paginated** - was 500KB |
+| `/api/jobs-api/active` | 15KB (50 jobs) | ✅ **Paginated** - was 889KB |
 | `/api/me` | 200B | ✅ Fast |
 | `/api/alerts?category=X` | 1-15KB | ✅ Selective queries |
 
@@ -14,38 +15,18 @@
 
 | Endpoint | Response Size | Issue |
 |----------|--------------|-------|
-| `/api/jobs-api/active` | **889KB** | Returns ALL 2,928 running jobs |
 | `/api/costs/summary` | 206KB | No pagination, full dataset |
 | `/api/alerts` (global) | 141KB | 267 alerts, no pagination |
 
 ---
 
-## Priority 1: Add Pagination to `/api/jobs-api/active`
+## ✅ DONE: Pagination for `/api/jobs-api/active`
 
-**Problem**: Returns 889KB of data with 2,928+ running jobs.
+**Problem**: Returned 889KB of data with 2,928+ running jobs.
 
-**Solution**: Add `page` and `page_size` parameters.
+**Solution**: Added `page` and `page_size` parameters.
 
-```python
-# jobs_api.py - add pagination
-@router.get("/jobs-api/active")
-async def get_active_runs(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=10, le=200),
-) -> ActiveRunsWithHistoryOut:
-    # Paginate the runs list
-    start = (page - 1) * page_size
-    paginated_runs = all_runs[start:start + page_size]
-    return {
-        "total_active": len(all_runs),
-        "runs": paginated_runs,
-        "page": page,
-        "page_size": page_size,
-        "has_more": start + page_size < len(all_runs)
-    }
-```
-
-**Impact**: 889KB → ~20KB per page (95% reduction)
+**Impact**: 889KB → 15KB per page (**98% reduction**)
 
 ---
 
@@ -138,7 +119,7 @@ const allRuns = data?.pages.flatMap(p => p.runs) ?? [];
 | Endpoint | Before | After | Improvement |
 |----------|--------|-------|-------------|
 | `/api/health-metrics` | 500KB | **12KB** | ✅ **Done** |
-| `/api/jobs-api/active` | 889KB | ~20KB | 95% smaller |
+| `/api/jobs-api/active` | 889KB | **15KB** | ✅ **Done** (98% smaller) |
 | `/api/costs/summary` | 206KB | ~25KB | 88% smaller |
 | `/api/alerts` | 141KB | ~15KB | 89% smaller |
 
