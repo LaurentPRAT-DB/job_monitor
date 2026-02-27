@@ -2,9 +2,9 @@
  * Costs Dashboard page.
  * Displays cost breakdown by team and job, with anomaly detection for cost spikes and zombie jobs.
  */
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, RefreshCw, DollarSign } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { AlertCircle, RefreshCw, DollarSign, Loader2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,11 +16,16 @@ import { queryPresets, queryKeys } from '@/lib/query-config';
 
 // Types matching backend models
 interface CostSummaryResponse {
-  total_dbus_30d: number;
+  total_dbus: number;
   dbu_rate: number;
   teams: TeamCost[];
   jobs: JobCost[];
-  anomaly_count: number;
+  anomalies: { job_id: string }[];
+  // Pagination fields
+  total_jobs_count: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
 }
 
 interface AnomaliesResponse {
@@ -28,8 +33,14 @@ interface AnomaliesResponse {
   total_count: number;
 }
 
-async function fetchCostSummary(): Promise<CostSummaryResponse> {
-  const response = await fetch('/api/costs/summary');
+const PAGE_SIZE = 50;
+
+async function fetchCostSummary(page: number = 1): Promise<CostSummaryResponse> {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(PAGE_SIZE),
+  });
+  const response = await fetch(`/api/costs/summary?${params}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch cost summary: ${response.statusText}`);
   }
@@ -51,16 +62,35 @@ export default function CostsPage() {
   // NOTE: Cost endpoints are very slow (30-40s) due to billing table queries
   // Use slow preset to cache aggressively and reduce API calls
   const {
-    data: costSummary,
+    data: costData,
     isLoading: isLoadingSummary,
     error: summaryError,
     refetch: refetchSummary,
     isFetching: isFetchingSummary,
-  } = useQuery({
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: queryKeys.costs.summary(),
-    queryFn: fetchCostSummary,
+    queryFn: ({ pageParam = 1 }) => fetchCostSummary(pageParam),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.has_more ? lastPage.page + 1 : undefined,
     ...queryPresets.slow, // Cost query is expensive (30-40s), cache for 10 min
   });
+
+  // Flatten jobs from all pages, keep other data from first page
+  const costSummary = useMemo(() => {
+    if (!costData?.pages || costData.pages.length === 0) return null;
+    const firstPage = costData.pages[0];
+    const allJobs = costData.pages.flatMap((page) => page.jobs);
+    return {
+      ...firstPage,
+      jobs: allJobs,
+      // Use total_dbus for display (not total_dbus_30d which doesn't exist)
+      total_dbus_30d: firstPage.total_dbus,
+      anomaly_count: firstPage.anomalies?.length ?? 0,
+    };
+  }, [costData?.pages]);
 
   const {
     data: anomaliesData,
@@ -225,6 +255,25 @@ export default function CostsPage() {
               dbuRate={dbuRate}
               isLoading={isLoadingSummary}
             />
+            {/* Load More button for jobs */}
+            {hasNextPage && (
+              <div className="flex justify-center py-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                >
+                  {isFetchingNextPage ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    `Load More (${costSummary?.jobs.length ?? 0} of ${costSummary?.total_jobs_count ?? 0})`
+                  )}
+                </Button>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="anomalies" className="m-0">
@@ -241,7 +290,7 @@ export default function CostsPage() {
       {/* Footer note about data latency */}
       <p className="text-xs text-gray-400 mt-4">
         Data refreshes every 5-15 minutes from Databricks system tables.
-        {costSummary && ` Showing 30-day cost data across ${costSummary.jobs.length} jobs.`}
+        {costSummary && ` Showing 30-day cost data across ${costSummary.jobs.length}${costSummary.total_jobs_count > costSummary.jobs.length ? ` of ${costSummary.total_jobs_count}` : ''} jobs.`}
       </p>
     </div>
   );

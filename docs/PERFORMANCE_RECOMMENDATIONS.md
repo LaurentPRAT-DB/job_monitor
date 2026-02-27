@@ -8,6 +8,7 @@
 |----------|--------------|--------|
 | `/api/health-metrics` | 12KB (50 jobs) | ✅ **Paginated** - was 500KB |
 | `/api/jobs-api/active` | 15KB (50 jobs) | ✅ **Paginated** - was 889KB |
+| `/api/costs/summary` | 55KB (50 jobs) | ✅ **Paginated** - was 206KB |
 | `/api/me` | 200B | ✅ Fast |
 | `/api/alerts?category=X` | 1-15KB | ✅ Selective queries |
 
@@ -15,7 +16,6 @@
 
 | Endpoint | Response Size | Issue |
 |----------|--------------|-------|
-| `/api/costs/summary` | 206KB | No pagination, full dataset |
 | `/api/alerts` (global) | 141KB | 267 alerts, no pagination |
 
 ---
@@ -30,32 +30,13 @@
 
 ---
 
-## Priority 2: Add Pagination to `/api/costs/summary`
+## ✅ DONE: Pagination for `/api/costs/summary`
 
-**Problem**: Returns 206KB with ~5000 job cost records.
+**Problem**: Returned 206KB with ~500 job cost records.
 
-**Solution**: Paginate the jobs list in cost summary.
+**Solution**: Added `page` and `page_size` parameters. Jobs list is paginated, teams and anomalies remain full (small lists).
 
-```python
-# cost.py - add pagination
-@router.get("/costs/summary")
-async def get_cost_summary(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=10, le=200),
-) -> CostSummaryOut:
-    # Keep team totals, paginate jobs
-    return {
-        "jobs": paginated_jobs,
-        "teams": team_totals,  # Keep full list (small)
-        "anomalies": anomalies,  # Keep full list (small)
-        "total_dbus": total,
-        "page": page,
-        "page_size": page_size,
-        "has_more": has_more
-    }
-```
-
-**Impact**: 206KB → ~25KB per page (88% reduction)
+**Impact**: 206KB → 55KB per page (**73% reduction**)
 
 ---
 
@@ -120,10 +101,10 @@ const allRuns = data?.pages.flatMap(p => p.runs) ?? [];
 |----------|--------|-------|-------------|
 | `/api/health-metrics` | 500KB | **12KB** | ✅ **Done** |
 | `/api/jobs-api/active` | 889KB | **15KB** | ✅ **Done** (98% smaller) |
-| `/api/costs/summary` | 206KB | ~25KB | 88% smaller |
+| `/api/costs/summary` | 206KB | **55KB** | ✅ **Done** (73% smaller) |
 | `/api/alerts` | 141KB | ~15KB | 89% smaller |
 
-**Total initial page load**: ~1.8MB → ~75KB (96% reduction)
+**Total initial page load**: ~1.8MB → ~100KB (94% reduction)
 
 ---
 

@@ -182,6 +182,10 @@ async def get_cost_summary(
         str | None,
         Query(description="Filter by workspace ID (omit or null for all, specific ID for single workspace)"),
     ] = None,
+    page: Annotated[int, Query(ge=1, description="Page number (1-indexed)")] = 1,
+    page_size: Annotated[
+        int, Query(ge=10, le=200, description="Number of jobs per page")
+    ] = 50,
     ws=Depends(get_ws_prefer_user),
 ) -> CostSummaryOut:
     """Get cost summary with per-job breakdown, team rollups, and anomalies.
@@ -214,10 +218,10 @@ async def get_cost_summary(
 
     # Check in-memory response cache first (fastest path)
     ws_filter = workspace_id if workspace_id else "all"
-    cache_key = f"cost_summary:{days}:{include_teams}:{ws_filter}"
+    cache_key = f"cost_summary:{days}:{include_teams}:{ws_filter}:p{page}:{page_size}"
     cached_response = response_cache.get(cache_key)
     if cached_response:
-        logger.info(f"[RESPONSE_CACHE] Returning cached cost summary ({days}d, ws={ws_filter})")
+        logger.info(f"[RESPONSE_CACHE] Returning cached cost summary ({days}d, ws={ws_filter}, page={page})")
         return cached_response
 
     dbu_rate = settings.dbu_rate
@@ -309,17 +313,29 @@ async def get_cost_summary(
             ]
 
             total_dbus = sum(j.total_dbus_30d for j in jobs)
+            total_jobs_count = len(jobs)
+
+            # Paginate jobs list
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            paginated_jobs = jobs[start_idx:end_idx]
+            has_more = end_idx < total_jobs_count
+
             result = CostSummaryOut(
-                jobs=jobs,
+                jobs=paginated_jobs,
                 teams=teams,
                 anomalies=anomalies,
                 total_dbus=total_dbus,
                 total_cost_dollars=total_dbus * dbu_rate if dbu_rate > 0 else None,
                 dbu_rate=dbu_rate,
+                total_jobs_count=total_jobs_count,
+                page=page,
+                page_size=page_size,
+                has_more=has_more,
             )
             # Cache in response cache for instant subsequent requests
             response_cache.set(cache_key, result, TTL_SLOW)
-            logger.info(f"[RESPONSE_CACHE] Cached cost summary from Delta cache ({len(jobs)} jobs)")
+            logger.info(f"[RESPONSE_CACHE] Cached cost summary from Delta cache (page {page}, {len(paginated_jobs)} of {total_jobs_count} jobs)")
             return result
 
         logger.info("[CACHE_MISS] costs/summary: falling back to live query")
@@ -489,19 +505,30 @@ async def get_cost_summary(
     # Calculate totals
     total_dbus = sum(j.total_dbus_30d for j in jobs)
     total_cost = total_dbus * dbu_rate if dbu_rate > 0 else None
+    total_jobs_count = len(jobs)
+
+    # Paginate jobs list
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_jobs = jobs[start_idx:end_idx]
+    has_more = end_idx < total_jobs_count
 
     result = CostSummaryOut(
-        jobs=jobs,
+        jobs=paginated_jobs,
         teams=teams,
         anomalies=anomalies,
         total_dbus=total_dbus,
         total_cost_dollars=total_cost,
         dbu_rate=dbu_rate,
+        total_jobs_count=total_jobs_count,
+        page=page,
+        page_size=page_size,
+        has_more=has_more,
     )
 
     # Cache the response for 10 minutes
     response_cache.set(cache_key, result, TTL_SLOW)
-    logger.info(f"[RESPONSE_CACHE] Cached cost summary ({len(jobs)} jobs, {days}d)")
+    logger.info(f"[RESPONSE_CACHE] Cached cost summary (page {page}, {len(paginated_jobs)} of {total_jobs_count} jobs, {days}d)")
 
     return result
 

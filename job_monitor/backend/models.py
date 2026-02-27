@@ -331,7 +331,7 @@ class CostAnomalyOut(BaseModel):
 
 
 class CostSummaryOut(BaseModel):
-    """Complete cost summary response."""
+    """Complete cost summary response with pagination for jobs."""
 
     jobs: list[JobCostOut]
     teams: list[TeamCostOut]
@@ -339,6 +339,11 @@ class CostSummaryOut(BaseModel):
     total_dbus: float
     total_cost_dollars: float | None = None
     dbu_rate: float
+    # Pagination fields for jobs list
+    total_jobs_count: int = 0
+    page: int = 1
+    page_size: int = 50
+    has_more: bool = False
 
 
 # Cluster Utilization models for Phase 4
