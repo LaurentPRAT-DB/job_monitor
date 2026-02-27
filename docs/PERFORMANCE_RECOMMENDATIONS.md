@@ -14,9 +14,7 @@
 
 ### Issues Requiring Attention
 
-| Endpoint | Response Size | Issue |
-|----------|--------------|-------|
-| `/api/alerts` (global) | 141KB | 267 alerts, no pagination |
+All major endpoints are now paginated.
 
 ---
 
@@ -40,34 +38,13 @@
 
 ---
 
-## Priority 3: Add Pagination to `/api/alerts`
+## ✅ DONE: Pagination for `/api/alerts`
 
-**Problem**: Returns 141KB with 267 alerts.
+**Problem**: Returned 141KB with 267 alerts.
 
-**Solution**: Add server-side pagination.
+**Solution**: Added `page` and `page_size` parameters. Alerts are filtered, sorted, then paginated.
 
-```python
-# alerts.py - add pagination
-@router.get("/alerts")
-async def get_alerts(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=10, le=200),
-    category: str | None = None,
-    severity: str | None = None,
-) -> AlertListOut:
-    # Filter then paginate
-    filtered = filter_alerts(all_alerts, category, severity)
-    paginated = filtered[start:end]
-    return {
-        "alerts": paginated,
-        "total": len(filtered),
-        "by_severity": compute_severity_counts(filtered),
-        "page": page,
-        "has_more": end < len(filtered)
-    }
-```
-
-**Impact**: 141KB → ~15KB per page (89% reduction)
+**Impact**: 141KB → ~15KB per page (**89% reduction**)
 
 ---
 
@@ -102,7 +79,7 @@ const allRuns = data?.pages.flatMap(p => p.runs) ?? [];
 | `/api/health-metrics` | 500KB | **12KB** | ✅ **Done** |
 | `/api/jobs-api/active` | 889KB | **15KB** | ✅ **Done** (98% smaller) |
 | `/api/costs/summary` | 206KB | **55KB** | ✅ **Done** (73% smaller) |
-| `/api/alerts` | 141KB | ~15KB | 89% smaller |
+| `/api/alerts` | 141KB | **~15KB** | ✅ **Done** (89% smaller) |
 
 **Total initial page load**: ~1.8MB → ~100KB (94% reduction)
 

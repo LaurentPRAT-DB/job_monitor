@@ -456,8 +456,13 @@ class AlertListOut(BaseModel):
     """Response wrapper for alert list.
 
     Includes summary counts by severity for dashboard display.
+    Supports pagination for large alert lists.
     """
 
     alerts: list[Alert]
     total: int
     by_severity: dict[str, int]  # {"P1": 2, "P2": 5, "P3": 10}
+    # Pagination fields
+    page: int = 1
+    page_size: int = 50
+    has_more: bool = False

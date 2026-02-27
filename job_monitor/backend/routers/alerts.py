@@ -692,6 +692,14 @@ async def get_alerts(
         str | None,
         Query(description="Filter by workspace ID (omit or null for all, specific ID for single workspace)"),
     ] = None,
+    page: Annotated[
+        int,
+        Query(ge=1, description="Page number (1-indexed)"),
+    ] = 1,
+    page_size: Annotated[
+        int,
+        Query(ge=10, le=200, description="Number of alerts per page"),
+    ] = 50,
     ws=Depends(get_ws_prefer_user),
 ) -> AlertListOut:
     """Get alerts generated from current system state.
@@ -727,9 +735,9 @@ async def get_alerts(
         logger.warning("Warehouse ID not configured - falling back to mock alerts")
         return get_mock_alerts()
 
-    # Build cache key from request parameters
+    # Build cache key from request parameters (include pagination for per-page caching)
     ws_filter = workspace_id if workspace_id else "all"
-    cache_key = f"alerts:{','.join(sorted(category or ['all']))}:{','.join(sorted(severity or ['all']))}:{acknowledged}:{ws_filter}"
+    cache_key = f"alerts:{','.join(sorted(category or ['all']))}:{','.join(sorted(severity or ['all']))}:{acknowledged}:{ws_filter}:p{page}:{page_size}"
 
     # Check in-memory response cache first (fastest)
     cached_response = response_cache.get(cache_key)
@@ -798,10 +806,24 @@ async def get_alerts(
             for alert in all_alerts:
                 by_severity[alert.severity.value] = by_severity.get(alert.severity.value, 0) + 1
 
-            result = AlertListOut(alerts=all_alerts, total=len(all_alerts), by_severity=by_severity)
+            # Paginate after filtering and sorting
+            total_alerts = len(all_alerts)
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            paginated_alerts = all_alerts[start_idx:end_idx]
+            has_more = end_idx < total_alerts
+
+            result = AlertListOut(
+                alerts=paginated_alerts,
+                total=total_alerts,
+                by_severity=by_severity,
+                page=page,
+                page_size=page_size,
+                has_more=has_more,
+            )
             # Cache in response cache for instant subsequent requests
             response_cache.set(cache_key, result, TTL_FAST)
-            logger.info(f"[RESPONSE_CACHE] Cached alerts from Delta cache ({len(all_alerts)} alerts)")
+            logger.info(f"[RESPONSE_CACHE] Cached alerts from Delta cache ({len(paginated_alerts)}/{total_alerts} alerts, page {page})")
             return result
 
         logger.info("[CACHE_MISS] alerts: falling back to live query")
@@ -864,20 +886,30 @@ async def get_alerts(
     # Sort by severity
     all_alerts = _sort_alerts(all_alerts)
 
-    # Calculate by_severity counts
+    # Calculate by_severity counts (from full filtered list, not paginated)
     by_severity = {"P1": 0, "P2": 0, "P3": 0}
     for alert in all_alerts:
         by_severity[alert.severity.value] = by_severity.get(alert.severity.value, 0) + 1
 
+    # Paginate after filtering and sorting
+    total_alerts = len(all_alerts)
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_alerts = all_alerts[start_idx:end_idx]
+    has_more = end_idx < total_alerts
+
     result = AlertListOut(
-        alerts=all_alerts,
-        total=len(all_alerts),
+        alerts=paginated_alerts,
+        total=total_alerts,
         by_severity=by_severity,
+        page=page,
+        page_size=page_size,
+        has_more=has_more,
     )
 
     # Cache the response for 2 minutes
     response_cache.set(cache_key, result, TTL_FAST)
-    logger.info(f"[RESPONSE_CACHE] Cached alerts response ({len(all_alerts)} alerts)")
+    logger.info(f"[RESPONSE_CACHE] Cached alerts response ({len(paginated_alerts)}/{total_alerts} alerts, page {page})")
 
     return result
 

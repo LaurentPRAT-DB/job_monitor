@@ -41,6 +41,10 @@ export interface AlertListResponse {
   alerts: Alert[];
   total: number;
   by_severity: Record<AlertSeverity, number>;
+  // Pagination fields
+  page: number;
+  page_size: number;
+  has_more: boolean;
 }
 
 /**
@@ -51,6 +55,8 @@ export async function fetchAlerts(params?: {
   category?: AlertCategory[];
   acknowledged?: boolean;
   workspaceId?: string | null;  // null = all workspaces, string = specific workspace
+  page?: number;
+  page_size?: number;
 }): Promise<AlertListResponse> {
   const searchParams = new URLSearchParams();
   if (params?.severity) {
@@ -65,6 +71,13 @@ export async function fetchAlerts(params?: {
   // Pass workspace_id if provided (null means no filter = all workspaces)
   if (params?.workspaceId) {
     searchParams.set("workspace_id", params.workspaceId);
+  }
+  // Pagination parameters
+  if (params?.page) {
+    searchParams.set("page", String(params.page));
+  }
+  if (params?.page_size) {
+    searchParams.set("page_size", String(params.page_size));
   }
   const queryString = searchParams.toString();
   const url = queryString ? `/api/alerts?${queryString}` : "/api/alerts";

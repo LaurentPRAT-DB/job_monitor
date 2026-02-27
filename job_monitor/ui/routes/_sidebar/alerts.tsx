@@ -2,8 +2,8 @@
  * Alerts page.
  * Dedicated page for reviewing all alerts with sortable table view and category filtering.
  */
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo } from 'react';
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertTable } from '@/components/alert-table';
 import {
   fetchAlerts,
@@ -15,11 +15,13 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { queryPresets } from '@/lib/query-config';
-import { RefreshCw, X } from 'lucide-react';
+import { RefreshCw, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useFilters } from '@/lib/filter-context';
 import { getCurrentUser, type UserInfo } from '@/lib/api';
+
+const PAGE_SIZE = 50;
 
 export default function AlertsPage() {
   const [categoryFilter, setCategoryFilter] = useState<AlertCategory | 'all'>('all');
@@ -43,9 +45,17 @@ export default function AlertsPage() {
   // Use the same query key as dashboard when no filter is applied
   // This ensures cache hits when navigating from dashboard to alerts
   // NOTE: Alerts endpoint is slow (15-30s) so use slow preset to reduce API calls
-  const { data, isLoading, refetch, isFetching } = useQuery({
+  const {
+    data: alertsData,
+    isLoading,
+    refetch,
+    isFetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['alerts', categoryFilter, effectiveWorkspaceId],
-    queryFn: async ({ queryKey }) => {
+    queryFn: async ({ queryKey, pageParam = 1 }) => {
       // Extract from queryKey to avoid closure issues
       const category = queryKey[1] as AlertCategory | 'all';
       const wsId = queryKey[2] as string;
@@ -53,11 +63,27 @@ export default function AlertsPage() {
       return fetchAlerts({
         ...(category === 'all' ? {} : { category: [category] }),
         workspaceId,
+        page: pageParam,
+        page_size: PAGE_SIZE,
       });
     },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.has_more ? lastPage.page + 1 : undefined,
     ...queryPresets.slow, // Alerts query is expensive (15-30s), cache aggressively
     enabled: effectiveWorkspaceId !== 'pending',
   });
+
+  // Flatten alerts from all pages, keep metadata from first page
+  const data = useMemo(() => {
+    if (!alertsData?.pages || alertsData.pages.length === 0) return null;
+    const firstPage = alertsData.pages[0];
+    const allAlerts = alertsData.pages.flatMap((page) => page.alerts);
+    return {
+      alerts: allAlerts,
+      total: firstPage.total,
+      by_severity: firstPage.by_severity,
+    };
+  }, [alertsData?.pages]);
 
   const acknowledgeMutation = useMutation({
     mutationFn: acknowledgeAlert,
@@ -159,6 +185,26 @@ export default function AlertsPage() {
         isAcknowledging={acknowledgeMutation.isPending}
         severityFilter={severityFilter}
       />
+
+      {/* Load More button */}
+      {hasNextPage && (
+        <div className="flex justify-center py-4">
+          <Button
+            variant="outline"
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+          >
+            {isFetchingNextPage ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              `Load More (${data?.alerts.length ?? 0} of ${data?.total ?? 0})`
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
