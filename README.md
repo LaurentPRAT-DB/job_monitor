@@ -38,6 +38,8 @@ A production-ready operational monitoring dashboard for Databricks jobs, cluster
 - **Metrics Cache**: Pre-aggregated Delta tables for sub-second dashboard loading
 - **Batch API Calls**: N+1 query elimination (50 requests → 1 request)
 - **Client-Side Caching**: Tiered TanStack Query caching for instant navigation
+- **Table Virtualization**: Render only visible rows for 4000+ job lists
+- **Route Prefetching**: Background data loading when navigating between pages
 - **GZip Compression**: Automatic response compression for large payloads
 
 ---
@@ -115,6 +117,24 @@ The app requires read access to Unity Catalog system tables. Choose one approach
 
 Use **On-Behalf-Of (OBO)** to run queries with the logged-in user's permissions.
 
+```mermaid
+sequenceDiagram
+    participant User
+    participant Browser
+    participant App as Job Monitor App
+    participant Platform as Databricks Platform
+    participant Warehouse as SQL Warehouse
+
+    User->>Browser: Access app URL
+    Browser->>Platform: Request with session cookie
+    Platform->>Browser: OAuth consent (first time)
+    User->>Browser: Grant SQL permission
+    Platform->>App: Forward request + gap-auth header
+    App->>Warehouse: Query with user's token
+    Warehouse->>App: Results (using user's permissions)
+    App->>Browser: JSON response
+```
+
 1. Add to `app.yaml`:
    ```yaml
    user_api_scopes:
@@ -183,6 +203,31 @@ Tag your Databricks jobs to enable advanced features:
 
 The application has five main pages accessible from the sidebar:
 
+```mermaid
+flowchart LR
+    subgraph sidebar["Sidebar Navigation"]
+        direction TB
+        dash["📊 Dashboard"]
+        running["▶️ Running Jobs"]
+        health["📈 Job Health"]
+        alerts["🔔 Alerts"]
+        hist["📅 Historical"]
+    end
+
+    subgraph pages["Page Features"]
+        dash --> d1["Summary Cards"]
+        dash --> d2["Recent Alerts"]
+        running --> r1["Live Job Status"]
+        running --> r2["Streaming Detection"]
+        health --> h1["Priority Sorting"]
+        health --> h2["SLA Management"]
+        alerts --> a1["Category Filtering"]
+        alerts --> a2["Acknowledgment"]
+        hist --> hs1["Cost Trends"]
+        hist --> hs2["Success Rate Charts"]
+    end
+```
+
 | Page | Icon | Purpose |
 |------|------|---------|
 | **Dashboard** | 📊 | Overview with summary metrics and recent activity |
@@ -241,6 +286,22 @@ Analyze job health patterns and identify problematic jobs:
 - **30 Days**: Extended view for trend analysis
 
 **Priority System:**
+
+```mermaid
+flowchart LR
+    subgraph input["Job Run History"]
+        runs["Recent Runs"]
+    end
+
+    runs --> check1{"Last 2 runs<br/>both failed?"}
+    check1 -->|Yes| P1["🔴 P1 Critical"]
+    check1 -->|No| check2{"Last run<br/>failed?"}
+    check2 -->|Yes| P2["🟠 P2 Failing"]
+    check2 -->|No| check3{"Success rate<br/>70-89%?"}
+    check3 -->|Yes| P3["🟡 P3 Warning"]
+    check3 -->|No| healthy["🟢 Healthy"]
+```
+
 | Priority | Criteria | Color |
 |----------|----------|-------|
 | P1 (Critical) | 2+ consecutive failures | Red |
@@ -263,6 +324,31 @@ Click any card to filter the table by that priority level.
 Review and manage alerts from multiple sources:
 
 **Alert Categories:**
+
+```mermaid
+flowchart TB
+    subgraph sources["Data Sources"]
+        runs["Job Runs"]
+        duration["Duration Stats"]
+        dbus["DBU Usage"]
+        clusters["Cluster Metrics"]
+    end
+
+    subgraph detection["Alert Detection"]
+        runs -->|"2+ failures"| failure["🔴 Failure Alert"]
+        duration -->|"> SLA target"| sla["🟠 SLA Alert"]
+        dbus -->|"> 2x baseline"| cost["🟡 Cost Alert"]
+        clusters -->|"Underutilized"| cluster["🔵 Cluster Alert"]
+    end
+
+    subgraph output["Alert Dashboard"]
+        failure --> alerts["Alerts Page"]
+        sla --> alerts
+        cost --> alerts
+        cluster --> alerts
+    end
+```
+
 | Category | Source | Examples |
 |----------|--------|----------|
 | **Failure** | Job run results | 2+ consecutive failures, low success rate |
@@ -333,6 +419,37 @@ The application includes a background job that pre-aggregates metrics for optima
 ### Cache Refresh Job
 
 **Purpose:** Pre-compute expensive aggregations from system tables into Delta tables.
+
+```mermaid
+flowchart LR
+    subgraph source["System Tables"]
+        lakeflow["system.lakeflow"]
+        billing["system.billing"]
+    end
+
+    subgraph job["Cache Refresh Job<br/>(Scheduled)"]
+        compute["Compute Aggregations<br/>• Success rates<br/>• Priority flags<br/>• Cost breakdowns"]
+    end
+
+    subgraph cache["Cache Tables (Delta)"]
+        health["job_health_cache"]
+        cost["cost_cache"]
+        alerts["alerts_cache"]
+    end
+
+    subgraph app["Job Monitor App"]
+        api["API Endpoints"]
+    end
+
+    lakeflow --> compute
+    billing --> compute
+    compute --> health
+    compute --> cost
+    compute --> alerts
+    health -->|"< 1s"| api
+    cost -->|"< 1s"| api
+    alerts -->|"< 1s"| api
+```
 
 **Performance Impact:**
 | Query Type | Without Cache | With Cache |
@@ -494,6 +611,31 @@ For multi-environment deployments:
 
 ### Multi-Workspace Deployment
 
+```mermaid
+flowchart TB
+    subgraph repo["Repository"]
+        code["Source Code"]
+        configs["Config Files"]
+    end
+
+    subgraph targets["Deployment Targets"]
+        e2["E2 Workspace<br/>databricks.e2.yml<br/>app.e2.yaml"]
+        prod["Production<br/>databricks.prod.yml<br/>app.prod.yaml"]
+        dev["Development<br/>databricks.dev.yml<br/>app.yaml"]
+    end
+
+    code --> e2
+    code --> prod
+    code --> dev
+    configs --> e2
+    configs --> prod
+    configs --> dev
+
+    e2 -->|"deploy.sh e2"| e2app["job-monitor-XXXX.aws.databricksapps.com"]
+    prod -->|"deploy.sh prod"| prodapp["job-monitor-YYYY.aws.databricksapps.com"]
+    dev -->|"deploy.sh dev"| devapp["job-monitor-ZZZZ.aws.databricksapps.com"]
+```
+
 Each target has separate config files:
 
 | Target | Bundle Config | App Config |
@@ -528,36 +670,41 @@ pytest tests/
 
 ### Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Databricks App Platform                       │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌─────────────┐     ┌──────────────────────────────────────┐   │
-│  │   React UI  │────▶│         FastAPI Backend              │   │
-│  │  (TanStack) │     │                                      │   │
-│  └─────────────┘     │  Routers:                            │   │
-│                      │  - health_metrics  - alerts          │   │
-│                      │  - jobs_api        - costs           │   │
-│                      │  - historical      - filters         │   │
-│                      └───────────────┬──────────────────────┘   │
-│                                      │                           │
-│                      ┌───────────────▼──────────────────────┐   │
-│                      │        SQL Warehouse                  │   │
-│                      │   (Statement Execution API)           │   │
-│                      └───────────────┬──────────────────────┘   │
-│                                      │                           │
-└──────────────────────────────────────┼───────────────────────────┘
-                                       │
-           ┌───────────────────────────┼───────────────────────────┐
-           │                           │                           │
-           ▼                           ▼                           ▼
-┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
-│  system.lakeflow    │  │   Cache Tables      │  │  system.billing     │
-│  .jobs              │  │  (job_health_cache, │  │  .usage             │
-│  .job_run_timeline  │  │   cost_cache,       │  │                     │
-│                     │  │   alerts_cache)     │  │                     │
-└─────────────────────┘  └─────────────────────┘  └─────────────────────┘
+```mermaid
+flowchart TB
+    subgraph platform["Databricks App Platform"]
+        subgraph frontend["Frontend"]
+            UI["React UI<br/>(TanStack Router/Query)"]
+        end
+
+        subgraph backend["FastAPI Backend"]
+            API["API Routers"]
+            API --> health_metrics
+            API --> jobs_api
+            API --> alerts
+            API --> costs
+            API --> historical
+            API --> filters
+        end
+
+        UI -->|"REST API"| API
+
+        subgraph warehouse["SQL Warehouse"]
+            SE["Statement Execution API"]
+        end
+
+        API -->|"OBO Auth"| SE
+    end
+
+    subgraph data["Unity Catalog"]
+        lakeflow["system.lakeflow<br/>• jobs<br/>• job_run_timeline"]
+        cache["Cache Tables<br/>• job_health_cache<br/>• cost_cache<br/>• alerts_cache"]
+        billing["system.billing<br/>• usage"]
+    end
+
+    SE --> lakeflow
+    SE --> cache
+    SE --> billing
 ```
 
 ### Performance Optimizations
@@ -582,8 +729,36 @@ The application includes numerous optimizations for production performance:
 | Tiered Cache Presets | `query-config.ts` | Different TTLs per data type |
 | Default Failure Tab | `alerts.tsx` | 30s → 5s initial load |
 | Infinite Query Pagination | Multiple pages | Load more on demand |
+| Table Virtualization | `job-health-table.tsx` | Only render visible rows (4000+ jobs) |
+| Route Prefetching | `routeTree.gen.tsx` | Background data loading on navigation |
+| Alert Cache Sharing | `alert-badge.tsx` | Single cache for badge + table |
 
 #### TanStack Query Presets
+
+```mermaid
+flowchart LR
+    subgraph presets["Cache Presets (staleTime)"]
+        static["static<br/>∞ (never refetch)"]
+        session["session<br/>5 min"]
+        semiLive["semiLive<br/>2 min"]
+        slow["slow<br/>10 min"]
+        live["live<br/>10 sec"]
+    end
+
+    subgraph usage["Usage"]
+        static --> u1["Historical data"]
+        session --> u2["User info, config"]
+        semiLive --> u3["Job health, costs"]
+        slow --> u4["Alerts, full costs"]
+        live --> u5["Running jobs"]
+    end
+
+    style static fill:#90EE90
+    style session fill:#87CEEB
+    style semiLive fill:#FFE4B5
+    style slow fill:#FFB6C1
+    style live fill:#FF6347
+```
 
 ```typescript
 // query-config.ts
@@ -716,6 +891,7 @@ MIT
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.2.1 | 2026-02-27 | Table virtualization, route prefetching, alert cache optimization |
 | 1.2.0 | 2026-02-26 | Filter presets caching, cache warm-up, UI polish |
 | 1.1.0 | 2026-02-26 | Wildcard filtering, preset edit mode |
 | 1.0.0 | 2026-02-25 | Initial release with multi-workspace support |
