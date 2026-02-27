@@ -1,170 +1,94 @@
-# Job Monitor
+# Databricks Job Monitor
 
-Databricks Job Monitoring Framework - A real-time operational monitoring dashboard for Databricks jobs, clusters, and resources.
+A production-ready operational monitoring dashboard for Databricks jobs, clusters, and resources. Monitor job health, track costs, receive intelligent alerts, and analyze historical trends—all from a single pane of glass.
 
-![Dashboard Screenshot](screenshot-dashboard.png)
+![Dashboard](docs/screenshots/dashboard.png)
+
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Application Usage](#application-usage)
+- [Monitoring Jobs](#monitoring-jobs)
+- [Deployment](#deployment)
+- [Developer Guide](#developer-guide)
+- [Troubleshooting](#troubleshooting)
+- [Tech Stack](#tech-stack)
+
+---
 
 ## Features
 
-- **Job Health Dashboard**: View job execution status with priority flags (P1/P2/P3)
-- **SLA Tracking**: Monitor running jobs against configurable SLA targets
-- **Cost Analysis**: Per-job and per-team cost attribution with DBU breakdown by SKU
-- **Smart Alerts**: Dynamic alert generation for failures, SLA breaches, cost anomalies
-- **Anomaly Detection**: Identify cost spikes (>2x p90 baseline) and over-provisioned clusters
+### Core Capabilities
+
+| Feature | Description |
+|---------|-------------|
+| **Job Health Dashboard** | Real-time job status with priority flags (P1/P2/P3) based on failure patterns |
+| **Running Jobs Monitor** | Live view of executing jobs with streaming detection and duration tracking |
+| **Smart Alerts** | Dynamic alerts for failures, SLA breaches, cost anomalies, and cluster issues |
+| **Cost Analysis** | Per-job and per-team cost attribution with DBU breakdown by SKU |
+| **Historical Trends** | Visualize cost, success rate, and failure trends with period-over-period comparison |
+| **Wildcard Filtering** | Filter jobs by name patterns (e.g., `*ETL*`, `prod-*-daily`) across all pages |
+| **Filter Presets** | Save and share filter combinations for quick access |
+
+### Performance Optimizations
+
 - **Metrics Cache**: Pre-aggregated Delta tables for sub-second dashboard loading
-- **Client-Side Caching**: Tiered TanStack Query caching for instant page navigation
-- **Mock Data Mode**: Demo-ready fallback when system tables aren't accessible
+- **Batch API Calls**: N+1 query elimination (50 requests → 1 request)
+- **Client-Side Caching**: Tiered TanStack Query caching for instant navigation
+- **GZip Compression**: Automatic response compression for large payloads
 
-> **For Developers**: See [DEVELOPER.md](DEVELOPER.md) for detailed development setup, architecture, and contribution guidelines.
+---
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      Databricks App Platform                        │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  ┌─────────────┐     ┌─────────────────────────────────────────┐   │
-│  │   React UI  │────▶│          FastAPI Backend               │   │
-│  │  (TanStack) │     │                                         │   │
-│  └─────────────┘     │  /api/health-metrics                    │   │
-│                      │  /api/alerts                            │   │
-│                      │  /api/costs/summary                     │   │
-│                      │  /api/jobs                              │   │
-│                      └───────────────┬─────────────────────────┘   │
-│                                      │                             │
-│                      ┌───────────────▼─────────────────────────┐   │
-│                      │        SQL Warehouse                    │   │
-│                      └───────────────┬─────────────────────────┘   │
-│                                      │                             │
-└──────────────────────────────────────┼─────────────────────────────┘
-                                       │
-           ┌───────────────────────────┼───────────────────────────┐
-           │                           │                           │
-           ▼                           ▼                           ▼
-┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
-│  system.lakeflow    │  │  system.lakeflow    │  │  system.billing     │
-│       .jobs         │  │  .job_run_timeline  │  │       .usage        │
-├─────────────────────┤  ├─────────────────────┤  ├─────────────────────┤
-│ Job metadata (SCD2) │  │ Job run history,    │  │ DBU consumption     │
-│ - job_id, name      │  │ durations, states   │  │ per job/SKU         │
-│ - workspace_id      │  │ - result_state      │  │ - usage_quantity    │
-│ - change_time       │  │ - run_duration_sec  │  │ - sku_name          │
-│ - delete_time       │  │ - period_start_time │  │ - usage_date        │
-└─────────────────────┘  └─────────────────────┘  └─────────────────────┘
-```
-
-## Prerequisites
-
-### 1. Databricks Workspace
-
-- Unity Catalog enabled workspace
-- SQL Warehouse (Serverless recommended)
-- Databricks CLI configured with authentication profile
-
-### 2. System Table Permissions
-
-The app requires read access to Unity Catalog system tables. There are two approaches:
-
-#### Option A: User OBO Authentication (Recommended)
-
-Use **On-Behalf-Of (OBO)** authentication to run queries with the logged-in user's permissions. This is the recommended approach because users typically already have system table access.
-
-1. **Configure app.yaml with user_api_scopes**:
-
-```yaml
-user_api_scopes:
-  - sql
-```
-
-2. **Enable OBO via CLI** (required after app creation):
+## Quick Start
 
 ```bash
-databricks apps update job-monitor --json '{"user_api_scopes": ["sql"]}' --profile YOUR_PROFILE
+# Clone and install
+git clone <repository-url>
+cd databricks_job_monitoring
+pip install -e ".[dev]"
+
+# Build frontend
+cd job_monitor/ui && npm install && npm run build && cd ../..
+
+# Deploy to Databricks
+databricks bundle deploy -t dev
 ```
 
-3. **Verify OBO is enabled**:
-
-```bash
-databricks apps get job-monitor --profile YOUR_PROFILE
-# Look for "effective_user_api_scopes": ["sql"]
-```
-
-> **Note**: Users will see an OAuth consent dialog on first access. The app then uses the user's existing permissions for all system table queries.
-
-#### Option B: Service Principal Grants
-
-Grant direct permissions to the app's Service Principal. Requires an **Account Administrator**.
-
-##### Required System Tables
-
-| Schema | Table | Purpose |
-|--------|-------|---------|
-| `system.lakeflow` | `jobs` | Job metadata (name, workspace, etc.) |
-| `system.lakeflow` | `job_run_timeline` | Job run history, durations, result states |
-| `system.billing` | `usage` | DBU consumption for cost attribution |
-
-##### Grant SQL Commands
-
-```sql
--- Replace SERVICE_PRINCIPAL_ID with the app's service principal application ID
--- You can find this in the app settings or Unity Catalog permissions
-
--- Grant access to system.lakeflow (job run data)
-GRANT USE SCHEMA ON SCHEMA system.lakeflow TO `SERVICE_PRINCIPAL_ID`;
-GRANT SELECT ON SCHEMA system.lakeflow TO `SERVICE_PRINCIPAL_ID`;
-
--- Grant access to system.billing (cost data)
-GRANT USE SCHEMA ON SCHEMA system.billing TO `SERVICE_PRINCIPAL_ID`;
-GRANT SELECT ON SCHEMA system.billing TO `SERVICE_PRINCIPAL_ID`;
-```
-
-> **Note**: These grants must be executed by an Account Administrator (member of "account admins" or metastore admin). Workspace administrators alone cannot grant access to system catalog tables.
-
-##### Verifying Permissions
-
-After grants are applied, verify access:
-
-```sql
--- Test lakeflow access
-SELECT * FROM system.lakeflow.jobs LIMIT 1;
-SELECT * FROM system.lakeflow.job_run_timeline LIMIT 1;
-
--- Test billing access
-SELECT * FROM system.billing.usage LIMIT 1;
-```
-
-### 3. Mock Data Fallback
-
-If system table permissions are not available (e.g., for demos), the app automatically falls back to realistic mock data. You can also explicitly enable mock mode:
-
-```yaml
-# In app.yaml
-env:
-  - name: USE_MOCK_DATA
-    value: "true"
-```
+---
 
 ## Installation
 
-### Clone the Repository
+### Prerequisites
+
+| Requirement | Details |
+|-------------|---------|
+| **Python** | 3.10+ |
+| **Node.js** | 18+ (for frontend build) |
+| **Databricks Workspace** | Unity Catalog enabled |
+| **SQL Warehouse** | Serverless recommended |
+| **Databricks CLI** | v0.200+ with authenticated profile |
+
+### Step 1: Clone Repository
 
 ```bash
 git clone <repository-url>
 cd databricks_job_monitoring
 ```
 
-### Install Python Dependencies
+### Step 2: Install Python Dependencies
 
 ```bash
 # Using pip
 pip install -e ".[dev]"
 
-# Or using uv (recommended)
+# Or using uv (faster)
 uv sync
 ```
 
-### Install Frontend Dependencies
+### Step 3: Build Frontend
 
 ```bash
 cd job_monitor/ui
@@ -173,165 +97,322 @@ npm run build
 cd ../..
 ```
 
-### Configure Databricks CLI Profile
+### Step 4: Configure Databricks CLI
 
 ```bash
-# Configure authentication profile
+# Create or configure a profile
 databricks configure --profile YOUR_PROFILE
 
 # Verify authentication
 databricks auth describe --profile YOUR_PROFILE
 ```
 
-## Configuration
+### Step 5: System Table Permissions
 
-### Central Configuration File
+The app requires read access to Unity Catalog system tables. Choose one approach:
 
-All settings are centralized in `job_monitor/config.yaml`. This file is used by both the app and the cache refresh job.
+#### Option A: User OBO Authentication (Recommended)
 
-```yaml
-# job_monitor/config.yaml
-cache:
-  catalog: "job_monitor"      # Unity Catalog for cache tables
-  schema: "cache"             # Schema for cache tables
-  refresh_cron: "0 */10 * * * ?"  # Refresh schedule (every 10 min)
-  enabled: true               # Set to false to bypass cache
+Use **On-Behalf-Of (OBO)** to run queries with the logged-in user's permissions.
 
-warehouse_id: ""              # SQL Warehouse ID (usually set via env var)
-dbu_rate: 0.0                 # DBU to dollar conversion rate
+1. Add to `app.yaml`:
+   ```yaml
+   user_api_scopes:
+     - sql
+   ```
 
-tags:
-  sla: "sla_minutes"          # Job tag key for SLA target
-  team: "team"                # Job tag key for team attribution
-  owner: "owner"              # Job tag key for owner
-  budget: "budget_monthly_dbus"  # Job tag key for monthly DBU budget
+2. After deployment, enable OBO via CLI:
+   ```bash
+   databricks apps update job-monitor --json '{"user_api_scopes": ["sql"]}' -p YOUR_PROFILE
+   ```
+
+3. Verify:
+   ```bash
+   databricks apps get job-monitor -p YOUR_PROFILE
+   # Look for: "effective_user_api_scopes": ["sql"]
+   ```
+
+#### Option B: Service Principal Grants
+
+Grant permissions to the app's Service Principal (requires Account Administrator):
+
+```sql
+-- Grant system.lakeflow access (job data)
+GRANT USE SCHEMA ON SCHEMA system.lakeflow TO `SERVICE_PRINCIPAL_ID`;
+GRANT SELECT ON SCHEMA system.lakeflow TO `SERVICE_PRINCIPAL_ID`;
+
+-- Grant system.billing access (cost data)
+GRANT USE SCHEMA ON SCHEMA system.billing TO `SERVICE_PRINCIPAL_ID`;
+GRANT SELECT ON SCHEMA system.billing TO `SERVICE_PRINCIPAL_ID`;
 ```
+
+---
+
+## Configuration
 
 ### Environment Variables
 
-Environment variables override `config.yaml` values. Set these in `app.yaml`:
+Configure in `app.yaml` or set as environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DATABRICKS_HOST` | Workspace URL (auto-set by platform) | - |
-| `WAREHOUSE_ID` | SQL Warehouse ID for queries | Required |
-| `USE_MOCK_DATA` | Enable mock data mode | `false` |
-| `LOG_LEVEL` | Logging level (DEBUG, INFO, etc.) | `INFO` |
-| `DBU_RATE` | DBU to dollar conversion rate | `0.0` |
-| `CACHE_CATALOG` | Catalog for cache tables | `job_monitor` |
-| `CACHE_SCHEMA` | Schema for cache tables | `cache` |
-| `USE_CACHE` | Enable cache-first queries | `true` |
+| `WAREHOUSE_ID` | SQL Warehouse ID for queries | **Required** |
+| `CACHE_CATALOG` | Catalog for cache tables | `main` |
+| `CACHE_SCHEMA` | Schema for cache tables | `job_monitor_cache` |
+| `LOG_LEVEL` | Logging level | `INFO` |
+| `USE_MOCK_DATA` | Enable demo mode with mock data | `false` |
 
-### Metrics Cache
+### Job Tags
 
-The app uses pre-aggregated Delta tables for fast dashboard loading (<1 second vs 10-30 seconds with live queries).
+Tag your Databricks jobs to enable advanced features:
 
-#### Required Permissions for Cache
+| Tag Key | Purpose | Example |
+|---------|---------|---------|
+| `team` | Team attribution for cost grouping | `data-platform` |
+| `sla_minutes` | SLA target in minutes | `30` |
+| `budget_monthly_dbus` | Monthly DBU budget | `500` |
+| `owner` | Job owner for notifications | `jane@company.com` |
+| `output_tables` | Tables for Pipeline Integrity tracking | `catalog.schema.table` |
 
-The cache refresh job needs permissions to create/write to the cache catalog and schema. An administrator must:
+---
 
-1. **Create the catalog** (if it doesn't exist):
-   ```sql
-   CREATE CATALOG IF NOT EXISTS job_monitor;
-   ```
+## Application Usage
 
-2. **Grant permissions to the user/service principal** running the cache refresh job:
-   ```sql
-   -- Grant catalog usage
-   GRANT USE CATALOG ON CATALOG job_monitor TO `user@company.com`;
+### Navigation
 
-   -- Grant schema creation and usage
-   GRANT CREATE SCHEMA ON CATALOG job_monitor TO `user@company.com`;
-   GRANT USE SCHEMA ON CATALOG job_monitor TO `user@company.com`;
+The application has five main pages accessible from the sidebar:
 
-   -- Or for full ownership (recommended for the job runner)
-   GRANT ALL PRIVILEGES ON CATALOG job_monitor TO `user@company.com`;
-   ```
+| Page | Icon | Purpose |
+|------|------|---------|
+| **Dashboard** | 📊 | Overview with summary metrics and recent activity |
+| **Running Jobs** | ▶️ | Real-time view of currently executing jobs |
+| **Job Health** | 📈 | Job health metrics with priority-based sorting |
+| **Alerts** | 🔔 | Active alerts from all categories |
+| **Historical** | 📅 | Trend charts for costs, success rates, failures |
 
-3. **Alternative: Use an existing catalog** where you have permissions:
-   Update `job_monitor/config.yaml`:
-   ```yaml
-   cache:
-     catalog: "your_catalog"  # e.g., "main" or your personal catalog
-     schema: "job_monitor_cache"
-   ```
+### Dashboard
 
-> **Note**: The `CREATE CATALOG` permission requires metastore admin privileges. If you cannot create a new catalog, use an existing catalog where you have schema creation rights.
+The Dashboard provides a high-level overview of your Databricks jobs ecosystem:
 
-4. **Grant read access to app users** (required for OBO authentication):
-   ```sql
-   -- Allow all workspace users to read cache tables
-   GRANT USE CATALOG ON CATALOG job_monitor TO `account users`;
-   GRANT USE SCHEMA ON SCHEMA job_monitor.cache TO `account users`;
-   GRANT SELECT ON SCHEMA job_monitor.cache TO `account users`;
-   ```
+**Metric Cards:**
+- **Total Jobs**: Count of jobs with activity in the monitoring window
+- **Active Alerts**: Current alert count with critical alerts highlighted
+- **Success Rate**: 7-day average success rate across all jobs
+- **DBU Cost (30d)**: Total DBU consumption over the last 30 days
 
-> **Note**: This step is required when using OBO (On-Behalf-Of) authentication. The app queries cache tables using the logged-in user's permissions, so users need read access to the cache.
+**System Status Panel:**
+- Jobs by priority (Critical/P1, Warning/P2, Info/P3, Healthy)
+- Connection status showing authentication state
+- Data freshness indicator
 
-#### Cache Tables
+**Recent Activity:**
+- Latest 5 alerts with severity indicators
+- Click any alert to navigate to the Alerts page
+
+### Running Jobs
+
+Monitor jobs that are currently executing:
+
+**Features:**
+- **Real-time updates**: Auto-refreshes every 30 seconds
+- **State filtering**: Click cards to filter by Running/Pending/Terminating
+- **Streaming detection**: Jobs matching patterns like `*stream*`, `*cdc*`, `*pipeline*` are flagged
+- **Long-running alerts**: Batch jobs > 4h or streaming jobs > 24h show warning
+- **Recent runs history**: 5 most recent run results (Success/Failed/Canceled)
+- **Expandable rows**: Click any job to see detailed information
+
+**Table Columns:**
+| Column | Description |
+|--------|-------------|
+| Job Name | Name with streaming/long-running indicators |
+| Recent Runs | Last 5 run results as status icons |
+| State | RUNNING, PENDING, QUEUED, or TERMINATING |
+| Started (UTC) | Start time in UTC |
+| Duration | Time since start |
+| Link | Direct link to Databricks job run |
+
+### Job Health
+
+Analyze job health patterns and identify problematic jobs:
+
+**Time Windows:**
+- **7 Days**: Recent health snapshot (default)
+- **30 Days**: Extended view for trend analysis
+
+**Priority System:**
+| Priority | Criteria | Color |
+|----------|----------|-------|
+| P1 (Critical) | 2+ consecutive failures | Red |
+| P2 (Failing) | Recent failure | Orange |
+| P3 (Warning) | Success rate 70-89% | Yellow |
+| Healthy | Success rate ≥ 90% | Green |
+
+**Summary Cards:**
+Click any card to filter the table by that priority level.
+
+**Table Features:**
+- Sortable by any column
+- Search by job name
+- Inline SLA editing
+- Duration sparklines
+- Click job name to see expanded details
+
+### Alerts
+
+Review and manage alerts from multiple sources:
+
+**Alert Categories:**
+| Category | Source | Examples |
+|----------|--------|----------|
+| **Failure** | Job run results | 2+ consecutive failures, low success rate |
+| **SLA** | Duration vs target | Job exceeded SLA target duration |
+| **Cost** | DBU usage | Cost spike > 2x baseline p90 |
+| **Cluster** | Cluster metrics | Over-provisioned resources |
+
+**Severity Badges:**
+- **P1 Critical**: Requires immediate attention
+- **P2 Warning**: Should be investigated
+- **P3 Info**: Informational, may need attention
+
+**Actions:**
+- Click severity badges to filter
+- Acknowledge alerts to dismiss for 24h
+- "All" tab runs all 4 queries (~30s), category tabs are faster (~1-5s)
+
+### Historical Trends
+
+Visualize trends with period-over-period comparison:
+
+**Tabs:**
+1. **Cost Trends**: DBU consumption over time
+2. **Success Rate**: Job success percentage
+3. **Failures**: Count of failed runs
+
+**Chart Features:**
+- Solid line: Current period
+- Dashed line: Previous period (same duration)
+- Hover for exact values
+- Auto-granularity (hourly/daily/weekly based on range)
+
+**Summary Cards:**
+- Current total value
+- Previous period comparison
+- Change percentage with trend indicator
+
+### Global Filters
+
+The filter panel (accessible from header) applies across all pages:
+
+**Filter Options:**
+1. **Workspace**: Filter by Databricks workspace (for multi-workspace deployments)
+2. **Time Range**: 7d, 30d, 90d, or custom date range
+3. **Team**: Filter by team tag
+4. **Job Name Patterns**: Wildcard filters like `*ETL*`, `prod-*`
+
+**Filter Presets:**
+- Save current filters as a preset
+- Load presets with one click
+- Edit existing presets
+- Share presets across team (stored in Delta table)
+
+**Wildcard Pattern Examples:**
+| Pattern | Matches |
+|---------|---------|
+| `*ETL*` | Any job with "ETL" in the name |
+| `prod-*` | Jobs starting with "prod-" |
+| `*-daily` | Jobs ending with "-daily" |
+| `*DQ*,*quality*` | Multiple patterns (comma-separated) |
+
+---
+
+## Monitoring Jobs
+
+The application includes a background job that pre-aggregates metrics for optimal dashboard performance.
+
+### Cache Refresh Job
+
+**Purpose:** Pre-compute expensive aggregations from system tables into Delta tables.
+
+**Performance Impact:**
+| Query Type | Without Cache | With Cache |
+|------------|---------------|------------|
+| Health Metrics | 10-16s | <1s |
+| Cost Summary | 30-40s | <1s |
+| Alerts | 15-30s | <1s |
+
+**Cache Tables Created:**
 
 | Table | Contents |
 |-------|----------|
-| `{catalog}.{schema}.job_health_cache` | Job success rates, priorities, duration stats |
-| `{catalog}.{schema}.cost_cache` | Cost data by job with SKU breakdown |
+| `{catalog}.{schema}.job_health_cache` | Success rates, priorities, duration stats |
+| `{catalog}.{schema}.cost_cache` | Per-job costs with SKU breakdown |
 | `{catalog}.{schema}.alerts_cache` | Pre-computed alert conditions |
 
-### Databricks Jobs
+**What the Job Computes:**
 
-The project includes background jobs deployed alongside the app via DABs.
+1. **Job Health Cache:**
+   - Success rates (7-day and 30-day windows)
+   - Priority flags (P1/P2/P3) based on failure patterns
+   - Consecutive failure detection
+   - Retry counts
+   - Duration statistics (median, p90, avg, max)
 
-#### Jobs Overview
+2. **Cost Cache:**
+   - Total DBUs per job (30-day)
+   - 7-day period comparison for trend calculation
+   - SKU breakdown per job
+   - P90 baseline for anomaly detection
+   - Cost spike flags (>2x baseline)
 
-| Job | Name | Purpose | Default Schedule |
-|-----|------|---------|------------------|
-| `refresh-metrics-cache` | `job-monitor-refresh-cache` | Pre-aggregate metrics from system tables into Delta cache tables | Every 15 minutes |
+3. **Alerts Cache:**
+   - Failure alerts from consecutive failure detection
+   - Cost spike alerts from anomaly detection
+   - Pre-computed severity levels
 
-#### Cache Refresh Job
+### Deploying the Cache Job
 
-**Purpose**: Pre-computes expensive aggregations from system tables into Delta tables, reducing dashboard load times from 10-30 seconds to <1 second.
+The job is deployed automatically with the bundle:
 
-**What it computes**:
-- Job health metrics (success rates, priorities, consecutive failures)
-- Cost data by job and team with SKU breakdown
-- Pre-computed alert conditions
+```bash
+databricks bundle deploy -t e2
+```
 
-**Cluster configuration**: Single-node `i3.xlarge` (cost-optimized for aggregation workloads)
-
-**Recommended schedules**:
+**Recommended Schedules:**
 
 | Use Case | Cron Expression | Interval |
 |----------|-----------------|----------|
 | Real-time ops | `0 */5 * * * ?` | Every 5 minutes |
-| Standard monitoring | `0 */15 * * * ?` | Every 15 minutes (default) |
+| Standard (default) | `0 */15 * * * ?` | Every 15 minutes |
 | Cost-conscious | `0 */30 * * * ?` | Every 30 minutes |
-| Hourly reporting | `0 0 * * * ?` | Every hour |
 
-**Run manually**:
-```bash
-databricks bundle run refresh-metrics-cache -t e2
-```
-
-**Override schedule at deploy time**:
+**Override Schedule:**
 ```bash
 databricks bundle deploy -t e2 --var="cache_refresh_cron=0 */30 * * * ?"
 ```
 
-**Monitor job runs**:
+**Run Manually:**
+```bash
+databricks bundle run refresh-metrics-cache -t e2
+```
+
+**Monitor Job:**
 ```bash
 # View recent runs
 databricks jobs list-runs --job-id JOB_ID --limit 5 -p YOUR_PROFILE
 
-# Check in Databricks UI
-# Workflows → job-monitor-refresh-cache → Runs
+# Check in UI: Workflows → job-monitor-refresh-cache → Runs
 ```
 
-#### Check Cache Status
+### Cache Status API
+
+Check cache availability:
 
 ```bash
 curl https://YOUR_APP_URL/api/cache/status
 ```
 
-Returns:
+Response:
 ```json
 {
   "available": true,
@@ -341,112 +422,103 @@ Returns:
 }
 ```
 
-### Job Tags for Monitoring Features
+### Required Permissions for Cache
 
-Tag your Databricks jobs to enable advanced monitoring features:
+The cache refresh job needs permissions to write to the cache catalog/schema:
 
-| Tag Key | Description | Example Value |
-|---------|-------------|---------------|
-| `team` | Team attribution for cost grouping | `data-platform` |
-| `sla_minutes` | SLA target in minutes | `30` |
-| `budget_monthly_dbus` | Monthly DBU budget | `500` |
-| `owner` | Job owner for notifications | `jane.doe@company.com` |
-| `output_tables` | Tables written by job (for Pipeline Integrity) | `catalog.schema.table1,catalog.schema.table2` |
+```sql
+-- Option 1: Create dedicated catalog
+CREATE CATALOG IF NOT EXISTS job_monitor;
+GRANT ALL PRIVILEGES ON CATALOG job_monitor TO `user@company.com`;
 
-```python
-# Example: Setting job tags via SDK
-job_settings = {
-    "name": "My ETL Job",
-    "tags": {
-        "team": "data-platform",
-        "sla_minutes": "30",
-        "budget_monthly_dbus": "500",
-        "output_tables": "main.sales.orders,main.sales.customers"
-    },
-    # ... other settings
-}
+-- Option 2: Use existing catalog
+-- Update config.yaml to use your catalog (e.g., "main")
+
+-- For OBO users to read cache
+GRANT USE CATALOG ON CATALOG job_monitor TO `account users`;
+GRANT USE SCHEMA ON SCHEMA job_monitor.cache TO `account users`;
+GRANT SELECT ON SCHEMA job_monitor.cache TO `account users`;
 ```
 
-#### Pipeline Integrity Tracking
-
-The `output_tables` tag enables **Pipeline Integrity** monitoring for jobs that write to Delta tables:
-
-- **Row Count Deltas**: Compares current row counts against a 7-day baseline. Alerts if counts deviate significantly (e.g., table suddenly has 50% fewer rows).
-- **Schema Drift Detection**: Detects when table schemas change unexpectedly (columns added/removed/modified).
-
-**How to configure:**
-
-1. Go to **Databricks → Workflows → Select job → Edit**
-2. Add a tag with key `output_tables`
-3. Value is a comma-separated list of fully-qualified table names
-
-```
-output_tables = main.sales.orders,main.sales.customers
-```
-
-> **Note**: This is optional. Jobs that don't write to tables or don't need data quality tracking can safely skip this configuration.
+---
 
 ## Deployment
 
 ### Using Databricks Asset Bundles (DABs)
 
-1. **Update `databricks.yml`** with your workspace profile and warehouse ID:
+1. **Update target configuration** in `databricks.yml`:
+   ```yaml
+   targets:
+     dev:
+       mode: development
+       workspace:
+         profile: YOUR_PROFILE
+       variables:
+         warehouse_id: "YOUR_WAREHOUSE_ID"
+   ```
 
-```yaml
-targets:
-  dev:
-    mode: development
-    default: true
-    workspace:
-      profile: YOUR_PROFILE
-    variables:
-      warehouse_id: "YOUR_WAREHOUSE_ID"
-```
+2. **Build frontend:**
+   ```bash
+   cd job_monitor/ui && npm run build && cd ../..
+   ```
 
-2. **Build the frontend**:
+3. **Deploy:**
+   ```bash
+   databricks bundle deploy -t dev
+   ```
 
-```bash
-cd job_monitor/ui
-npm run build
-cd ../..
-```
+4. **Enable OBO** (required after first deploy):
+   ```bash
+   databricks apps update job-monitor --json '{"user_api_scopes": ["sql"]}' -p YOUR_PROFILE
+   ```
 
-3. **Deploy the bundle**:
+5. **Get app URL:**
+   ```bash
+   databricks apps get job-monitor -p YOUR_PROFILE
+   ```
 
-```bash
-databricks bundle deploy -t dev
-```
+### Using deploy.sh Script
 
-4. **Get the app URL**:
-
-```bash
-databricks apps get job-monitor --profile YOUR_PROFILE
-```
-
-### Manual Deployment
-
-```bash
-# Deploy app to workspace
-databricks apps deploy job-monitor \
-  --profile YOUR_PROFILE \
-  --source-code-path /Workspace/Users/your.email@company.com/.bundle/job-monitor/dev/files
-```
-
-## Development
-
-For detailed development instructions, see [DEVELOPER.md](DEVELOPER.md).
-
-### Quick Start
+For multi-environment deployments:
 
 ```bash
-# Backend (with mock data for local dev)
+# E2 workspace
+./deploy.sh e2
+
+# Production (DEMO WEST)
+./deploy.sh prod
+
+# Development
+./deploy.sh dev
+```
+
+### Multi-Workspace Deployment
+
+Each target has separate config files:
+
+| Target | Bundle Config | App Config |
+|--------|--------------|------------|
+| e2 | `databricks.e2.yml` | `app.e2.yaml` |
+| prod | `databricks.prod.yml` | `app.prod.yaml` |
+| dev | `databricks.dev.yml` | `app.yaml` |
+
+---
+
+## Developer Guide
+
+### Local Development
+
+```bash
+# Terminal 1: Backend with mock data
 export USE_MOCK_DATA=true
 uvicorn job_monitor.backend.app:app --reload --port 8000
 
-# Frontend (in another terminal)
+# Terminal 2: Frontend with hot reload
 cd job_monitor/ui
 npm run dev
 ```
+
+Frontend runs at `http://localhost:5173`, proxies API calls to backend at `http://localhost:8000`.
 
 ### Running Tests
 
@@ -454,147 +526,196 @@ npm run dev
 pytest tests/
 ```
 
-### API Endpoints
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Databricks App Platform                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────┐     ┌──────────────────────────────────────┐   │
+│  │   React UI  │────▶│         FastAPI Backend              │   │
+│  │  (TanStack) │     │                                      │   │
+│  └─────────────┘     │  Routers:                            │   │
+│                      │  - health_metrics  - alerts          │   │
+│                      │  - jobs_api        - costs           │   │
+│                      │  - historical      - filters         │   │
+│                      └───────────────┬──────────────────────┘   │
+│                                      │                           │
+│                      ┌───────────────▼──────────────────────┐   │
+│                      │        SQL Warehouse                  │   │
+│                      │   (Statement Execution API)           │   │
+│                      └───────────────┬──────────────────────┘   │
+│                                      │                           │
+└──────────────────────────────────────┼───────────────────────────┘
+                                       │
+           ┌───────────────────────────┼───────────────────────────┐
+           │                           │                           │
+           ▼                           ▼                           ▼
+┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
+│  system.lakeflow    │  │   Cache Tables      │  │  system.billing     │
+│  .jobs              │  │  (job_health_cache, │  │  .usage             │
+│  .job_run_timeline  │  │   cost_cache,       │  │                     │
+│                     │  │   alerts_cache)     │  │                     │
+└─────────────────────┘  └─────────────────────┘  └─────────────────────┘
+```
+
+### Performance Optimizations
+
+The application includes numerous optimizations for production performance:
+
+#### Backend Optimizations
+
+| Optimization | Location | Impact |
+|-------------|----------|--------|
+| Health Summary Endpoint | `health_metrics.py` | 86x smaller payload |
+| Batch Job History | `jobs_api.py` | 50 requests → 1 request |
+| Response Caching | Multiple routers | Configurable TTL per endpoint |
+| Selective Alert Queries | `alerts.py` | Only run requested categories |
+| Cost Summary Skip Teams | `cost.py` | 37s → 7.8s with `include_teams=false` |
+
+#### Frontend Optimizations
+
+| Optimization | Location | Impact |
+|-------------|----------|--------|
+| Query Key Deduplication | `query-config.ts` | Single `/api/me` call |
+| Tiered Cache Presets | `query-config.ts` | Different TTLs per data type |
+| Default Failure Tab | `alerts.tsx` | 30s → 5s initial load |
+| Infinite Query Pagination | Multiple pages | Load more on demand |
+
+#### TanStack Query Presets
+
+```typescript
+// query-config.ts
+export const queryPresets = {
+  static: { staleTime: Infinity, gcTime: 60 * 60 * 1000 },      // Never refetch
+  session: { staleTime: 5 * 60 * 1000, gcTime: 30 * 60 * 1000 }, // User session
+  semiLive: { staleTime: 2 * 60 * 1000, gcTime: 10 * 60 * 1000 }, // System tables
+  live: { staleTime: 10 * 1000, gcTime: 60 * 1000 },            // Active jobs
+  slow: { staleTime: 10 * 60 * 1000, gcTime: 30 * 60 * 1000 },  // Expensive queries
+}
+```
+
+#### Watch Points for Developers
+
+1. **OBO Authentication**: All routers querying system tables MUST use `get_ws_prefer_user` (not `get_ws`)
+   - `get_ws` → Service Principal auth → limited permissions
+   - `get_ws_prefer_user` → OBO → user's permissions
+
+2. **Query Key Consistency**: Use `queryKeys.user.current()` for user queries to enable cache sharing
+
+3. **Slow Endpoints**: Always use `queryPresets.slow` for expensive queries (alerts, costs)
+
+4. **Result State Casing**: System tables use `SUCCEEDED` (not `SUCCESS`) for result_state
+
+5. **Workspace Filtering**: All endpoints should support `workspace_id` parameter for multi-workspace deployments
+
+### API Endpoints Reference
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/me` | GET | Current authenticated user info |
+| **Health** |||
 | `/api/health` | GET | App health check |
+| `/api/me` | GET | Current authenticated user |
 | `/api/cache/status` | GET | Cache availability and freshness |
 | **Job Health** |||
-| `/api/health-metrics` | GET | Job health summary with priorities |
-| `/api/health-metrics/{job_id}/duration` | GET | Duration statistics for a job |
+| `/api/health-metrics` | GET | Paginated job health list |
+| `/api/health-metrics/summary` | GET | Lightweight counts only |
 | `/api/health-metrics/{job_id}/details` | GET | Expanded job details |
-| **Alerts** |||
-| `/api/alerts` | GET | Generated alerts from all sources |
-| `/api/alerts/{id}/acknowledge` | POST | Acknowledge an alert (24h TTL) |
-| **Costs** |||
-| `/api/costs/summary` | GET | Cost summary with job/team breakdown |
-| `/api/costs/by-team` | GET | Costs grouped by team tag |
-| `/api/costs/anomalies` | GET | Cost spikes and zombie jobs |
-| **Historical** |||
-| `/api/historical/costs` | GET | Historical cost trends |
-| `/api/historical/success-rate` | GET | Historical success rate trends |
-| `/api/historical/sla-breaches` | GET | Historical SLA breach data |
-| **Jobs** |||
-| `/api/jobs` | GET | Job list from system tables |
-| `/api/jobs-api/list` | GET | Jobs via Databricks Jobs API |
+| **Running Jobs** |||
 | `/api/jobs-api/active` | GET | Currently running jobs |
 | `/api/jobs-api/runs/{job_id}` | GET | Run history for a job |
-| `/api/job-tags/{job_id}/tags` | GET | Tags for a specific job |
-| **Pipeline Integrity** |||
-| `/api/pipeline/{job_id}/row-counts` | GET | Row count deltas for output tables |
-| `/api/pipeline/{job_id}/schema-drift` | GET | Schema drift detection |
-| **Cluster Metrics** |||
-| `/api/cluster-metrics/{job_id}` | GET | Cluster utilization statistics |
-| **Filter Presets** |||
-| `/api/filters/presets` | GET | List saved filter presets |
-| `/api/filters/presets` | POST | Create a filter preset |
-| `/api/filters/presets/{id}` | PUT | Update a filter preset |
-| `/api/filters/presets/{id}` | DELETE | Delete a filter preset |
+| `/api/jobs-api/runs/batch` | POST | Batch fetch history for multiple jobs |
+| **Alerts** |||
+| `/api/alerts` | GET | Alerts with optional category filter |
+| `/api/alerts/{id}/acknowledge` | POST | Acknowledge alert (24h TTL) |
+| **Costs** |||
+| `/api/costs/summary` | GET | Cost summary (use `include_teams=false` for speed) |
+| `/api/historical/costs` | GET | Historical cost trends |
+| **Historical** |||
+| `/api/historical/success-rate` | GET | Success rate trends |
+| `/api/historical/sla-breaches` | GET | Failure count trends |
+| **Filters** |||
+| `/api/filters/presets` | GET/POST | List or create filter presets |
+| `/api/filters/presets/{id}` | PUT/DELETE | Update or delete preset |
+
+---
 
 ## Troubleshooting
 
-### Permission Errors
+### Common Issues
 
-**Symptom**: API returns 403 or "INSUFFICIENT_PERMISSIONS" error
+#### Permission Errors (403)
 
-**Solution**:
-1. Check that system table grants have been applied by an Account Administrator
-2. Verify grants with `SHOW GRANTS ON SCHEMA system.lakeflow`
-3. Enable mock data mode for demos: `USE_MOCK_DATA=true`
-
-### SQL Warehouse Not Starting
-
-**Symptom**: Queries timeout or return connection errors
+**Symptom**: API returns "INSUFFICIENT_PERMISSIONS"
 
 **Solution**:
-1. Start the warehouse: `databricks warehouses start WAREHOUSE_ID --profile YOUR_PROFILE`
-2. Check warehouse state: `databricks warehouses get WAREHOUSE_ID --profile YOUR_PROFILE`
-3. Consider using a warehouse without auto-stop for production
-
-### App Not Loading Data
-
-**Symptom**: Dashboard shows empty or "loading" state
-
-**Solution**:
-1. Check app logs: Visit `https://YOUR_APP_URL/logz`
-2. Verify warehouse ID in app.yaml matches an active warehouse
-3. Test SQL queries directly in Databricks SQL Editor
-
-### Authentication Issues
-
-**Symptom**: 401 Unauthorized or SDK initialization errors
-
-**Solution**:
-1. Verify Databricks CLI profile: `databricks auth describe --profile YOUR_PROFILE`
-2. Re-authenticate: `databricks auth login --profile YOUR_PROFILE`
-3. Check that the app service principal has workspace access
-
-### OBO Not Working
-
-**Symptom**: App uses SP credentials instead of user credentials, queries fail with permission errors
-
-**Solution**:
-1. Verify `user_api_scopes` in app.yaml contains `["sql"]`
-2. Run CLI update (required after app creation):
+1. Verify OBO is enabled:
    ```bash
-   databricks apps update job-monitor --json '{"user_api_scopes": ["sql"]}' --profile YOUR_PROFILE
+   databricks apps get job-monitor -p YOUR_PROFILE
+   # Check for: "effective_user_api_scopes": ["sql"]
    ```
-3. Check effective scopes:
+2. Re-enable OBO if needed:
    ```bash
-   databricks apps get job-monitor --profile YOUR_PROFILE
-   # Look for: "effective_user_api_scopes": ["sql"]
+   databricks apps update job-monitor --json '{"user_api_scopes": ["sql"]}' -p YOUR_PROFILE
    ```
-4. Clear browser cache and re-login to trigger OAuth consent
-5. Check app logs for `gap-auth` header presence (shows authenticated user email)
+3. Clear browser cache and re-login to trigger OAuth consent
 
-### Cache Not Available
+#### Dashboard Shows 0 / Loading
 
-**Symptom**: Dashboard loads slowly, `/api/cache/status` shows `"available": false`
+**Symptom**: Metrics show 0 or stuck loading
 
 **Solution**:
-1. Run the cache refresh job manually:
-   ```bash
-   databricks bundle run refresh-metrics-cache -t e2
-   ```
-2. Verify the job completed successfully in the Databricks Jobs UI
-3. Check that the cache catalog/schema exist:
-   ```sql
-   SHOW TABLES IN job_monitor.cache;
-   ```
-4. Verify the app has permission to read cache tables
+1. Check app logs: `https://YOUR_APP_URL/logz`
+2. Verify warehouse ID matches an active warehouse
+3. Check cache status: `curl https://YOUR_APP_URL/api/cache/status`
+4. Run cache refresh job if cache is stale
 
-### Cache Data is Stale
+#### Slow Page Loads (>10s)
 
-**Symptom**: `/api/cache/status` shows `"fresh": false`
+**Symptom**: Pages take 10-30+ seconds to load
 
 **Solution**:
-1. Check if the refresh job is running on schedule in Databricks Jobs UI
-2. Verify the job schedule in `job_monitor/config.yaml`:
-   ```yaml
-   cache:
-     refresh_cron: "0 */10 * * * ?"  # Every 10 minutes
-   ```
-3. Run the job manually to refresh immediately:
-   ```bash
-   databricks bundle run refresh-metrics-cache -t e2
-   ```
+1. Verify cache is enabled and fresh
+2. Check if using category filters on Alerts page (defaults to Failure which is fast)
+3. Review network tab for which endpoints are slow
+4. Consider deploying cache refresh job if not running
+
+#### App Logs Location
+
+- **E2**: `https://job-monitor-XXXX.aws.databricksapps.com/logz`
+- **From CLI**: `databricks apps logs job-monitor -p YOUR_PROFILE`
+
+### Debug Headers
+
+Check app logs for authentication status:
+- `gap-auth: user@email.com` → OBO working, using user credentials
+- No `gap-auth` header → Using Service Principal credentials
+
+---
 
 ## Tech Stack
 
-- **Backend**: FastAPI + Databricks SDK + Pydantic + APScheduler
-- **Frontend**: React 18 + TypeScript + TanStack (Router, Query) + Tailwind CSS + Recharts
-- **Caching**: Two-tier strategy:
-  - **Server-side**: Pre-aggregated Delta tables refreshed every 10 minutes
-  - **Client-side**: TanStack Query with tiered presets (static/semiLive/live/session)
-- **Deployment**: Databricks Apps via Asset Bundles (DABs)
+| Layer | Technology |
+|-------|------------|
+| **Backend** | FastAPI, Databricks SDK, Pydantic, APScheduler |
+| **Frontend** | React 18, TypeScript, TanStack Router/Query, Tailwind CSS, Recharts |
+| **Caching** | Server: Delta tables, Client: TanStack Query |
+| **Deployment** | Databricks Apps via Asset Bundles (DABs) |
+| **Data Sources** | Unity Catalog system tables (lakeflow, billing) |
 
-## Documentation
-
-- [README.md](README.md) - This file (user guide, installation, deployment)
-- [DEVELOPER.md](DEVELOPER.md) - Developer guide (local setup, architecture, contributing)
+---
 
 ## License
 
 MIT
+
+---
+
+## Version History
+
+| Version | Date | Highlights |
+|---------|------|------------|
+| 1.2.0 | 2026-02-26 | Filter presets caching, cache warm-up, UI polish |
+| 1.1.0 | 2026-02-26 | Wildcard filtering, preset edit mode |
+| 1.0.0 | 2026-02-25 | Initial release with multi-workspace support |

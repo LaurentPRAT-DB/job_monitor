@@ -16,7 +16,7 @@ import { getCurrentUser } from '@/lib/api'
 import { queryKeys, queryPresets } from '@/lib/query-config'
 
 // Version from package.json - updated at build time
-const APP_VERSION = '1.1.0'
+const APP_VERSION = '1.2.0'
 // Build timestamp - set during build or use current date
 const BUILD_DATE = __BUILD_DATE__ ?? new Date().toISOString().split('T')[0]
 

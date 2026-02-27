@@ -2,6 +2,23 @@
 
 This document provides detailed information for developers working on the Job Monitor project.
 
+## Table of Contents
+
+- [Project Structure](#project-structure)
+- [Local Development Setup](#local-development-setup)
+- [Backend Development](#backend-development)
+- [Frontend Development](#frontend-development)
+- [Performance Optimizations](#performance-optimizations)
+- [Watch Points](#watch-points)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Configuration](#configuration)
+- [OBO Authentication](#obo-authentication)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+
+---
+
 ## Project Structure
 
 ```
@@ -52,6 +69,8 @@ databricks_job_monitoring/
 ├── pyproject.toml            # Python project config
 └── README.md                 # User documentation
 ```
+
+---
 
 ## Local Development Setup
 
@@ -115,6 +134,8 @@ uvicorn job_monitor.backend.app:app --reload
 
 Mock data provides realistic job health, costs, and alerts for UI development.
 
+---
+
 ## Backend Development
 
 ### Adding a New API Endpoint
@@ -124,15 +145,22 @@ Mock data provides realistic job health, costs, and alerts for UI development.
 ```python
 # job_monitor/backend/routers/my_feature.py
 from fastapi import APIRouter, Depends
-from ..core import get_sql_client
+from ..core import get_ws_prefer_user  # ALWAYS use get_ws_prefer_user for system tables!
 from ..models import MyResponse
 
 router = APIRouter(prefix="/api/my-feature", tags=["my-feature"])
 
 @router.get("", response_model=MyResponse)
-async def get_my_feature(sql_client=Depends(get_sql_client)):
-    # Execute query using sql_client
-    result = sql_client.execute("SELECT ...")
+async def get_my_feature(
+    workspace_id: str | None = None,  # Support workspace filtering
+    ws=Depends(get_ws_prefer_user),   # Use OBO authentication
+):
+    # Execute query using statement execution
+    result = ws.statement_execution.execute_statement(
+        warehouse_id=settings.warehouse_id,
+        statement="SELECT ...",
+        wait_timeout="30s",
+    )
     return MyResponse(data=result)
 ```
 
@@ -147,52 +175,37 @@ app.include_router(my_feature.router)
 
 ### SQL Client Usage
 
-The `get_sql_client()` dependency provides a configured SQL executor:
+Use `statement_execution` for system table queries:
 
 ```python
-from ..core import get_sql_client
+from ..core import get_ws_prefer_user
+from ..config import settings
 
 @router.get("/data")
-async def get_data(sql_client=Depends(get_sql_client)):
-    # Execute returns list of dicts
-    rows = sql_client.execute("""
-        SELECT job_id, name, result_state
-        FROM system.lakeflow.job_run_timeline
-        WHERE workspace_id = current_workspace_id()
-        LIMIT 100
-    """)
+async def get_data(ws=Depends(get_ws_prefer_user)):
+    result = ws.statement_execution.execute_statement(
+        warehouse_id=settings.warehouse_id,
+        statement="""
+            SELECT job_id, name, result_state
+            FROM system.lakeflow.job_run_timeline
+            WHERE workspace_id = current_workspace_id()
+            LIMIT 100
+        """,
+        wait_timeout="30s",
+    )
+
+    if result.status.state.value not in ("SUCCEEDED", "CLOSED"):
+        raise HTTPException(status_code=500, detail="Query failed")
+
+    if not result.result or not result.result.data_array:
+        return {"jobs": []}
+
+    columns = [col.name for col in result.manifest.schema.columns]
+    rows = [dict(zip(columns, row)) for row in result.result.data_array]
     return {"jobs": rows}
 ```
 
-### Cache Layer
-
-The cache layer (`cache.py`) provides pre-aggregated metrics for fast dashboard loading.
-
-```python
-from ..cache import CacheManager
-
-cache = CacheManager()
-
-# Check if cache is available and fresh
-status = await cache.get_status()
-if status["available"] and status["fresh"]:
-    data = await cache.get_job_health()
-else:
-    # Fall back to live query
-    data = await query_live_data()
-```
-
-### Mock Data
-
-When system tables aren't accessible, the app falls back to mock data (`mock_data.py`):
-
-```python
-from ..mock_data import MockDataGenerator
-
-mock = MockDataGenerator()
-jobs = mock.generate_job_health(count=100)
-alerts = mock.generate_alerts()
-```
+---
 
 ## Frontend Development
 
@@ -205,60 +218,28 @@ alerts = mock.generate_alerts()
 - **shadcn/ui** - Component library
 - **Recharts** - Charts and visualizations
 
-### Project Structure
-
-```
-ui/
-├── components/           # Reusable components
-│   ├── ui/              # shadcn/ui primitives (button, table, badge, etc.)
-│   ├── alert-table.tsx  # Alerts table with sorting/filtering
-│   ├── alert-drawer.tsx # Alert details drawer
-│   ├── cost-breakdown.tsx
-│   ├── duration-chart.tsx
-│   ├── filter-presets.tsx
-│   ├── global-filter-bar.tsx
-│   ├── historical-chart.tsx
-│   ├── job-health-table.tsx
-│   ├── job-expanded-details.tsx
-│   ├── pipeline-integrity-section.tsx
-│   ├── sidebar.tsx
-│   ├── team-cost-table.tsx
-│   └── ...
-├── lib/
-│   ├── api.ts           # API client functions
-│   ├── query-config.ts  # TanStack Query cache presets
-│   ├── filter-context.tsx  # Global filter state
-│   ├── theme-context.tsx
-│   └── utils.ts         # Utility functions
-├── routes/
-│   └── _sidebar/        # Pages with sidebar layout
-│       ├── dashboard.tsx    # Main dashboard (/)
-│       ├── alerts.tsx       # Alerts page
-│       ├── costs.tsx        # Cost analysis
-│       ├── historical.tsx   # Historical trends
-│       ├── job-health.tsx   # Job health table
-│       └── running-jobs.tsx # Active jobs
-└── main.tsx             # App entry point
-```
-
 ### Adding a New Page
 
-1. Create a route file in `ui/routes/`:
+1. Create a route file in `ui/routes/_sidebar/`:
 
 ```tsx
-// ui/routes/my-page.tsx
-import { createFileRoute } from '@tanstack/react-router'
+// ui/routes/_sidebar/my-page.tsx
 import { useQuery } from '@tanstack/react-query'
-import { fetchMyData } from '../lib/api'
+import { queryPresets } from '@/lib/query-config'
+import { useFilters } from '@/lib/filter-context'
 
-export const Route = createFileRoute('/my-page')({
-  component: MyPage,
-})
+export default function MyPage() {
+  const { filters } = useFilters()
 
-function MyPage() {
   const { data, isLoading } = useQuery({
-    queryKey: ['my-data'],
-    queryFn: fetchMyData,
+    queryKey: ['my-data', filters.workspaceId],
+    queryFn: async () => {
+      const res = await fetch(`/api/my-feature?workspace_id=${filters.workspaceId}`)
+      if (!res.ok) throw new Error('Failed to fetch')
+      return res.json()
+    },
+    ...queryPresets.semiLive,  // Choose appropriate preset
+    enabled: filters.workspaceId !== 'pending',
   })
 
   if (isLoading) return <div>Loading...</div>
@@ -266,104 +247,255 @@ function MyPage() {
 }
 ```
 
-2. Run `npm run dev` - TanStack Router auto-generates `routeTree.gen.ts`.
+2. Add to sidebar navigation in `ui/components/sidebar.tsx`:
 
-### API Client
+```tsx
+const navItems: NavItem[] = [
+  // ...existing items
+  { href: '/my-page', label: 'My Page', icon: MyIcon },
+]
+```
 
-Add API functions in `ui/lib/api.ts`:
+### API Client Pattern
 
 ```typescript
-export async function fetchMyData(): Promise<MyDataType> {
-  const response = await fetch('/api/my-feature')
+// ui/lib/api.ts
+export async function fetchMyData(workspaceId?: string): Promise<MyDataType> {
+  const params = workspaceId ? `?workspace_id=${workspaceId}` : ''
+  const response = await fetch(`/api/my-feature${params}`)
   if (!response.ok) throw new Error('Failed to fetch')
   return response.json()
 }
 ```
 
-### Building for Production
-
-```bash
-cd job_monitor/ui
-npm run build
-```
-
-This creates optimized assets in `ui/dist/` which the backend serves statically.
-
 ### Client-Side Caching Strategy
-
-The frontend uses TanStack Query with a **tiered caching strategy** to optimize performance and reduce unnecessary API calls. Configuration is centralized in `ui/lib/query-config.ts`.
 
 #### Cache Tiers
 
 | Preset | staleTime | gcTime | Use Case |
 |--------|-----------|--------|----------|
-| `static` | Infinity | 30 min | Historical data that never changes |
-| `semiLive` | 5 min | 15 min | Job health, costs (matches system table refresh) |
-| `live` | 1 min | 5 min | Alerts, running jobs (needs freshness) |
-| `session` | 30 min | 60 min | User info, workspace config |
+| `static` | Infinity | 60 min | Historical data that never changes |
+| `session` | 5 min | 30 min | User info, workspace config |
+| `semiLive` | 2 min | 10 min | Job health, costs (matches system table 5-15 min latency) |
+| `live` | 10 sec | 60 sec | Active jobs (needs freshness) |
+| `slow` | 10 min | 30 min | Expensive queries (alerts, full costs) |
 
-#### Using Presets
+#### Query Key Consistency
 
-```tsx
-import { useQuery } from '@tanstack/react-query'
-import { queryPresets, queryKeys } from '@/lib/query-config'
-
-// Semi-live data (job health, costs)
-const { data } = useQuery({
-  queryKey: queryKeys.healthMetrics.list(7),
-  queryFn: fetchHealthMetrics,
-  ...queryPresets.semiLive,
-})
-
-// Live data (alerts)
-const { data: alerts } = useQuery({
-  queryKey: queryKeys.alerts.all,
-  queryFn: fetchAlerts,
-  ...queryPresets.live,
-})
-
-// Static data (historical)
-const { data: history } = useQuery({
-  queryKey: queryKeys.historical.runs(jobId, startDate, endDate),
-  queryFn: fetchHistoricalRuns,
-  ...queryPresets.static,
-})
-```
-
-#### Query Key Factories
-
-Always use `queryKeys` factories to ensure cache hits across components:
+Always use `queryKeys` factory for cache sharing:
 
 ```tsx
 // Good - uses shared key factory
-queryKey: queryKeys.alerts.all
+import { queryKeys, queryPresets } from '@/lib/query-config'
 
-// Bad - different components might use different keys
-queryKey: ['alerts']
-queryKey: ['alerts', {}]  // Different key = cache miss!
+useQuery({
+  queryKey: queryKeys.user.current(),
+  queryFn: getCurrentUser,
+  ...queryPresets.session,
+})
+
+// Bad - different keys prevent cache sharing
+queryKey: ['user']
+queryKey: ['user', 'me']
+queryKey: ['current-user']
 ```
 
-#### SPA Navigation
+---
 
-The sidebar uses TanStack Router `<Link>` for client-side navigation, which preserves the query cache between pages:
+## Performance Optimizations
 
-```tsx
-import { Link } from '@tanstack/react-router'
+### Implemented Optimizations
 
-// SPA navigation - cache preserved
-<Link to="/alerts">Alerts</Link>
+#### 1. Health Summary Endpoint
 
-// Full page reload - cache lost (avoid!)
-<a href="/alerts">Alerts</a>
+**Problem:** Full `/api/health-metrics` returns 11KB payload, takes 11-16s
+**Solution:** Added `/api/health-metrics/summary` returning only counts (136 bytes)
+
+```python
+# health_metrics.py
+@router.get("/summary")
+async def get_health_summary(days: int = 7):
+    # Returns: {total_count, p1_count, p2_count, p3_count, healthy_count, avg_success_rate}
 ```
 
-#### Performance Impact
+**Impact:** Dashboard uses 86x smaller payload
 
-With proper caching:
-- **Initial load**: ~30-60s (system table queries)
-- **Navigation between pages**: **Instant** (data served from cache)
-- **Return to previous page**: **Instant** (cached within gcTime window)
-- **Window focus after idle**: Background refetch (if staleTime exceeded)
+#### 2. Batch Job History Endpoint
+
+**Problem:** Running Jobs page made 50+ individual API calls for job history
+**Solution:** Single batch endpoint fetching all histories in parallel
+
+```python
+# jobs_api.py
+@router.post("/runs/batch")
+async def get_batch_runs(request: BatchRunsRequest):
+    # Fetches history for all job_ids in parallel (20 concurrent)
+    # 5s per-job timeout, 15s overall timeout
+```
+
+**Impact:** 52 requests → 5 requests
+
+#### 3. Selective Alert Queries
+
+**Problem:** `/api/alerts` runs 4 expensive queries (30s total)
+**Solution:** Only run queries for requested categories
+
+```python
+# alerts.py
+@router.get("")
+async def get_alerts(category: list[AlertCategory] | None = None):
+    # If category=['failure'], only runs failure query
+```
+
+**Impact:** 30s → 5s for single category
+
+#### 4. Cost Summary Team Skip
+
+**Problem:** Cost summary makes 50+ Jobs API calls for team tags (37s)
+**Solution:** Added `include_teams=false` parameter
+
+```python
+# cost.py
+@router.get("/summary")
+async def get_cost_summary(include_teams: bool = False):
+    # Skip expensive team tag lookups when not needed
+```
+
+**Impact:** 37s → 7.8s
+
+#### 5. Filter Presets Caching
+
+**Problem:** Filter presets query took ~3s every page load
+**Solution:** 60-second in-memory cache with cache warm-up
+
+```python
+# filters.py
+_presets_cache: dict = {"data": None, "timestamp": 0}
+PRESETS_CACHE_TTL = 60  # seconds
+
+# app.py - warm-up on startup
+async def warm_up_caches(app: FastAPI):
+    asyncio.create_task(...)  # Background, non-blocking
+```
+
+#### 6. Query Key Deduplication
+
+**Problem:** Multiple components called `/api/me` with different query keys
+**Solution:** Standardized on `queryKeys.user.current()`
+
+**Impact:** 5+ API calls → 1 API call
+
+#### 7. Default Failure Category on Alerts
+
+**Problem:** Alerts page defaulted to "All" (30s query)
+**Solution:** Default to "Failure" category (5s query)
+
+### Performance Benchmarks
+
+| Endpoint | Before | After | Improvement |
+|----------|--------|-------|-------------|
+| Health Summary | N/A | 1.8s | New endpoint |
+| Active Jobs (cached) | 25s | 200ms | 125x faster |
+| Cost Summary | 37s | 7.8s | 5x faster |
+| Alerts (failure only) | 30s | 5s | 6x faster |
+| Filter Presets (cached) | 3s | 0ms | Instant |
+
+---
+
+## Watch Points
+
+### Critical Issues to Avoid
+
+#### 1. Using `get_ws` Instead of `get_ws_prefer_user`
+
+**This is the #1 cause of 500 errors in production!**
+
+```python
+# WRONG - Uses Service Principal auth (limited permissions)
+@router.get("/endpoint")
+async def endpoint(ws=Depends(get_ws)):
+    ...
+
+# CORRECT - Uses OBO auth (user's permissions)
+@router.get("/endpoint")
+async def endpoint(ws=Depends(get_ws_prefer_user)):
+    ...
+```
+
+**Why:** Service Principal doesn't have system table access by default. OBO uses the logged-in user's permissions.
+
+#### 2. Result State Casing
+
+```sql
+-- WRONG - Won't match any records!
+WHERE result_state = 'SUCCESS'
+
+-- CORRECT - System tables use SUCCEEDED
+WHERE UPPER(result_state) = 'SUCCEEDED'
+```
+
+**Why:** System tables store `SUCCEEDED`, not `SUCCESS`.
+
+#### 3. Inconsistent Query Keys
+
+```typescript
+// WRONG - Different keys = cache misses
+useQuery({ queryKey: ['user'] })
+useQuery({ queryKey: ['current-user'] })
+
+// CORRECT - Use centralized factory
+useQuery({ queryKey: queryKeys.user.current() })
+```
+
+#### 4. Missing Workspace Filter
+
+```python
+# WRONG - No multi-workspace support
+@router.get("/data")
+async def get_data():
+    ...
+
+# CORRECT - Support workspace filtering
+@router.get("/data")
+async def get_data(workspace_id: str | None = None):
+    # Apply workspace_id filter to queries
+```
+
+#### 5. Blocking Cache Warm-up
+
+```python
+# WRONG - Blocks app startup
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await warm_up_caches(app)  # Blocking!
+    yield
+
+# CORRECT - Background task
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    asyncio.create_task(warm_up_caches(app))  # Non-blocking
+    yield
+```
+
+### Checklists
+
+#### Adding New Backend Endpoints
+
+- [ ] Use `get_ws_prefer_user` for system table queries
+- [ ] Add `workspace_id: str | None = None` parameter
+- [ ] Use `UPPER()` for result_state comparisons
+- [ ] Add response caching for slow queries (>5s)
+- [ ] Add pagination for large result sets
+
+#### Adding New UI Pages
+
+- [ ] Use standardized `queryKeys` for queries
+- [ ] Choose appropriate `queryPresets`
+- [ ] Support global filter context (`useFilters`)
+- [ ] Handle loading and error states
+- [ ] Add to sidebar navigation
+
+---
 
 ## Testing
 
@@ -378,6 +510,9 @@ pytest tests/test_health_metrics.py
 
 # With coverage
 pytest --cov=job_monitor tests/
+
+# Verbose output
+pytest -v tests/
 ```
 
 ### Writing Tests
@@ -397,6 +532,8 @@ def test_my_endpoint():
     assert "expected_field" in data
 ```
 
+---
+
 ## Deployment
 
 ### Targets
@@ -407,44 +544,17 @@ def test_my_endpoint():
 | `prod` | DEMO WEST | `75fd8278393d07eb` | https://job-monitor-2556758628403379.aws.databricksapps.com |
 | `dev` | LPT_FREE_EDITION | `58d41113cb262dce` | https://job-monitor-3704140105640043.aws.databricksapps.com |
 
-### Configuration Files Per Target
-
-Each target has its own configuration files:
-
-| Target | Bundle Config | App Config |
-|--------|--------------|------------|
-| `e2` | `databricks.e2.yml` | `app.e2.yaml` |
-| `prod` | `databricks.prod.yml` | `app.prod.yaml` |
-| `dev` | `databricks.dev.yml` | `app.yaml` |
-
-**Important**: The `app.*.yaml` files contain target-specific `WAREHOUSE_ID` and other environment variables.
-
 ### Deploy Commands
 
-Use the `deploy.sh` script for simplified deployment:
+Use the `deploy.sh` script:
 
 ```bash
-# Deploy to E2 (default)
-./deploy.sh e2
-
-# Deploy to DEMO WEST (production)
-./deploy.sh prod
-
-# Deploy to dev workspace
-./deploy.sh dev
+./deploy.sh e2    # E2 workspace
+./deploy.sh prod  # DEMO WEST
+./deploy.sh dev   # Development
 ```
 
-The script handles:
-1. Building frontend (if needed)
-2. Swapping `databricks.yml` and `app.yaml` to target-specific versions
-3. Running `databricks bundle deploy`
-4. Running `databricks apps deploy`
-5. Enabling OBO authentication (for non-dev targets)
-6. Restoring original config files
-
 ### Manual Deployment
-
-If you need manual control:
 
 ```bash
 # Build frontend
@@ -456,11 +566,6 @@ cp app.e2.yaml app.yaml
 
 # Deploy bundle
 databricks bundle deploy -t e2
-
-# Deploy app
-databricks apps deploy job-monitor \
-  --source-code-path /Workspace/Users/YOUR_EMAIL/.bundle/job-monitor/e2/files \
-  -p DEFAULT
 
 # Enable OBO (required after first deploy)
 databricks apps update job-monitor --json '{"user_api_scopes": ["sql"]}' -p DEFAULT
@@ -475,42 +580,27 @@ databricks apps get job-monitor -p DEFAULT
 # View logs
 open https://YOUR_APP_URL/logz
 
-# Test API endpoints
+# Test API
 curl https://YOUR_APP_URL/api/me
-curl https://YOUR_APP_URL/api/health-metrics
-curl https://YOUR_APP_URL/api/alerts
+curl https://YOUR_APP_URL/api/health-metrics/summary
 ```
 
-### Troubleshooting Deployment
-
-**API returning 500 errors**:
-1. Check warehouse ID matches the target workspace
-2. Verify `app.yaml` was swapped correctly (check `WAREHOUSE_ID` value)
-3. Ensure OBO is enabled (`effective_user_api_scopes` includes `sql`)
-
-**OBO not working**:
-1. Verify `user_api_scopes: ["sql"]` in app.yaml
-2. Run `databricks apps update` command
-3. Check `effective_user_api_scopes` in `databricks apps get` output
+---
 
 ## Configuration
 
 ### config.yaml
 
-Central configuration in `job_monitor/config.yaml`:
-
 ```yaml
 cache:
-  catalog: "job_monitor"
-  schema: "cache"
-  refresh_cron: "0 */10 * * * ?"
+  catalog: "main"
+  schema: "job_monitor_cache"
+  refresh_cron: "0 */15 * * * ?"
   enabled: true
 
 mock_data:
   enabled: false
-  auto_fallback: true  # Use mock when queries fail
-
-warehouse_id: ""  # Usually set via env var
+  auto_fallback: true
 
 tags:
   sla: "sla_minutes"
@@ -520,8 +610,6 @@ tags:
 
 ### Environment Variable Overrides
 
-Environment variables override `config.yaml`. Naming convention: uppercase with underscores.
-
 | Config Key | Environment Variable |
 |------------|---------------------|
 | `cache.catalog` | `CACHE_CATALOG` |
@@ -530,9 +618,9 @@ Environment variables override `config.yaml`. Naming convention: uppercase with 
 | `mock_data.enabled` | `USE_MOCK_DATA` |
 | `warehouse_id` | `WAREHOUSE_ID` |
 
-## OBO Authentication
+---
 
-On-Behalf-Of (OBO) authentication forwards user credentials for SQL queries.
+## OBO Authentication
 
 ### How It Works
 
@@ -543,90 +631,73 @@ On-Behalf-Of (OBO) authentication forwards user credentials for SQL queries.
 
 ### Enabling OBO
 
-```bash
-# In app.yaml
+```yaml
+# app.yaml
 user_api_scopes:
   - sql
-
-# CRITICAL: Also run this after app creation
-databricks apps update job-monitor --json '{"user_api_scopes": ["sql"]}' -p DEFAULT
 ```
-
-### Using OBO in Routers
-
-**CRITICAL**: All routers querying system tables must use `get_ws_prefer_user`:
-
-```python
-# CORRECT - Uses OBO (user's permissions)
-from ..core import get_ws_prefer_user
-
-@router.get("/data")
-async def get_data(ws=Depends(get_ws_prefer_user)):
-    result = ws.statement_execution.execute_statement(...)
-
-# WRONG - Uses Service Principal (limited permissions)
-from ..core import get_ws
-
-@router.get("/data")
-async def get_data(ws=Depends(get_ws)):  # Will fail on system tables!
-    ...
-```
-
-### Debugging OBO
 
 ```bash
-# Check effective scopes
-databricks apps get job-monitor -p DEFAULT | grep -A5 scopes
-
-# Check logs for authenticated user
-# Look for: "OBO user: user@example.com"
+# CRITICAL: Run after app creation/update
+databricks apps update job-monitor --json '{"user_api_scopes": ["sql"]}' -p YOUR_PROFILE
 ```
+
+### Verifying OBO
+
+```bash
+databricks apps get job-monitor -p YOUR_PROFILE
+# Check for: "effective_user_api_scopes": ["sql"]
+```
+
+---
 
 ## Troubleshooting
 
 ### Common Issues
 
-**Backend won't start**
-- Check `WAREHOUSE_ID` is set
-- Verify Databricks CLI auth: `databricks auth describe -p YOUR_PROFILE`
+**API returning 500 errors**
+1. Check router uses `get_ws_prefer_user` (not `get_ws`)
+2. Verify OBO is enabled (`effective_user_api_scopes` includes `sql`)
+3. Check `WAREHOUSE_ID` matches target workspace
 
-**Frontend build fails**
-- Delete `node_modules` and reinstall: `rm -rf node_modules && npm install`
-- Check Node version: `node --version` (need 18+)
-
-**Queries return empty**
-- Enable mock data for development: `USE_MOCK_DATA=true`
-- Check warehouse is running
-- Verify user has system table access
+**Dashboard shows 0 values**
+1. Check cache status: `curl https://APP_URL/api/cache/status`
+2. Verify result_state uses `SUCCEEDED` (not `SUCCESS`)
+3. Check logs for query errors
 
 **OBO not working**
-- Ensure `user_api_scopes: ["sql"]` in app.yaml
-- Run CLI update command (required after app creation)
-- Check `effective_user_api_scopes` in `databricks apps get` output
-- Clear browser cache and re-authenticate
-
-**API returning 500 errors after deployment**
-- **CRITICAL**: Check if router uses `get_ws` vs `get_ws_prefer_user`
-  - `get_ws` = Service Principal auth (limited permissions)
-  - `get_ws_prefer_user` = OBO auth (user's permissions)
-- All routers querying system tables MUST use `get_ws_prefer_user`
-- Verify correct `WAREHOUSE_ID` in `app.*.yaml` for target workspace:
-  - E2: `06c1adfd3dbdacde`
-  - DEMO WEST: `75fd8278393d07eb`
-  - Dev: `58d41113cb262dce`
-- Check `deploy.sh` swapped the correct app config file
+1. Verify `user_api_scopes: ["sql"]` in app.yaml
+2. Run CLI update command
+3. Clear browser cache, re-authenticate
 
 ### Logs
 
-**Local**: Check terminal output with `LOG_LEVEL=DEBUG`
+- **Local**: Terminal with `LOG_LEVEL=DEBUG`
+- **Deployed**: `https://YOUR_APP_URL/logz`
 
-**Deployed**: Visit `https://YOUR_APP_URL/logz`
+---
 
 ## Contributing
 
-1. Create a feature branch from `main`
+1. Create feature branch from `main`
 2. Make changes with tests
 3. Build frontend: `cd job_monitor/ui && npm run build`
 4. Run tests: `pytest tests/`
-5. Deploy to dev target for testing
-6. Create PR with description of changes
+5. Deploy to dev for testing
+6. Create PR with description
+
+### Commit Message Format
+
+```
+feat: add wildcard filtering for job names
+fix: correct result_state casing in queries
+perf: add batch endpoint for job history
+docs: update developer guide
+```
+
+### Version Tagging
+
+```bash
+git tag -a v1.X.0 -m "Release notes..."
+git push origin v1.X.0
+```
