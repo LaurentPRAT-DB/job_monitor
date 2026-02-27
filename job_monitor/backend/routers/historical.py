@@ -4,6 +4,10 @@ Provides:
 - Historical cost data with auto-granularity
 - Success rate trends over time
 - SLA breach counts with previous period comparison
+
+Performance optimizations:
+- Response caching with 5-minute TTL for all historical endpoints
+- Cache key includes all query parameters for accurate cache hits
 """
 
 import asyncio
@@ -15,8 +19,13 @@ from pydantic import BaseModel
 
 from job_monitor.backend.config import get_settings
 from job_monitor.backend.core import get_ws_prefer_user
+from job_monitor.backend.response_cache import response_cache
 
 logger = logging.getLogger(__name__)
+
+# Cache TTL for historical data (seconds) - 5 minutes
+# Historical data doesn't change frequently, so longer cache is fine
+HISTORICAL_CACHE_TTL = 300
 
 router = APIRouter(prefix="/api/historical", tags=["historical"])
 
@@ -90,7 +99,17 @@ async def get_historical_costs(
     workspace_id: Annotated[str | None, Query()] = None,
     ws=Depends(get_ws_prefer_user),
 ) -> HistoricalResponse:
-    """Get historical cost data with auto-granularity and previous period comparison."""
+    """Get historical cost data with auto-granularity and previous period comparison.
+
+    Results are cached for 5 minutes to improve response times.
+    """
+    # Check cache first
+    cache_key = f"historical:costs:{days}:{team}:{job_id}:{workspace_id}"
+    cached = response_cache.get(cache_key)
+    if cached:
+        logger.debug(f"[CACHE_HIT] Historical costs ({days}d)")
+        return HistoricalResponse(**cached)
+
     settings = get_settings()
 
     if not ws or not settings.warehouse_id:
@@ -169,13 +188,19 @@ async def get_historical_costs(
         else 0
     )
 
-    return HistoricalResponse(
+    result = HistoricalResponse(
         data=data,
         granularity=granularity,
         current_total=current_total,
         previous_total=previous_total,
         change_percent=round(change_percent, 1),
     )
+
+    # Cache the result
+    response_cache.set(cache_key, result.model_dump(), HISTORICAL_CACHE_TTL)
+    logger.info(f"[CACHE_SET] Historical costs ({days}d, {len(data)} points)")
+
+    return result
 
 
 @router.get("/success-rate", response_model=HistoricalResponse)
@@ -186,7 +211,17 @@ async def get_historical_success_rate(
     workspace_id: Annotated[str | None, Query()] = None,
     ws=Depends(get_ws_prefer_user),
 ) -> HistoricalResponse:
-    """Get historical success rate with auto-granularity and previous period comparison."""
+    """Get historical success rate with auto-granularity and previous period comparison.
+
+    Results are cached for 5 minutes to improve response times.
+    """
+    # Check cache first
+    cache_key = f"historical:success-rate:{days}:{team}:{job_id}:{workspace_id}"
+    cached = response_cache.get(cache_key)
+    if cached:
+        logger.debug(f"[CACHE_HIT] Historical success-rate ({days}d)")
+        return HistoricalResponse(**cached)
+
     settings = get_settings()
 
     if not ws or not settings.warehouse_id:
@@ -257,13 +292,19 @@ async def get_historical_success_rate(
     previous_avg = sum(d.previous for d in data) / len(data) if data else 0
     change_percent = current_avg - previous_avg  # For percentage, show absolute diff
 
-    return HistoricalResponse(
+    result = HistoricalResponse(
         data=data,
         granularity=granularity,
         current_total=round(current_avg, 1),
         previous_total=round(previous_avg, 1),
         change_percent=round(change_percent, 1),
     )
+
+    # Cache the result
+    response_cache.set(cache_key, result.model_dump(), HISTORICAL_CACHE_TTL)
+    logger.info(f"[CACHE_SET] Historical success-rate ({days}d, {len(data)} points)")
+
+    return result
 
 
 @router.get("/sla-breaches", response_model=HistoricalResponse)
@@ -274,7 +315,17 @@ async def get_historical_sla_breaches(
     workspace_id: Annotated[str | None, Query()] = None,
     ws=Depends(get_ws_prefer_user),
 ) -> HistoricalResponse:
-    """Get historical SLA breach count with auto-granularity and previous period comparison."""
+    """Get historical SLA breach count with auto-granularity and previous period comparison.
+
+    Results are cached for 5 minutes to improve response times.
+    """
+    # Check cache first
+    cache_key = f"historical:sla-breaches:{days}:{team}:{job_id}:{workspace_id}"
+    cached = response_cache.get(cache_key)
+    if cached:
+        logger.debug(f"[CACHE_HIT] Historical sla-breaches ({days}d)")
+        return HistoricalResponse(**cached)
+
     settings = get_settings()
 
     if not ws or not settings.warehouse_id:
@@ -350,10 +401,16 @@ async def get_historical_sla_breaches(
         else 0
     )
 
-    return HistoricalResponse(
+    result = HistoricalResponse(
         data=data,
         granularity=granularity,
         current_total=current_total,
         previous_total=previous_total,
         change_percent=round(change_percent, 1),
     )
+
+    # Cache the result
+    response_cache.set(cache_key, result.model_dump(), HISTORICAL_CACHE_TTL)
+    logger.info(f"[CACHE_SET] Historical sla-breaches ({days}d, {len(data)} points)")
+
+    return result

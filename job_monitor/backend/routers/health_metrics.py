@@ -585,13 +585,14 @@ async def get_health_summary(
         workspace_clause = f"AND workspace_id = {workspace_id}"
 
     # Optimized query - only fetches counts, not individual jobs
+    # Note: Uses UPPER() for case-insensitive comparison as system table values may vary
     query = f"""
     WITH run_stats AS (
         SELECT
             job_id,
             COUNT(*) as total_runs,
-            COUNT(CASE WHEN result_state = 'SUCCESS' THEN 1 END) as success_count,
-            ROUND(100.0 * COUNT(CASE WHEN result_state = 'SUCCESS' THEN 1 END) / NULLIF(COUNT(*), 0), 1) as success_rate
+            COUNT(CASE WHEN UPPER(result_state) IN ('SUCCESS', 'SUCCEEDED') THEN 1 END) as success_count,
+            ROUND(100.0 * COUNT(CASE WHEN UPPER(result_state) IN ('SUCCESS', 'SUCCEEDED') THEN 1 END) / NULLIF(COUNT(*), 0), 1) as success_rate
         FROM system.lakeflow.job_run_timeline
         WHERE period_start_time >= current_date() - INTERVAL {days} DAYS
           AND result_state IS NOT NULL
@@ -601,8 +602,8 @@ async def get_health_summary(
     consecutive_check AS (
         SELECT
             job_id,
-            result_state,
-            LAG(result_state) OVER (PARTITION BY job_id ORDER BY period_start_time DESC) as prev_state,
+            UPPER(result_state) as result_state,
+            LAG(UPPER(result_state)) OVER (PARTITION BY job_id ORDER BY period_start_time DESC) as prev_state,
             ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY period_start_time DESC) as rn
         FROM system.lakeflow.job_run_timeline
         WHERE period_start_time >= current_date() - INTERVAL {days} DAYS
@@ -613,8 +614,8 @@ async def get_health_summary(
         SELECT
             job_id,
             CASE
-                WHEN result_state = 'FAILED' AND prev_state = 'FAILED' THEN 'P1'
-                WHEN result_state = 'FAILED' THEN 'P2'
+                WHEN result_state IN ('FAILED', 'FAILURE') AND prev_state IN ('FAILED', 'FAILURE') THEN 'P1'
+                WHEN result_state IN ('FAILED', 'FAILURE') THEN 'P2'
                 ELSE NULL
             END as failure_priority
         FROM consecutive_check

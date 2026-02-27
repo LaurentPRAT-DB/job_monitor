@@ -353,7 +353,7 @@ class CostSummaryOut(BaseModel):
     jobs: list[JobCostOut]
     teams: list[TeamCostOut]
     anomalies: list[CostAnomalyOut]
-    total_dbus: float
+    total_dbus_30d: float  # Field name matches frontend expectation
     total_cost_dollars: float | None = None
     dbu_rate: float
     # Pagination fields for jobs list
