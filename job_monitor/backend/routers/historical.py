@@ -139,7 +139,7 @@ async def get_historical_costs(
           AND usage_date < current_date() - INTERVAL {days} DAYS
           AND usage_metadata.job_id IS NOT NULL
           {filter_sql}
-        GROUP BY DATE_TRUNC('{interval}', usage_date)
+        GROUP BY DATE_TRUNC('{interval}', usage_date + INTERVAL {days} DAYS)
     )
     SELECT
         COALESCE(c.period, p.period) as period,
@@ -231,7 +231,7 @@ async def get_historical_success_rate(
           AND period_start_time < current_date() - INTERVAL {days} DAYS
           AND result_state IS NOT NULL
           {filter_sql}
-        GROUP BY DATE_TRUNC('{interval}', period_start_time)
+        GROUP BY DATE_TRUNC('{interval}', period_start_time + INTERVAL {days} DAYS)
     )
     SELECT
         COALESCE(c.period, p.period) as period,
@@ -320,7 +320,7 @@ async def get_historical_sla_breaches(
           AND period_start_time < current_date() - INTERVAL {days} DAYS
           AND result_state = 'FAILED'
           {filter_sql}
-        GROUP BY DATE_TRUNC('{interval}', period_start_time)
+        GROUP BY DATE_TRUNC('{interval}', period_start_time + INTERVAL {days} DAYS)
     )
     SELECT
         COALESCE(c.period, p.period) as period,
