@@ -29,13 +29,36 @@ def anyio_backend():
 def app():
     """Create FastAPI app instance for testing."""
     from job_monitor.backend.app import app
+    # Initialize the app state with a mock workspace_client
+    app.state.workspace_client = Mock()
     return app
 
 
 @pytest.fixture
 def client(app):
     """Create test client for API requests."""
-    return TestClient(app)
+    from job_monitor.backend.core import get_ws_prefer_user, get_ws
+
+    # Create a mock workspace client
+    mock_ws = Mock()
+    mock_ws.statement_execution = Mock()
+    mock_ws.jobs = Mock()
+
+    # Override the dependencies to return mock
+    def override_get_ws_prefer_user():
+        return mock_ws
+
+    def override_get_ws():
+        return mock_ws
+
+    app.dependency_overrides[get_ws_prefer_user] = override_get_ws_prefer_user
+    app.dependency_overrides[get_ws] = override_get_ws
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+    # Clean up overrides
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
