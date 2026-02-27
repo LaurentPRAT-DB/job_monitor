@@ -7,13 +7,16 @@ Provides:
 """
 
 import asyncio
+import logging
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from job_monitor.backend.config import get_settings
 from job_monitor.backend.core import get_ws_prefer_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/historical", tags=["historical"])
 
@@ -103,7 +106,10 @@ async def get_historical_costs(
 
     # Build optional filter clauses
     filters = []
-    if workspace_id:
+    if workspace_id and workspace_id != "all":
+        # workspace_id in system tables is BIGINT, not string - don't quote it
+        if not workspace_id.isdigit():
+            raise HTTPException(status_code=422, detail="workspace_id must be numeric")
         filters.append(f"AND workspace_id = {workspace_id}")
     if team:
         filters.append(
@@ -196,7 +202,10 @@ async def get_historical_success_rate(
 
     # Build optional filter clauses
     filters = []
-    if workspace_id:
+    if workspace_id and workspace_id != "all":
+        # workspace_id in system tables is BIGINT, not string - don't quote it
+        if not workspace_id.isdigit():
+            raise HTTPException(status_code=422, detail="workspace_id must be numeric")
         filters.append(f"AND workspace_id = {workspace_id}")
     if job_id:
         filters.append(f"AND job_id = '{job_id}'")
@@ -280,7 +289,10 @@ async def get_historical_sla_breaches(
     interval, granularity = _get_granularity(days)
 
     filters = []
-    if workspace_id:
+    if workspace_id and workspace_id != "all":
+        # workspace_id in system tables is BIGINT, not string - don't quote it
+        if not workspace_id.isdigit():
+            raise HTTPException(status_code=422, detail="workspace_id must be numeric")
         filters.append(f"AND workspace_id = {workspace_id}")
     if job_id:
         filters.append(f"AND job_id = '{job_id}'")
