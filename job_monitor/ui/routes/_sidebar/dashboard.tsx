@@ -32,6 +32,11 @@ interface JobHealthResponse {
     retry_count: number
   }>
   total_count: number
+  // Priority counts for full dataset (not just current page)
+  p1_count?: number
+  p2_count?: number
+  p3_count?: number
+  healthy_count?: number
 }
 
 interface CostSummaryResponse {
@@ -209,9 +214,9 @@ export default function Dashboard() {
 
   const isLoading = userLoading || healthLoading || alertsLoading || costLoading
 
-  // Calculate metrics
+  // Calculate metrics (use pre-computed counts from API, not filtered jobs array)
   const totalJobs = healthData?.total_count ?? 0
-  const criticalJobs = healthData?.jobs.filter(j => j.priority === 'P1').length ?? 0
+  const criticalJobs = healthData?.p1_count ?? 0
   const avgSuccessRate = healthData?.jobs.length
     ? (healthData.jobs.reduce((sum, j) => sum + j.success_rate, 0) / healthData.jobs.length).toFixed(1)
     : '0'
@@ -353,25 +358,25 @@ export default function Dashboard() {
               <div className="flex gap-2">
                 <div className="flex-1 bg-red-100 dark:bg-red-900/30 rounded-lg p-3 text-center">
                   <div className="text-lg font-bold text-red-700 dark:text-red-400">
-                    {healthData?.jobs.filter(j => j.priority === 'P1').length ?? 0}
+                    {healthData?.p1_count ?? 0}
                   </div>
                   <div className="text-xs text-red-600 dark:text-red-500">Critical</div>
                 </div>
                 <div className="flex-1 bg-orange-100 dark:bg-orange-900/30 rounded-lg p-3 text-center">
                   <div className="text-lg font-bold text-orange-700 dark:text-orange-400">
-                    {healthData?.jobs.filter(j => j.priority === 'P2').length ?? 0}
+                    {healthData?.p2_count ?? 0}
                   </div>
                   <div className="text-xs text-orange-600 dark:text-orange-500">Warning</div>
                 </div>
                 <div className="flex-1 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg p-3 text-center">
                   <div className="text-lg font-bold text-yellow-700 dark:text-yellow-400">
-                    {healthData?.jobs.filter(j => j.priority === 'P3').length ?? 0}
+                    {healthData?.p3_count ?? 0}
                   </div>
                   <div className="text-xs text-yellow-600 dark:text-yellow-500">Info</div>
                 </div>
                 <div className="flex-1 bg-green-100 dark:bg-green-900/30 rounded-lg p-3 text-center">
                   <div className="text-lg font-bold text-green-700 dark:text-green-400">
-                    {healthData?.jobs.filter(j => !j.priority).length ?? 0}
+                    {healthData?.healthy_count ?? 0}
                   </div>
                   <div className="text-xs text-green-600 dark:text-green-500">Healthy</div>
                 </div>
