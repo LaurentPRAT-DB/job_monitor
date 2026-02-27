@@ -7,3 +7,4 @@ dist/
 build/
 node_modules/
 job_monitor/ui/tsconfig.tsbuildinfo
+coverage
