@@ -108,7 +108,7 @@ export default function JobHealthPage() {
   // Flatten all pages into a single array of jobs
   const allJobs = useMemo(() => {
     if (!data?.pages) return [];
-    return data.pages.flatMap((page) => page.jobs);
+    return data.pages.flatMap((page) => page.jobs ?? []);
   }, [data?.pages]);
 
   // Get summary stats from first page (contains counts for full dataset)
@@ -116,8 +116,8 @@ export default function JobHealthPage() {
 
   // Filter jobs by global wildcard patterns (client-side filtering)
   const filteredJobs = useMemo(() => {
-    if (allJobs.length === 0) return [];
-    if (filters.jobNamePatterns.length === 0) return allJobs;
+    if (!allJobs || allJobs.length === 0) return [];
+    if (!filters.jobNamePatterns || filters.jobNamePatterns.length === 0) return allJobs;
     return allJobs.filter((job) => matchesJobPatterns(job.job_name, filters.jobNamePatterns));
   }, [allJobs, filters.jobNamePatterns]);
 

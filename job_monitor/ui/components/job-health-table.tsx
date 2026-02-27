@@ -96,6 +96,7 @@ export function JobHealthTable({ jobs, isLoading, onRefetch, initialSearchQuery 
 
   // Filter jobs by search query and time filter
   const filteredJobs = useMemo(() => {
+    if (!jobs) return [];
     let result = jobs;
 
     // Apply time filter
@@ -232,7 +233,7 @@ export function JobHealthTable({ jobs, isLoading, onRefetch, initialSearchQuery 
     );
   }
 
-  if (jobs.length === 0) {
+  if (!jobs || jobs.length === 0) {
     return (
       <div className="text-center py-12 text-gray-500 dark:text-gray-400">
         <p className="text-lg font-medium">No jobs found</p>
