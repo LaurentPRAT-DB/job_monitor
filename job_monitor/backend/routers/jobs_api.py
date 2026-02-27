@@ -158,8 +158,8 @@ async def list_job_runs_api(
     """Get recent runs for a specific job via Jobs API (real-time).
 
     Returns the most recent runs for a job directly from the Jobs API.
-    Useful for monitoring critical jobs where 5-15 minute system table
-    latency is not acceptable.
+    Results are cached for 60 seconds to reduce API load when displaying
+    multiple job histories on the Running Jobs page.
 
     Args:
         job_id: The job ID to get runs for
@@ -175,12 +175,23 @@ async def list_job_runs_api(
             detail="WorkspaceClient not available. Check Databricks credentials.",
         )
 
+    # Check cache first (60s TTL for job history)
+    cache_key = f"job_runs:{job_id}:{limit}"
+    cached = response_cache.get(cache_key)
+    if cached:
+        logger.debug(f"[CACHE_HIT] Job runs for {job_id}")
+        return cached
+
     try:
         runs = await asyncio.wait_for(
             asyncio.to_thread(lambda: list(ws.jobs.list_runs(job_id=job_id, limit=limit))),
             timeout=JOBS_API_TIMEOUT,
         )
-        return [_run_to_model(r) for r in runs]
+        result = [_run_to_model(r) for r in runs]
+
+        # Cache for 60 seconds
+        response_cache.set(cache_key, result, 60)
+        return result
     except asyncio.TimeoutError:
         logger.warning(f"Jobs API timeout after {JOBS_API_TIMEOUT}s for job {job_id} runs")
         raise HTTPException(
