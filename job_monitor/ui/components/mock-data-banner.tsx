@@ -18,13 +18,15 @@ export function MockDataBanner() {
     ...queryPresets.session,
   });
 
-  // Don't show if dismissed, loading, or using real data
-  if (dismissed || !user || !user.is_mock_data) {
+  // Determine if mock data mode based on multiple signals
+  const isLocalDev = user?.auth_mode === 'local';
+  const isSPOnly = user?.auth_mode === 'service_principal';
+  const isMockData = user?.is_mock_data || isLocalDev || isSPOnly;
+
+  // Don't show if dismissed, loading, or using real data (OBO mode)
+  if (dismissed || !user || !isMockData) {
     return null;
   }
-
-  const isLocalDev = user.auth_mode === 'local';
-  const isSPOnly = user.auth_mode === 'service_principal';
 
   return (
     <div className="bg-amber-50 dark:bg-amber-950/50 border-b border-amber-200 dark:border-amber-800">
