@@ -1,6 +1,6 @@
 # Databricks Job Monitor - User Guide
 
-**Version 1.2.0** | Last Updated: February 2026
+**Version 1.2.1** | Last Updated: February 28, 2026
 
 ---
 
@@ -248,7 +248,7 @@ Four colored boxes showing counts:
 1. **Live Clock** - Shows local and UTC time, updates every second for timing reference
 2. **State Filter Cards** - Filter by Total Active, Running, Pending/Queued, or Terminating
 3. **Streaming Badge** - Orange "Streaming" indicator for continuous/streaming jobs
-4. **Recent Runs Sparkline** - Last 5 runs: green=success, red=failure, gray=no data
+4. **Recent Runs Sparkline** - Last 5 runs with hover tooltips showing start/end time and duration
 5. **State Badge** - Current state: RUNNING (blue), PENDING (yellow), TERMINATING (orange)
 6. **Duration** - Current run duration. Red highlight if running > 4 hours
 7. **View Link** - Opens job run directly in Databricks workspace
@@ -290,15 +290,25 @@ Four clickable cards for filtering by job state:
 
 ### Recent Runs Indicator
 
-Displays the last 5 completed runs as small icons. This data is fetched from Unity Catalog system tables and may take a moment to load after the page opens.
+Displays the last 5 completed runs as small icons (sparkline). This data is fetched from Unity Catalog system tables (`system.lakeflow.job_run_timeline`) and may take a moment to load after the page opens.
 
 | Icon | Meaning |
 |------|---------|
-| Green checkmark | SUCCESS |
-| Red X | FAILED |
-| Orange X | CANCELED |
+| Green checkmark | SUCCEEDED |
+| Red X | FAILED or ERROR |
+| Orange X | CANCELLED |
 | Gray minus | SKIPPED |
 | Empty gray circle | No historical data available |
+
+**Hover Tooltips**: Hover over any sparkline icon to see detailed run information:
+- **Status**: Success, Failed, Error, or Cancelled
+- **Start Time**: When the run started (e.g., "28 Feb, 12:10")
+- **End Time**: When the run completed (e.g., "28 Feb, 12:12")
+- **Duration**: Total run time (e.g., "1m 34s" or "42m 1s")
+
+Example tooltip: `"Failed Start: 28 Feb, 11:47 End: 28 Feb, 12:29 Duration: 42m 1s"`
+
+![Sparklines with Tooltips](screenshots/running-jobs-sparklines-tooltips.png)
 
 **Note**: Empty circles indicate that no historical run data exists for that job in the system tables. This is common for:
 - Newly created jobs that haven't completed a run yet
