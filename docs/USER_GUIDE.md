@@ -46,6 +46,10 @@
 10. [Data Freshness & Performance](#data-freshness--performance)
 11. [Keyboard Shortcuts](#keyboard-shortcuts)
 12. [Troubleshooting](#troubleshooting)
+13. [Appendix: Visual Reference](#appendix-visual-reference)
+    - [Page Screenshots](#page-screenshots)
+    - [Annotated Screenshots](#annotated-screenshots)
+    - [UI States](#ui-states)
 
 ---
 
@@ -132,6 +136,22 @@ The application uses a **sidebar navigation** system with five main pages:
 
 ![Dashboard Screenshot](screenshots/dashboard.png)
 
+<details>
+<summary><strong>View Annotated Screenshot</strong> (with numbered callouts)</summary>
+
+![Dashboard Annotated](screenshots/dashboard-annotated.png)
+
+**Callouts:**
+1. **Sidebar Navigation** - Navigate between Dashboard, Running Jobs, Job Health, Alerts, and Historical pages
+2. **Alert Badge** - Shows count of unacknowledged alerts. Click to view all alerts
+3. **Filters Panel** - Toggle global filters (workspace, team, job name, time window)
+4. **Dark Mode Toggle** - Switch between dark and light themes
+5. **Recent Activity** - Shows latest alerts. "View all" links to Alerts page
+6. **Jobs by Priority** - Summary counts: Critical (P1), Warning (P2), Info (P3), Healthy
+7. **Connection Status** - Shows authenticated user and data refresh info
+
+</details>
+
 ### Metric Cards
 
 Four summary cards at the top of the dashboard:
@@ -217,7 +237,25 @@ Four colored boxes showing counts:
 
 **Update Frequency**: Live (auto-refresh every 30 seconds)
 
-![Running Jobs Screenshot](screenshots/test-running-jobs.png)
+![Running Jobs Screenshot](screenshots/running-jobs.png)
+
+<details>
+<summary><strong>View Annotated Screenshot</strong> (with numbered callouts)</summary>
+
+![Running Jobs Annotated](screenshots/running-jobs-annotated.png)
+
+**Callouts:**
+1. **Live Clock** - Shows local and UTC time, updates every second for timing reference
+2. **State Filter Cards** - Filter by Total Active, Running, Pending/Queued, or Terminating
+3. **Streaming Badge** - Orange "Streaming" indicator for continuous/streaming jobs
+4. **Recent Runs Sparkline** - Last 5 runs: green=success, red=failure, gray=no data
+5. **State Badge** - Current state: RUNNING (blue), PENDING (yellow), TERMINATING (orange)
+6. **Duration** - Current run duration. Red highlight if running > 4 hours
+7. **View Link** - Opens job run directly in Databricks workspace
+8. **Load More** - Fetch additional active jobs (loads 50 at a time)
+9. **Long Running Warning** - Red "Running > 4h" badge for jobs exceeding 4 hours
+
+</details>
 
 ### State Summary Cards
 
@@ -295,6 +333,25 @@ Local: 14:32:15 | UTC: 21:32:15
 **Update Frequency**: Semi-live (5 minutes)
 
 ![Job Health Screenshot](screenshots/job-health.png)
+
+<details>
+<summary><strong>View Annotated Screenshot</strong> (with numbered callouts)</summary>
+
+![Job Health Annotated](screenshots/job-health-annotated.png)
+
+**Callouts:**
+1. **Time Window Tabs** - Switch between 7-day and 30-day analysis windows
+2. **Priority Filters** - Filter by Total, Critical (P1), Failing (P2), or Warning (P3)
+3. **Search Box** - Real-time search by job name within loaded jobs
+4. **Job Type Filter** - Filter by All Jobs, Scheduled, or Streaming jobs
+5. **Success Rate** - Percentage with color: green (>95%), yellow (80-95%), red (<80%)
+6. **Priority Badge** - Calculated priority: P1 (critical), P2 (failing), P3 (warning), P4 (healthy)
+7. **Last Run** - Time since last job execution (relative format)
+8. **Retry Count** - Number of retry attempts in the time window
+9. **Pagination** - Navigate pages, change rows per page (10/25/50/100/All)
+10. **Load More** - Fetch additional jobs from server (loads 50 at a time)
+
+</details>
 
 ### Time Window Selector
 
@@ -393,6 +450,24 @@ Jobs are classified into priorities based on failure patterns:
 **Update Frequency**: Slow (10 minutes) - expensive query
 
 ![Alerts Screenshot](screenshots/alerts.png)
+
+<details>
+<summary><strong>View Annotated Screenshot</strong> (with numbered callouts)</summary>
+
+![Alerts Annotated](screenshots/alerts-annotated.png)
+
+**Callouts:**
+1. **Category Tabs** - Filter by All, Failure, SLA, Cost, or Cluster alert types
+2. **Severity Summary** - Quick counts: Critical (P1), Warning (P2), Info (P3), Total
+3. **Search Box** - Search alerts by job name, title, or category
+4. **Severity Badge** - Priority level (P1-P4) with color: red=Critical, orange=Warning, blue=Info
+5. **Job Name** - Affected job. Click row to expand details
+6. **Category** - Alert type: Failure, SLA, Cost, or Cluster
+7. **Time** - When alert was triggered (relative format)
+8. **Status** - Active (unacknowledged) or Acknowledged. Click row to acknowledge
+9. **Pagination** - Navigate pages, change rows per page (10/25/50/100)
+
+</details>
 
 ### Category Tabs
 
@@ -679,6 +754,49 @@ The application uses TanStack Query with tiered caching:
 - **In-app**: Check the data freshness notes at the bottom of each page
 - **Logs**: Access app logs at `https://[APP_URL]/logz`
 - **Issues**: Report bugs at the project repository
+
+---
+
+## Appendix: Visual Reference
+
+### Page Screenshots
+
+| Page | Screenshot | Description |
+|------|------------|-------------|
+| Dashboard | ![](screenshots/dashboard.png) | Overview with metrics and alerts |
+| Running Jobs | ![](screenshots/running-jobs.png) | Real-time active jobs |
+| Job Health | ![](screenshots/job-health.png) | Priority-sorted health table |
+| Alerts | ![](screenshots/alerts.png) | Alert management interface |
+| Historical | ![](screenshots/historical.png) | Trend charts and analysis |
+
+### Annotated Screenshots
+
+These screenshots include numbered callouts explaining each UI element:
+
+| Page | Annotated Screenshot |
+|------|---------------------|
+| Dashboard | [dashboard-annotated.png](screenshots/dashboard-annotated.png) |
+| Running Jobs | [running-jobs-annotated.png](screenshots/running-jobs-annotated.png) |
+| Job Health | [job-health-annotated.png](screenshots/job-health-annotated.png) |
+| Alerts | [alerts-annotated.png](screenshots/alerts-annotated.png) |
+
+### UI States
+
+#### Empty States
+When filters return no results, helpful messages guide the user:
+
+| State | Screenshot | Message |
+|-------|------------|---------|
+| No Running Jobs | ![](screenshots/empty-state-running-jobs.png) | "No jobs match your filter" |
+| No Job Health Data | ![](screenshots/empty-state-job-health.png) | "No jobs found" |
+
+#### Loading States
+Data-heavy pages show loading indicators while fetching:
+
+| State | Screenshot |
+|-------|------------|
+| Historical Loading | ![](screenshots/loading-state-historical.png) |
+| Job Health Loading | ![](screenshots/loading-state-job-health.png) |
 
 ---
 
