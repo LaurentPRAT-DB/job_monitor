@@ -103,20 +103,36 @@ The application uses a **sidebar navigation** system with five main pages:
 
 ### Understanding the Layout
 
-```
-+------------------+----------------------------------------+
-|                  |  [Filters]  [Workspace] [Presets]      |
-|    SIDEBAR       +----------------------------------------+
-|                  |                                        |
-|  - Dashboard     |         MAIN CONTENT AREA              |
-|  - Running Jobs  |                                        |
-|  - Job Health    |   (Tables, Charts, Cards, etc.)        |
-|  - Alerts        |                                        |
-|  - Historical    |                                        |
-|                  |                                        |
-|  [Dark Mode]     |                                        |
-|  [v1.2.0]        |                                        |
-+------------------+----------------------------------------+
+```mermaid
+%%{init: {'theme': 'neutral'}}%%
+block-beta
+    columns 3
+
+    block:sidebar:1
+        columns 1
+        space
+        dash["📊 Dashboard"]
+        running["▶️ Running Jobs"]
+        health["❤️ Job Health"]
+        alerts["🔔 Alerts"]
+        hist["📈 Historical"]
+        space
+        dark["🌙 Dark Mode"]
+        ver["v1.2.1"]
+    end
+
+    block:main:2
+        columns 1
+        filters["🔍 Filters | 🏢 Workspace | ⭐ Presets"]
+        space
+        content["Main Content Area\n(Tables, Charts, Cards)"]
+        space
+    end
+
+    style sidebar fill:#f0f4f8,stroke:#3182ce
+    style main fill:#fff,stroke:#e2e8f0
+    style filters fill:#edf2f7,stroke:#a0aec0
+    style content fill:#fff,stroke:#cbd5e0
 ```
 
 **Components:**
@@ -414,37 +430,24 @@ Four clickable cards for filtering by priority:
 
 Jobs are classified into priorities based on failure patterns:
 
-```
-                    ┌─────────────────────────┐
-                    │   Last 2 runs failed?   │
-                    └───────────┬─────────────┘
-                                │
-                    ┌───────────┴───────────┐
-                    │                       │
-                   YES                      NO
-                    │                       │
-              ┌─────┴─────┐         ┌───────┴───────┐
-              │  P1       │         │ Last run      │
-              │ Critical  │         │ failed?       │
-              └───────────┘         └───────┬───────┘
-                                            │
-                                ┌───────────┴───────────┐
-                                │                       │
-                               YES                      NO
-                                │                       │
-                          ┌─────┴─────┐         ┌───────┴───────┐
-                          │  P2       │         │ Success rate  │
-                          │ Failing   │         │ 70-89%?       │
-                          └───────────┘         └───────┬───────┘
-                                                        │
-                                            ┌───────────┴───────────┐
-                                            │                       │
-                                           YES                      NO
-                                            │                       │
-                                      ┌─────┴─────┐           ┌─────┴─────┐
-                                      │  P3       │           │  Healthy  │
-                                      │ Warning   │           │  (Green)  │
-                                      └───────────┘           └───────────┘
+```mermaid
+%%{init: {'theme': 'neutral'}}%%
+flowchart TD
+    A{Last 2 runs<br/>failed?}
+    A -->|YES| P1["🔴 P1<br/>Critical"]
+    A -->|NO| B{Last run<br/>failed?}
+    B -->|YES| P2["🟠 P2<br/>Failing"]
+    B -->|NO| C{Success rate<br/>70-89%?}
+    C -->|YES| P3["🟡 P3<br/>Warning"]
+    C -->|NO| H["🟢 Healthy"]
+
+    style P1 fill:#fed7d7,stroke:#c53030,color:#742a2a
+    style P2 fill:#feebc8,stroke:#c05621,color:#7b341e
+    style P3 fill:#fefcbf,stroke:#b7791f,color:#744210
+    style H fill:#c6f6d5,stroke:#2f855a,color:#22543d
+    style A fill:#e2e8f0,stroke:#4a5568
+    style B fill:#e2e8f0,stroke:#4a5568
+    style C fill:#e2e8f0,stroke:#4a5568
 ```
 
 | Priority | Criteria | Recommended Action |
