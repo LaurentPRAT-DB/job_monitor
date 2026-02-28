@@ -263,35 +263,36 @@ function getStateBadgeVariant(state: string): 'default' | 'secondary' | 'destruc
   }
 }
 
-// Batch fetch recent runs for multiple jobs in one request
+// Batch fetch recent runs for multiple jobs from system tables
 // This solves the N+1 query problem (50 requests -> 1 request)
+// Uses system tables which have 5-15 min latency but work with user's OBO permissions
 interface BatchRunsResponse {
   runs_by_job: Record<string, Array<{ run_id: number; result_state: string | null }>>;
 }
 
-async function fetchBatchJobHistory(jobIds: number[]): Promise<Record<string, RecentRunStatus[]>> {
+async function fetchBatchJobHistory(jobIds: number[], workspaceId: string | null): Promise<Record<string, RecentRunStatus[]>> {
   if (jobIds.length === 0) return {};
 
   try {
-    const response = await fetch('/api/jobs-api/runs/batch', {
+    // Use system tables endpoint (works with user's OBO permissions)
+    // Include workspace_id query param if filtering by workspace
+    const params = workspaceId ? `?workspace_id=${workspaceId}` : '';
+    const response = await fetch(`/api/historical/batch-runs${params}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ job_ids: jobIds, limit: 6 }),
+      body: JSON.stringify({ job_ids: jobIds, limit: 5 }),
     });
     if (!response.ok) return {};
 
     const data: BatchRunsResponse = await response.json();
 
-    // Process each job's runs: filter to completed and take first 5
+    // System tables endpoint already returns only completed runs with result_state
     const result: Record<string, RecentRunStatus[]> = {};
     for (const [jobId, runs] of Object.entries(data.runs_by_job)) {
-      result[jobId] = runs
-        .filter((r) => r.result_state !== null)
-        .slice(0, 5)
-        .map((r) => ({
-          run_id: r.run_id,
-          result_state: r.result_state,
-        }));
+      result[jobId] = runs.map((r) => ({
+        run_id: r.run_id,
+        result_state: r.result_state,
+      }));
     }
     return result;
   } catch {
@@ -450,8 +451,8 @@ export default function RunningJobsPage() {
 
   // Batch fetch job history for all visible jobs (1 request instead of N)
   const { data: batchHistory } = useQuery({
-    queryKey: ['batch-job-history', uniqueJobIds],
-    queryFn: () => fetchBatchJobHistory(uniqueJobIds),
+    queryKey: ['batch-job-history', uniqueJobIds, filters.workspaceId],
+    queryFn: () => fetchBatchJobHistory(uniqueJobIds, filters.workspaceId),
     enabled: uniqueJobIds.length > 0,
     staleTime: 60000, // Cache for 1 minute
     refetchOnWindowFocus: false,

@@ -415,3 +415,120 @@ async def get_historical_sla_breaches(
     logger.info(f"[CACHE_SET] Historical sla-breaches ({days}d, {len(data)} points)")
 
     return result
+
+
+# --- Sparkline data endpoint (batch recent runs from system tables) ---
+
+
+class RecentRunOut(BaseModel):
+    """Single run for sparkline display."""
+    run_id: int
+    result_state: str | None
+
+
+class BatchRunsRequest(BaseModel):
+    """Request for batch recent runs."""
+    job_ids: list[int]
+    limit: int = 5  # Runs per job for sparkline
+
+
+class BatchRunsResponse(BaseModel):
+    """Response with recent runs keyed by job_id."""
+    runs_by_job: dict[str, list[RecentRunOut]]
+
+
+@router.post("/batch-runs", response_model=BatchRunsResponse)
+async def get_batch_recent_runs(
+    request: BatchRunsRequest,
+    workspace_id: Annotated[str | None, Query()] = None,
+    ws=Depends(get_ws_prefer_user),
+) -> BatchRunsResponse:
+    """Batch fetch recent completed runs for multiple jobs from system tables.
+
+    This endpoint provides sparkline data for the Running Jobs page.
+    Uses system tables (5-15 min latency) which works with user's OBO permissions.
+
+    Only returns completed runs (with result_state) for sparkline display.
+
+    Args:
+        request: BatchRunsRequest with job_ids list and optional limit
+        workspace_id: Optional workspace filter
+        ws: User OBO WorkspaceClient
+
+    Returns:
+        BatchRunsResponse with recent runs keyed by job_id
+    """
+    settings = get_settings()
+
+    if not ws or not settings.warehouse_id:
+        return BatchRunsResponse(runs_by_job={})
+
+    # Limit batch size
+    job_ids = request.job_ids[:100]
+    if not job_ids:
+        return BatchRunsResponse(runs_by_job={})
+
+    # Check cache first
+    cache_key = f"batch_runs:{','.join(str(j) for j in sorted(job_ids))}:{request.limit}:{workspace_id or 'all'}"
+    cached = response_cache.get(cache_key)
+    if cached:
+        logger.info(f"[CACHE_HIT] Batch runs for {len(job_ids)} jobs")
+        return BatchRunsResponse(**cached)
+
+    logger.info(f"[BATCH_RUNS] Fetching runs for {len(job_ids)} jobs from system tables")
+
+    # Build SQL query
+    job_ids_str = ",".join(str(jid) for jid in job_ids)
+
+    # Workspace filter
+    ws_filter = ""
+    if workspace_id:
+        ws_filter = f"AND workspace_id = {workspace_id}"
+
+    query = f"""
+    WITH ranked_runs AS (
+        SELECT
+            job_id,
+            run_id,
+            result_state,
+            ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY period_start_time DESC) as rn
+        FROM system.lakeflow.job_run_timeline
+        WHERE job_id IN ({job_ids_str})
+          AND result_state IS NOT NULL
+          AND period_start_time >= CURRENT_TIMESTAMP() - INTERVAL 30 DAY
+          {ws_filter}
+    )
+    SELECT job_id, run_id, result_state
+    FROM ranked_runs
+    WHERE rn <= {request.limit}
+    ORDER BY job_id, rn
+    """
+
+    rows = await _execute_query(ws, settings.warehouse_id, query)
+
+    # Build response dict
+    runs_by_job: dict[str, list[RecentRunOut]] = {}
+
+    for row in rows:
+        job_id = str(row["job_id"])
+        run = RecentRunOut(
+            run_id=int(row["run_id"]),
+            result_state=row["result_state"],
+        )
+        if job_id not in runs_by_job:
+            runs_by_job[job_id] = []
+        runs_by_job[job_id].append(run)
+
+    # Ensure all requested jobs have an entry
+    for job_id in job_ids:
+        job_id_str = str(job_id)
+        if job_id_str not in runs_by_job:
+            runs_by_job[job_id_str] = []
+
+    # Cache for 60 seconds (sparkline data doesn't need to be super fresh)
+    response_cache.set(cache_key, {"runs_by_job": runs_by_job}, 60)
+
+    jobs_with_data = sum(1 for runs in runs_by_job.values() if len(runs) > 0)
+    logger.info(f"[BATCH_RUNS] Got runs for {jobs_with_data}/{len(job_ids)} jobs")
+
+    return BatchRunsResponse(runs_by_job=runs_by_job)
