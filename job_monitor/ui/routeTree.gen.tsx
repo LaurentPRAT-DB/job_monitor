@@ -40,6 +40,32 @@ const prefetchAdjacentPages = async (currentPath: string) => {
       ...queryPresets.semiLive,
     })
   }
+
+  // Prefetch running jobs data when navigating towards running-jobs page
+  if (adjacent.includes('/running-jobs')) {
+    queryClientRef.prefetchQuery({
+      queryKey: ['active-jobs'],
+      queryFn: async () => {
+        const res = await fetch('/api/jobs/active')
+        if (!res.ok) throw new Error('Failed to prefetch')
+        return res.json()
+      },
+      ...queryPresets.live,
+    })
+  }
+
+  // Prefetch alerts data when navigating towards alerts page
+  if (adjacent.includes('/alerts')) {
+    queryClientRef.prefetchQuery({
+      queryKey: ['alerts', {}],
+      queryFn: async () => {
+        const res = await fetch('/api/alerts?days=7')
+        if (!res.ok) throw new Error('Failed to prefetch')
+        return res.json()
+      },
+      ...queryPresets.slow,
+    })
+  }
 }
 
 // Root layout
