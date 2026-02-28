@@ -290,7 +290,7 @@ Four clickable cards for filtering by job state:
 
 ### Recent Runs Indicator
 
-Displays the last 5 completed runs as small icons:
+Displays the last 5 completed runs as small icons. This data is fetched from Unity Catalog system tables and may take a moment to load after the page opens.
 
 | Icon | Meaning |
 |------|---------|
@@ -298,7 +298,12 @@ Displays the last 5 completed runs as small icons:
 | Red X | FAILED |
 | Orange X | CANCELED |
 | Gray minus | SKIPPED |
-| Empty circle | No data / Still running |
+| Empty gray circle | No historical data available |
+
+**Note**: Empty circles indicate that no historical run data exists for that job in the system tables. This is common for:
+- Newly created jobs that haven't completed a run yet
+- Jobs that haven't run within the selected time window
+- Jobs where system table data hasn't synced yet (5-15 minute latency)
 
 ### Streaming Job Detection
 
