@@ -421,9 +421,12 @@ async def get_historical_sla_breaches(
 
 
 class RecentRunOut(BaseModel):
-    """Single run for sparkline display."""
+    """Single run for sparkline display with tooltip details."""
     run_id: int
     result_state: str | None
+    start_time: str | None  # ISO timestamp
+    end_time: str | None    # ISO timestamp
+    duration_seconds: int | None  # Duration in seconds for easy display
 
 
 class BatchRunsRequest(BaseModel):
@@ -486,19 +489,32 @@ async def get_batch_recent_runs(
         ws_filter = f"AND workspace_id = {workspace_id}"
 
     query = f"""
-    WITH ranked_runs AS (
+    WITH run_times AS (
+        -- Get start/end times per run (min start, max end across all periods)
         SELECT
             job_id,
             run_id,
             result_state,
-            ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY period_start_time DESC) as rn
+            MIN(period_start_time) as start_time,
+            MAX(period_end_time) as end_time
         FROM system.lakeflow.job_run_timeline
         WHERE job_id IN ({job_ids_str})
           AND result_state IS NOT NULL
           AND period_start_time >= CURRENT_TIMESTAMP() - INTERVAL 30 DAY
           {ws_filter}
+        GROUP BY job_id, run_id, result_state
+    ),
+    ranked_runs AS (
+        SELECT
+            job_id,
+            run_id,
+            result_state,
+            start_time,
+            end_time,
+            ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY start_time DESC) as rn
+        FROM run_times
     )
-    SELECT job_id, run_id, result_state
+    SELECT job_id, run_id, result_state, start_time, end_time
     FROM ranked_runs
     WHERE rn <= {request.limit}
     ORDER BY job_id, rn
@@ -511,9 +527,31 @@ async def get_batch_recent_runs(
 
     for row in rows:
         job_id = str(row["job_id"])
+        start_time = row.get("start_time")
+        end_time = row.get("end_time")
+
+        # Calculate duration if both times are available
+        duration_seconds = None
+        if start_time and end_time:
+            try:
+                from datetime import datetime
+                # Parse timestamps (system tables return datetime objects or strings)
+                if isinstance(start_time, str):
+                    start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                    end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                else:
+                    start_dt = start_time
+                    end_dt = end_time
+                duration_seconds = int((end_dt - start_dt).total_seconds())
+            except Exception:
+                pass
+
         run = RecentRunOut(
             run_id=int(row["run_id"]),
             result_state=row["result_state"],
+            start_time=str(start_time) if start_time else None,
+            end_time=str(end_time) if end_time else None,
+            duration_seconds=duration_seconds,
         )
         if job_id not in runs_by_job:
             runs_by_job[job_id] = []

@@ -29,7 +29,10 @@ type StateFilter = 'all' | 'RUNNING' | 'PENDING' | 'TERMINATING';
 
 interface RecentRunStatus {
   run_id: number;
-  result_state: string | null;  // SUCCESS, FAILED, CANCELED, SKIPPED, null
+  result_state: string | null;  // SUCCEEDED, FAILED, CANCELED, SKIPPED, ERROR, null
+  start_time: string | null;    // ISO timestamp
+  end_time: string | null;      // ISO timestamp
+  duration_seconds: number | null;
 }
 
 interface ActiveRunWithHistory {
@@ -198,39 +201,96 @@ function compareRuns(a: ActiveRunWithHistory, b: ActiveRunWithHistory, column: S
   return direction === 'asc' ? result : -result;
 }
 
+// Format duration from seconds to human-readable
+function formatDurationFromSeconds(seconds: number | null): string {
+  if (seconds === null || seconds < 0) return '--';
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  if (mins < 60) return `${mins}m ${seconds % 60}s`;
+  const hours = Math.floor(mins / 60);
+  const remainingMins = mins % 60;
+  if (hours < 24) return `${hours}h ${remainingMins}m`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
+// Format timestamp to local time string
+function formatLocalTime(isoTimestamp: string | null): string {
+  if (!isoTimestamp) return '--';
+  try {
+    const date = new Date(isoTimestamp);
+    return date.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '--';
+  }
+}
+
+// Build tooltip text for a run
+function buildRunTooltip(run: RecentRunStatus): string {
+  const state = run.result_state;
+  if (!state) return 'No data';
+
+  const stateLabel = state === 'SUCCEEDED' ? 'Success' :
+                     state === 'FAILED' ? 'Failed' :
+                     state === 'ERROR' ? 'Error' :
+                     state === 'CANCELLED' ? 'Cancelled' :
+                     state === 'SKIPPED' ? 'Skipped' : state;
+
+  const lines: string[] = [stateLabel];
+
+  if (run.start_time) {
+    lines.push(`Start: ${formatLocalTime(run.start_time)}`);
+  }
+  if (run.end_time) {
+    lines.push(`End: ${formatLocalTime(run.end_time)}`);
+  }
+  if (run.duration_seconds !== null) {
+    lines.push(`Duration: ${formatDurationFromSeconds(run.duration_seconds)}`);
+  }
+
+  return lines.join('\n');
+}
+
 // Recent runs status icons component (like Databricks UI)
 function RecentRunsIndicator({ runs }: { runs: RecentRunStatus[] }) {
   // Pad to always show 5 slots
   const slots = [...runs];
   while (slots.length < 5) {
-    slots.push({ run_id: -slots.length, result_state: null });
+    slots.push({ run_id: -slots.length, result_state: null, start_time: null, end_time: null, duration_seconds: null });
   }
 
   return (
     <div className="flex items-center gap-1">
       {slots.slice(0, 5).map((run, idx) => {
         const state = run.result_state;
-        if (state === 'SUCCESS') {
+        const tooltip = buildRunTooltip(run);
+
+        if (state === 'SUCCEEDED') {
           return (
-            <span key={run.run_id || idx} title="Success">
+            <span key={run.run_id || idx} title={tooltip} className="cursor-help">
               <CheckCircle className="h-4 w-4 text-green-500" />
             </span>
           );
-        } else if (state === 'FAILED') {
+        } else if (state === 'FAILED' || state === 'ERROR') {
           return (
-            <span key={run.run_id || idx} title="Failed">
+            <span key={run.run_id || idx} title={tooltip} className="cursor-help">
               <XCircle className="h-4 w-4 text-red-500" />
             </span>
           );
-        } else if (state === 'CANCELED') {
+        } else if (state === 'CANCELLED') {
           return (
-            <span key={run.run_id || idx} title="Canceled">
+            <span key={run.run_id || idx} title={tooltip} className="cursor-help">
               <XCircle className="h-4 w-4 text-orange-400" />
             </span>
           );
         } else if (state === 'SKIPPED') {
           return (
-            <span key={run.run_id || idx} title="Skipped">
+            <span key={run.run_id || idx} title={tooltip} className="cursor-help">
               <MinusCircle className="h-4 w-4 text-gray-400" />
             </span>
           );
@@ -239,7 +299,7 @@ function RecentRunsIndicator({ runs }: { runs: RecentRunStatus[] }) {
           return (
             <div
               key={run.run_id || idx}
-              className="h-4 w-4 rounded-full border-2 border-gray-300 dark:border-gray-600"
+              className="h-4 w-4 rounded-full border-2 border-gray-300 dark:border-gray-600 cursor-help"
               title="No data"
             />
           );
@@ -267,7 +327,13 @@ function getStateBadgeVariant(state: string): 'default' | 'secondary' | 'destruc
 // This solves the N+1 query problem (50 requests -> 1 request)
 // Uses system tables which have 5-15 min latency but work with user's OBO permissions
 interface BatchRunsResponse {
-  runs_by_job: Record<string, Array<{ run_id: number; result_state: string | null }>>;
+  runs_by_job: Record<string, Array<{
+    run_id: number;
+    result_state: string | null;
+    start_time: string | null;
+    end_time: string | null;
+    duration_seconds: number | null;
+  }>>;
 }
 
 async function fetchBatchJobHistory(jobIds: number[], workspaceId: string | null): Promise<Record<string, RecentRunStatus[]>> {
@@ -286,12 +352,15 @@ async function fetchBatchJobHistory(jobIds: number[], workspaceId: string | null
 
     const data: BatchRunsResponse = await response.json();
 
-    // System tables endpoint already returns only completed runs with result_state
+    // Map response to RecentRunStatus with all fields
     const result: Record<string, RecentRunStatus[]> = {};
     for (const [jobId, runs] of Object.entries(data.runs_by_job)) {
       result[jobId] = runs.map((r) => ({
         run_id: r.run_id,
         result_state: r.result_state,
+        start_time: r.start_time,
+        end_time: r.end_time,
+        duration_seconds: r.duration_seconds,
       }));
     }
     return result;
