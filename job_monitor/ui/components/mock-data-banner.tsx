@@ -19,9 +19,11 @@ export function MockDataBanner() {
   });
 
   // Determine if mock data mode based on multiple signals
-  const isLocalDev = user?.auth_mode === 'local';
+  // Check email directly as fallback (most reliable indicator)
+  const isLocalDevByEmail = user?.email === 'local-dev-user';
+  const isLocalDev = user?.auth_mode === 'local' || isLocalDevByEmail;
   const isSPOnly = user?.auth_mode === 'service_principal';
-  const isMockData = user?.is_mock_data || isLocalDev || isSPOnly;
+  const isMockData = user?.is_mock_data === true || isLocalDev || isSPOnly;
 
   // Don't show if dismissed, loading, or using real data (OBO mode)
   if (dismissed || !user || !isMockData) {
