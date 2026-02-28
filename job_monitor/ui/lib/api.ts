@@ -10,6 +10,8 @@ export interface UserInfo {
   workspace_host: string | null;
   workspace_name: string | null;
   workspace_id: string | null;  // Numeric workspace ID for filtering system tables
+  auth_mode: 'obo' | 'service_principal' | 'local' | 'unknown';  // Authentication method
+  is_mock_data: boolean;  // True when using mock data due to auth limitations
 }
 
 export interface HealthResponse {

@@ -3,6 +3,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { AlertBadge } from './components/alert-badge'
 import { FilterProvider } from '@/lib/filter-context'
 import { GlobalFilterBar } from '@/components/global-filter-bar'
+import { MockDataBanner } from '@/components/mock-data-banner'
 import { Sidebar, MobileNav } from '@/components/sidebar'
 import { queryPresets } from '@/lib/query-config'
 
@@ -75,6 +76,8 @@ const rootRoute = createRootRoute({
       <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
         <Sidebar />
         <main className="flex-1 flex flex-col min-w-0">
+          {/* Mock data warning banner (shown when OBO not available) */}
+          <MockDataBanner />
           {/* Header with mobile nav and alerts */}
           <header className="flex justify-between items-center px-4 py-2 border-b bg-white dark:bg-gray-800 dark:border-gray-700">
             <MobileNav />

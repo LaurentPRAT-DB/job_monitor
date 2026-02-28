@@ -88,6 +88,7 @@ def _get_workspace_id_from_sdk(ws) -> str | None:
 
 @router.get("/api/me", response_model=UserInfo)
 async def get_me(
+    request: Request,
     user_email: Annotated[str, Depends(get_current_user)],
     ws=Depends(get_ws),
 ) -> UserInfo:
@@ -95,6 +96,8 @@ async def get_me(
 
     In production (Databricks App), returns the authenticated user's email.
     In local development, returns 'local-dev-user'.
+
+    Also indicates auth_mode and is_mock_data for UI to display appropriate warnings.
     """
     workspace_host = settings.databricks_host or None
     workspace_name = _extract_workspace_name(workspace_host) if workspace_host else "Local"
@@ -104,10 +107,28 @@ async def get_me(
     if not workspace_id:
         workspace_id = _get_workspace_id_from_sdk(ws)
 
+    # Determine auth mode based on user email and token presence
+    # - "obo": User authenticated via OBO token (X-Forwarded-Access-Token header)
+    # - "service_principal": Only SP auth available (no user token)
+    # - "local": Local development mode
+    token = request.headers.get("X-Forwarded-Access-Token")
+    if user_email == "local-dev-user":
+        auth_mode = "local"
+        is_mock_data = True  # Local dev uses mock data
+    elif token:
+        auth_mode = "obo"
+        is_mock_data = False  # OBO provides real data access
+    else:
+        auth_mode = "service_principal"
+        # SP-only mode typically means mock data (SP lacks system table permissions)
+        is_mock_data = True
+
     return UserInfo(
         email=user_email,
         display_name=user_email.split("@")[0] if "@" in user_email else user_email,
         workspace_host=workspace_host,
         workspace_name=workspace_name,
         workspace_id=workspace_id,
+        auth_mode=auth_mode,
+        is_mock_data=is_mock_data,
     )

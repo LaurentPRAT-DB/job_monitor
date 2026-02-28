@@ -15,6 +15,8 @@ class UserInfo(BaseModel):
     workspace_host: str | None = None
     workspace_name: str | None = None
     workspace_id: str | None = None  # Numeric workspace ID for filtering system tables
+    auth_mode: str = "unknown"  # "obo" = user authenticated, "service_principal" = SP only, "local" = local dev
+    is_mock_data: bool = False  # True when using mock data due to auth limitations
 
 
 class HealthResponse(BaseModel):
