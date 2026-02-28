@@ -114,14 +114,16 @@ async def get_me(
     token = request.headers.get("X-Forwarded-Access-Token")
     if user_email == "local-dev-user":
         auth_mode = "local"
-        is_mock_data = True  # Local dev uses mock data
     elif token:
         auth_mode = "obo"
-        is_mock_data = False  # OBO provides real data access
     else:
         auth_mode = "service_principal"
-        # SP-only mode typically means mock data (SP lacks system table permissions)
-        is_mock_data = True
+
+    # Determine if using mock data:
+    # 1. Explicit USE_MOCK_DATA=true setting (for workspaces without OBO support)
+    # 2. Local development mode
+    # 3. Service principal only mode (no user token)
+    is_mock_data = settings.use_mock_data or auth_mode == "local" or auth_mode == "service_principal"
 
     return UserInfo(
         email=user_email,

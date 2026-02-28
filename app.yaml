@@ -21,6 +21,9 @@ env:
   - name: CACHE_SCHEMA
     description: "Schema for cache tables and filter presets"
     value: "job_monitor_cache"
+  - name: USE_MOCK_DATA
+    description: "Enable mock data mode (Free Edition - no OBO support)"
+    value: "true"
 
 permissions:
   - user_name: "${DATABRICKS_USER}"
