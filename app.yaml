@@ -10,8 +10,8 @@ env:
   - name: DATABRICKS_HOST
     valueFrom: workspace-host
   - name: WAREHOUSE_ID
-    description: "SQL warehouse ID for system table queries (DEMO WEST)"
-    value: "75fd8278393d07eb"  # DEMO WEST Shared Endpoint
+    description: "SQL warehouse ID for system table queries (Dev)"
+    value: "58d41113cb262dce"  # Dev workspace warehouse
   - name: LOG_LEVEL
     description: "Logging level for debugging"
     value: "INFO"
