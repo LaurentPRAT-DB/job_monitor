@@ -38,9 +38,11 @@ A production-ready operational monitoring dashboard for Databricks jobs, cluster
 - **Metrics Cache**: Pre-aggregated Delta tables for sub-second dashboard loading
 - **Batch API Calls**: N+1 query elimination (50 requests → 1 request)
 - **Client-Side Caching**: Tiered TanStack Query caching for instant navigation
+- **IndexedDB Persistence**: Query cache survives page refreshes for instant loading
 - **Table Virtualization**: Render only visible rows for 4000+ job lists
 - **Route Prefetching**: Background data loading when navigating between pages
 - **GZip Compression**: Automatic response compression for large payloads
+- **Workspace-Filtered Alerts**: Delta cache with workspace_id column (35x faster)
 
 ---
 
@@ -457,6 +459,7 @@ flowchart LR
 | Health Metrics | 10-16s | <1s |
 | Cost Summary | 30-40s | <1s |
 | Alerts | 15-30s | <1s |
+| Alerts (workspace filter) | 46s | <1.5s |
 
 **Cache Tables Created:**
 
@@ -785,6 +788,19 @@ export const queryPresets = {
 
 5. **Workspace Filtering**: All endpoints should support `workspace_id` parameter for multi-workspace deployments
 
+6. **IndexedDB Persistence**: When persisting TanStack Query cache to IndexedDB, filter out pending queries:
+   ```typescript
+   shouldDehydrateQuery: (query) => {
+     return gcTime >= 5 * 60 * 1000 && query.state.status === 'success'
+   }
+   ```
+   Pending queries contain Promises that can't be serialized (causes DataCloneError)
+
+7. **Delta Schema Evolution**: When adding columns to cache tables, use `.option("overwriteSchema", "true")`:
+   ```python
+   df.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(table_name)
+   ```
+
 ### API Endpoints Reference
 
 | Endpoint | Method | Description |
@@ -891,6 +907,9 @@ MIT
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.3.2 | 2026-03-01 | IndexedDB Promise serialization fix, cost anomalies caching, Delta schema evolution |
+| 1.3.1 | 2026-03-01 | workspace_id in alerts_cache - 35x faster workspace-filtered alerts |
+| 1.3.0 | 2026-02-28 | IndexedDB persistence, extended route prefetching |
 | 1.2.1 | 2026-02-27 | Table virtualization, route prefetching, alert cache optimization |
 | 1.2.0 | 2026-02-26 | Filter presets caching, cache warm-up, UI polish |
 | 1.1.0 | 2026-02-26 | Wildcard filtering, preset edit mode |

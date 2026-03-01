@@ -1,6 +1,6 @@
 # Databricks Job Monitor - User Guide
 
-**Version 1.2.1** | Last Updated: February 28, 2026
+**Version 1.3.2** | Last Updated: March 1, 2026
 
 ---
 
@@ -118,7 +118,7 @@ block-beta
         hist["📈 Historical"]
         space
         dark["🌙 Dark Mode"]
-        ver["v1.2.1"]
+        ver["v1.3.2"]
     end
 
     block:main:2
@@ -698,12 +698,19 @@ The application uses TanStack Query with tiered caching:
 | **Static** | Infinite | Historical data |
 | **Session** | 30 minutes | User info |
 
+**IndexedDB Persistence** (v1.3+): Query results with cache times >= 5 minutes are persisted to IndexedDB and survive page refreshes. This means:
+- Dashboard loads instantly on return visits
+- Alerts and health data appear immediately from cache
+- Background refresh updates stale data automatically
+- Cache expires after 24 hours
+
 ### Performance Tips
 
 1. **Use category tabs on Alerts page** - Individual categories are 5-30x faster than "All"
 2. **Pagination** - Large tables use "Load More" to reduce initial load
 3. **Route Prefetching** - Adjacent pages are preloaded for instant navigation
 4. **Table Virtualization** - Only visible rows are rendered for 100+ job tables
+5. **Workspace Filter** - Alerts with workspace filter now load in ~1.3s (was 46s)
 
 ---
 
@@ -818,4 +825,4 @@ Data-heavy pages show loading indicators while fetching:
 
 ---
 
-*This guide was generated for Databricks Job Monitor v1.2.0*
+*This guide was generated for Databricks Job Monitor v1.3.2*

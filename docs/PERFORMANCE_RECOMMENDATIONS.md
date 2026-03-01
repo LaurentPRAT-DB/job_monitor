@@ -1,6 +1,6 @@
 # Performance Recommendations
 
-## Current Status (2026-02-27)
+## Current Status (2026-03-01)
 
 ### What's Working Well
 
@@ -99,3 +99,20 @@ const allRuns = data?.pages.flatMap(p => p.runs) ?? [];
 
 4. ✅ **Frontend Caching** (query-config.ts)
    - `slow` preset: 10 min staleTime for heavy endpoints
+
+5. ✅ **workspace_id in alerts_cache** (commit f8745cb)
+   - Delta cache table now includes workspace_id column
+   - Alerts with workspace filter: 46s → 1.3s (**35x faster**)
+
+6. ✅ **IndexedDB Persistence** (commit 7f6afd6)
+   - Query cache persisted to IndexedDB
+   - Survives page refreshes for instant loading
+   - Fixed DataCloneError by filtering pending queries
+
+7. ✅ **Cost Anomalies Caching** (commit 21d4adc)
+   - `/api/costs/anomalies` now cached for 10 minutes
+   - First load: 13s, cached: <1s
+
+8. ✅ **Delta Schema Evolution** (commit f8745cb)
+   - Use `.option("overwriteSchema", "true")` for cache table updates
+   - Allows adding columns without manual schema migration
