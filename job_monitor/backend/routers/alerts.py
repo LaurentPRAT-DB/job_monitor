@@ -746,11 +746,11 @@ async def get_alerts(
         return cached_response
 
     # Try Delta table cache for fast response
-    # NOTE: Delta cache doesn't support workspace filtering, so skip it when workspace_id is specified
-    use_delta_cache = settings.use_cache and (not workspace_id or workspace_id == "all")
+    # Delta cache now supports workspace filtering via workspace_id column
+    use_delta_cache = settings.use_cache
     if use_delta_cache:
-        logger.info("[CACHE] Attempting Delta cache lookup for alerts (no workspace filter)")
-        cached_alerts = await query_alerts_cache(ws)
+        logger.info(f"[CACHE] Attempting Delta cache lookup for alerts (workspace_id={workspace_id or 'all'})")
+        cached_alerts = await query_alerts_cache(ws, workspace_id)
         if cached_alerts:
             logger.info(f"[CACHE_HIT] alerts: returning {len(cached_alerts)} alerts from cache")
             all_alerts = []
@@ -827,8 +827,6 @@ async def get_alerts(
             return result
 
         logger.info("[CACHE_MISS] alerts: falling back to live query")
-    elif workspace_id:
-        logger.info(f"[CACHE_SKIP] Skipping Delta cache - workspace filter active: {workspace_id}")
 
     # Determine which alert categories to generate
     # If category filter is specified, only run those queries (major perf optimization)

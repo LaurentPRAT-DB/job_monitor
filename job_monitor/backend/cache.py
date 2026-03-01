@@ -229,8 +229,12 @@ async def query_cost_cache(ws) -> list[dict[str, Any]] | None:
         return None
 
 
-async def query_alerts_cache(ws) -> list[dict[str, Any]] | None:
+async def query_alerts_cache(ws, workspace_id: str | None = None) -> list[dict[str, Any]] | None:
     """Query alerts from cache table.
+
+    Args:
+        ws: WorkspaceClient
+        workspace_id: Optional workspace ID to filter by. If None or 'all', returns all alerts.
 
     Returns:
         List of alert records, or None if cache unavailable
@@ -238,9 +242,16 @@ async def query_alerts_cache(ws) -> list[dict[str, Any]] | None:
     if not settings.use_cache or not ws or not settings.warehouse_id:
         return None
 
+    # Build workspace filter clause
+    # workspace_id in cache table is BIGINT, not string - don't quote it
+    workspace_clause = ""
+    if workspace_id and workspace_id != "all":
+        workspace_clause = f"WHERE workspace_id = {workspace_id}"
+
     query = f"""
     SELECT
         alert_id,
+        workspace_id,
         job_id,
         job_name,
         category,
@@ -253,6 +264,7 @@ async def query_alerts_cache(ws) -> list[dict[str, Any]] | None:
         cost_multiplier,
         refreshed_at
     FROM {settings.cache_table_prefix}.alerts_cache
+    {workspace_clause}
     ORDER BY
         CASE
             WHEN severity = 'P1' THEN 1
@@ -280,19 +292,20 @@ async def query_alerts_cache(ws) -> list[dict[str, Any]] | None:
             for row in result.result.data_array:
                 alerts.append({
                     "alert_id": str(row[0]) if row[0] else "",
-                    "job_id": str(row[1]) if row[1] else "",
-                    "job_name": str(row[2]) if row[2] else "",
-                    "category": str(row[3]) if row[3] else "failure",
-                    "severity": str(row[4]) if row[4] else "P3",
-                    "title": str(row[5]) if row[5] else "",
-                    "description": str(row[6]) if row[6] else "",
-                    "failure_reasons": str(row[7]) if row[7] else None,
-                    "current_dbus": float(row[8]) if row[8] else None,
-                    "baseline_p90_dbus": float(row[9]) if row[9] else None,
-                    "cost_multiplier": float(row[10]) if row[10] else None,
-                    "refreshed_at": row[11],
+                    "workspace_id": str(row[1]) if row[1] else None,
+                    "job_id": str(row[2]) if row[2] else "",
+                    "job_name": str(row[3]) if row[3] else "",
+                    "category": str(row[4]) if row[4] else "failure",
+                    "severity": str(row[5]) if row[5] else "P3",
+                    "title": str(row[6]) if row[6] else "",
+                    "description": str(row[7]) if row[7] else "",
+                    "failure_reasons": str(row[8]) if row[8] else None,
+                    "current_dbus": float(row[9]) if row[9] else None,
+                    "baseline_p90_dbus": float(row[10]) if row[10] else None,
+                    "cost_multiplier": float(row[11]) if row[11] else None,
+                    "refreshed_at": row[12],
                 })
-            logger.info(f"[CACHE_HIT] alerts_cache returned {len(alerts)} alerts")
+            logger.info(f"[CACHE_HIT] alerts_cache returned {len(alerts)} alerts" + (f" for workspace {workspace_id}" if workspace_id else ""))
             return alerts
 
         logger.info("[CACHE_MISS] alerts_cache returned empty result")

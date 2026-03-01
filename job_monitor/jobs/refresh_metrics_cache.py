@@ -279,63 +279,68 @@ def refresh_alerts_cache(spark: SparkSession, catalog: str, schema: str) -> int:
     alerts_query = """
     WITH run_stats AS (
         SELECT
+            workspace_id,
             job_id,
             COUNT(*) as total_runs,
             COUNT(CASE WHEN result_state = 'SUCCESS' THEN 1 END) as success_count,
             MAX(period_start_time) as last_run_time
         FROM system.lakeflow.job_run_timeline
         WHERE period_start_time >= current_date() - INTERVAL 7 DAYS
-        GROUP BY job_id
+        GROUP BY workspace_id, job_id
     ),
     consecutive_check AS (
         SELECT
+            workspace_id,
             job_id,
             result_state,
-            LAG(result_state) OVER (PARTITION BY job_id ORDER BY period_start_time DESC) as prev_state,
-            ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY period_start_time DESC) as rn
+            LAG(result_state) OVER (PARTITION BY workspace_id, job_id ORDER BY period_start_time DESC) as prev_state,
+            ROW_NUMBER() OVER (PARTITION BY workspace_id, job_id ORDER BY period_start_time DESC) as rn
         FROM system.lakeflow.job_run_timeline
         WHERE period_start_time >= current_date() - INTERVAL 7 DAYS
     ),
     failure_reasons AS (
-        SELECT job_id, COLLECT_SET(termination_code) as reasons
+        SELECT workspace_id, job_id, COLLECT_SET(termination_code) as reasons
         FROM system.lakeflow.job_run_timeline
         WHERE period_start_time >= current_date() - INTERVAL 7 DAYS
           AND result_state = 'FAILED'
           AND termination_code IS NOT NULL
-        GROUP BY job_id
+        GROUP BY workspace_id, job_id
     ),
     job_names AS (
-        SELECT job_id, name,
+        SELECT workspace_id, job_id, name,
             ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) as rn
         FROM system.lakeflow.jobs
         WHERE delete_time IS NULL
     ),
     cost_anomalies AS (
         SELECT
+            workspace_id,
             usage_metadata.job_id as job_id,
             SUM(usage_quantity) as current_7d_dbus
         FROM system.billing.usage
         WHERE usage_date >= current_date() - INTERVAL 7 DAYS
           AND usage_metadata.job_id IS NOT NULL
-        GROUP BY usage_metadata.job_id
+        GROUP BY workspace_id, usage_metadata.job_id
         HAVING SUM(usage_quantity) > 0
     ),
     cost_baselines AS (
         SELECT
+            workspace_id,
             job_id,
             PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY daily_dbus) as p90_dbus
         FROM (
             SELECT
+                workspace_id,
                 usage_metadata.job_id as job_id,
                 usage_date,
                 SUM(usage_quantity) as daily_dbus
             FROM system.billing.usage
             WHERE usage_date >= current_date() - INTERVAL 30 DAYS
               AND usage_metadata.job_id IS NOT NULL
-            GROUP BY usage_metadata.job_id, usage_date
+            GROUP BY workspace_id, usage_metadata.job_id, usage_date
             HAVING SUM(usage_quantity) != 0
         )
-        GROUP BY job_id
+        GROUP BY workspace_id, job_id
         HAVING COUNT(*) >= 5
     )
     -- Failure alerts
@@ -347,6 +352,7 @@ def refresh_alerts_cache(spark: SparkSession, catalog: str, schema: str) -> int:
                 ELSE 'p3'
             END
         ) as alert_id,
+        rs.workspace_id,
         rs.job_id,
         COALESCE(jn.name, CONCAT('job-', rs.job_id)) as job_name,
         'failure' as category,
@@ -371,17 +377,18 @@ def refresh_alerts_cache(spark: SparkSession, catalog: str, schema: str) -> int:
         NULL as cost_multiplier,
         current_timestamp() as refreshed_at
     FROM run_stats rs
-    LEFT JOIN job_names jn ON rs.job_id = jn.job_id AND jn.rn = 1
-    LEFT JOIN consecutive_check cc ON rs.job_id = cc.job_id AND cc.rn = 1
-    LEFT JOIN failure_reasons fr ON rs.job_id = fr.job_id
+    LEFT JOIN job_names jn ON rs.workspace_id = jn.workspace_id AND rs.job_id = jn.job_id AND jn.rn = 1
+    LEFT JOIN consecutive_check cc ON rs.workspace_id = cc.workspace_id AND rs.job_id = cc.job_id AND cc.rn = 1
+    LEFT JOIN failure_reasons fr ON rs.workspace_id = fr.workspace_id AND rs.job_id = fr.job_id
     WHERE cc.result_state = 'FAILED'
        OR ROUND(100.0 * rs.success_count / NULLIF(rs.total_runs, 0), 1) BETWEEN 70 AND 89.9
 
     UNION ALL
 
-    -- Cost spike alerts
+    -- Cost spike alerts (workspace_id from billing.usage via workspace_id)
     SELECT
         CONCAT('cost_', ca.job_id, '_spike') as alert_id,
+        ca.workspace_id,
         ca.job_id,
         COALESCE(jn.name, CONCAT('job-', ca.job_id)) as job_name,
         'cost' as category,
@@ -394,8 +401,8 @@ def refresh_alerts_cache(spark: SparkSession, catalog: str, schema: str) -> int:
         ROUND(ca.current_7d_dbus / cb.p90_dbus, 2) as cost_multiplier,
         current_timestamp() as refreshed_at
     FROM cost_anomalies ca
-    JOIN cost_baselines cb ON ca.job_id = cb.job_id
-    LEFT JOIN job_names jn ON ca.job_id = jn.job_id AND jn.rn = 1
+    JOIN cost_baselines cb ON ca.workspace_id = cb.workspace_id AND ca.job_id = cb.job_id
+    LEFT JOIN job_names jn ON ca.workspace_id = jn.workspace_id AND ca.job_id = jn.job_id AND jn.rn = 1
     WHERE ca.current_7d_dbus > (cb.p90_dbus * 2)
     """
 
