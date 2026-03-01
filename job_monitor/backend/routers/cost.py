@@ -586,6 +586,12 @@ async def get_cost_anomalies(
     if not warehouse_id:
         raise HTTPException(status_code=503, detail="Warehouse ID not configured")
 
+    # Check response cache first
+    cache_key = f"cost_anomalies:{days}"
+    cached = response_cache.get(cache_key)
+    if cached:
+        return cached
+
     # Get cost spike anomalies from summary
     summary = await get_cost_summary(days=days, ws=ws)
     anomalies = list(summary.anomalies)
@@ -683,4 +689,6 @@ async def get_cost_anomalies(
         # If zombie query fails, return cost spike anomalies only
         pass
 
+    # Cache the result for 10 minutes
+    response_cache.set(cache_key, anomalies, TTL_SLOW)
     return anomalies
