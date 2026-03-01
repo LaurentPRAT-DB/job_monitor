@@ -68,11 +68,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         persistOptions={{
           persister: idbPersister,
           maxAge: MAX_AGE,
-          // Only persist queries with gcTime >= 5 minutes (skip live data)
+          // Only persist successful queries with gcTime >= 5 minutes
+          // Excludes pending queries (contain Promises that can't be serialized to IndexedDB)
           dehydrateOptions: {
             shouldDehydrateQuery: (query) => {
               const gcTime = query.gcTime ?? 0
-              return gcTime >= 5 * 60 * 1000
+              return gcTime >= 5 * 60 * 1000 && query.state.status === 'success'
             },
           },
         }}
