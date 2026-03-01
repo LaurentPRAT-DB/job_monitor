@@ -410,7 +410,8 @@ def refresh_alerts_cache(spark: SparkSession, catalog: str, schema: str) -> int:
     row_count = df.count()
 
     table_name = f"{catalog}.{schema}.alerts_cache"
-    df.write.format("delta").mode("overwrite").saveAsTable(table_name)
+    # Use overwriteSchema to allow schema evolution (e.g., adding workspace_id column)
+    df.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(table_name)
 
     print(f"[{datetime.now()}] Wrote {row_count} alerts to {table_name}")
     return row_count
