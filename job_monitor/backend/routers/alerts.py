@@ -137,7 +137,12 @@ async def _generate_failure_alerts(ws, warehouse_id: str, workspace_id: str | No
         workspace_clause = f"AND workspace_id = {workspace_id}"
 
     # Query job health for 7-day window
+    # This query generates failure alerts by analyzing:
+    # 1. Run statistics (total runs, success count, last run time)
+    # 2. Consecutive failure detection using LAG window function
+    # 3. Failure reason aggregation for remediation suggestions
     query = f"""
+    -- CTE 1: Aggregate run statistics per job for the time window
     WITH run_stats AS (
         SELECT
             job_id,
@@ -148,6 +153,9 @@ async def _generate_failure_alerts(ws, warehouse_id: str, workspace_id: str | No
         WHERE period_start_time >= current_date() - INTERVAL 7 DAYS {workspace_clause}
         GROUP BY job_id
     ),
+    -- CTE 2: Detect consecutive failures using LAG window function
+    -- Orders runs by start time DESC so most recent is rn=1
+    -- Compares current result_state with previous (prev_state)
     consecutive_check AS (
         SELECT
             job_id,
@@ -157,6 +165,8 @@ async def _generate_failure_alerts(ws, warehouse_id: str, workspace_id: str | No
         FROM system.lakeflow.job_run_timeline
         WHERE period_start_time >= current_date() - INTERVAL 7 DAYS {workspace_clause}
     ),
+    -- CTE 3: Collect distinct failure reasons for remediation context
+    -- COLLECT_SET aggregates unique termination codes per job
     failure_reasons AS (
         SELECT job_id, COLLECT_SET(termination_code) as reasons
         FROM system.lakeflow.job_run_timeline
@@ -165,12 +175,15 @@ async def _generate_failure_alerts(ws, warehouse_id: str, workspace_id: str | No
           AND termination_code IS NOT NULL {workspace_clause}
         GROUP BY job_id
     ),
+    -- CTE 4: Get latest job names using SCD2 pattern
+    -- ROW_NUMBER with change_time DESC ensures we get the most recent version
     job_names AS (
         SELECT job_id, name,
             ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) as rn
         FROM system.lakeflow.jobs
         WHERE delete_time IS NULL {workspace_clause}
     )
+    -- Main query: Join CTEs and filter for alert-worthy conditions
     SELECT
         rs.job_id,
         COALESCE(jn.name, CONCAT('job-', rs.job_id)) as job_name,
@@ -178,13 +191,14 @@ async def _generate_failure_alerts(ws, warehouse_id: str, workspace_id: str | No
         rs.success_count,
         ROUND(100.0 * rs.success_count / NULLIF(rs.total_runs, 0), 1) as success_rate,
         rs.last_run_time,
-        cc.result_state as last_result,
-        cc.prev_state as prev_result,
+        cc.result_state as last_result,   -- Used for P1/P2 priority determination
+        cc.prev_state as prev_result,      -- Used for consecutive failure detection
         fr.reasons as failure_reasons
     FROM run_stats rs
     LEFT JOIN job_names jn ON rs.job_id = jn.job_id AND jn.rn = 1
     LEFT JOIN consecutive_check cc ON rs.job_id = cc.job_id AND cc.rn = 1
     LEFT JOIN failure_reasons fr ON rs.job_id = fr.job_id
+    -- Filter: Include jobs with failures OR in yellow zone (70-89% success rate)
     WHERE cc.result_state = 'FAILED'
        OR ROUND(100.0 * rs.success_count / NULLIF(rs.total_runs, 0), 1) BETWEEN 70 AND 89.9
     """
@@ -354,7 +368,11 @@ async def _generate_cost_alerts(ws, warehouse_id: str, workspace_id: str | None 
         workspace_clause = f"AND workspace_id = {workspace_id}"
 
     # Query for cost spikes (>2x p90 baseline)
+    # Anomaly detection: Identifies jobs whose current 7-day cost exceeds
+    # twice their historical P90 baseline (calculated from 30 days of data)
     spike_query = f"""
+    -- CTE 1: Current 7-day cost per job
+    -- Aggregates DBU usage from billing.usage, filtering by job_id
     WITH job_costs AS (
         SELECT
             usage_metadata.job_id as job_id,
@@ -363,13 +381,17 @@ async def _generate_cost_alerts(ws, warehouse_id: str, workspace_id: str | None 
         WHERE usage_date >= current_date() - INTERVAL 7 DAYS
           AND usage_metadata.job_id IS NOT NULL {workspace_clause}
         GROUP BY usage_metadata.job_id
-        HAVING SUM(usage_quantity) > 0
+        HAVING SUM(usage_quantity) > 0  -- Exclude zero-cost jobs
     ),
+    -- CTE 2: P90 baseline calculation per job
+    -- Uses PERCENTILE_CONT for accurate percentile across daily totals
+    -- Requires at least 5 data points for statistical significance
     job_p90 AS (
         SELECT
             job_id,
             PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY daily_dbus) as p90_dbus
         FROM (
+            -- Subquery: Daily DBU totals for 30-day history
             SELECT
                 usage_metadata.job_id as job_id,
                 usage_date,
@@ -381,25 +403,28 @@ async def _generate_cost_alerts(ws, warehouse_id: str, workspace_id: str | None 
             HAVING SUM(usage_quantity) > 0
         )
         GROUP BY job_id
-        HAVING COUNT(*) >= 5
+        HAVING COUNT(*) >= 5  -- Need sufficient history for baseline
     ),
+    -- CTE 3: Job names using SCD2 pattern for latest version
     job_names AS (
         SELECT job_id, name,
             ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) as rn
         FROM system.lakeflow.jobs
         WHERE delete_time IS NULL {workspace_clause}
     )
+    -- Main query: Identify anomalies (current > 2x baseline)
     SELECT
         jc.job_id,
         COALESCE(jn.name, CONCAT('job-', jc.job_id)) as job_name,
-        jc.total_dbus,
-        jp.p90_dbus,
-        jc.total_dbus / NULLIF(jp.p90_dbus, 0) as multiplier
+        jc.total_dbus,        -- Current 7-day cost
+        jp.p90_dbus,          -- Historical P90 baseline
+        jc.total_dbus / NULLIF(jp.p90_dbus, 0) as multiplier  -- Spike magnitude
     FROM job_costs jc
-    JOIN job_p90 jp ON jc.job_id = jp.job_id
+    JOIN job_p90 jp ON jc.job_id = jp.job_id  -- INNER JOIN: only jobs with baseline
     LEFT JOIN job_names jn ON jc.job_id = jn.job_id AND jn.rn = 1
+    -- Anomaly threshold: >2x the P90 baseline
     WHERE jc.total_dbus > (jp.p90_dbus * 2)
-    ORDER BY multiplier DESC
+    ORDER BY multiplier DESC  -- Worst anomalies first
     LIMIT 50
     """
 
@@ -536,9 +561,13 @@ async def _generate_cluster_alerts(ws, warehouse_id: str, workspace_id: str | No
         workspace_clause = f"AND workspace_id = {workspace_id}"
 
     # Query for over-provisioned jobs (low utilization across all recent runs)
+    # Utilization proxy: DBUs per hour of runtime. Low values indicate
+    # clusters that are larger than necessary for the workload.
     # Note: run_duration_seconds can be 0 for serverless jobs, so we calculate
     # effective duration from timestamps as fallback
     query = f"""
+    -- CTE 1: Calculate effective run duration per job run
+    -- Handles serverless jobs where run_duration_seconds may be 0
     WITH job_runs_raw AS (
         SELECT
             job_id,
@@ -551,12 +580,14 @@ async def _generate_cluster_alerts(ws, warehouse_id: str, workspace_id: str | No
             period_start_time
         FROM system.lakeflow.job_run_timeline
         WHERE period_start_time >= current_date() - INTERVAL 30 DAYS
-            AND period_end_time IS NOT NULL
+            AND period_end_time IS NOT NULL  -- Only completed runs
             AND result_state IS NOT NULL {workspace_clause}
     ),
+    -- CTE 2: Filter to runs with valid duration (> 0 seconds)
     job_runs AS (
         SELECT * FROM job_runs_raw WHERE run_duration_seconds > 0
     ),
+    -- CTE 3: Daily DBU totals per job from billing data
     billing AS (
         SELECT
             usage_metadata.job_id as job_id,
@@ -568,12 +599,16 @@ async def _generate_cluster_alerts(ws, warehouse_id: str, workspace_id: str | No
         GROUP BY usage_metadata.job_id, usage_date
         HAVING SUM(usage_quantity) > 0
     ),
+    -- CTE 4: Calculate utilization as DBUs per hour of runtime
+    -- Low DBU/hour indicates resources sitting idle (over-provisioned)
+    -- High DBU/hour indicates efficient resource usage
     job_utilization AS (
         SELECT
             jr.job_id,
             AVG(
                 CASE
                     WHEN jr.run_duration_seconds > 0 THEN
+                        -- DBUs per hour = daily_dbus / (duration_seconds / 3600)
                         COALESCE(b.total_dbus, 0) / (jr.run_duration_seconds / 3600.0)
                     ELSE 0
                 END
@@ -582,23 +617,26 @@ async def _generate_cluster_alerts(ws, warehouse_id: str, workspace_id: str | No
         FROM job_runs jr
         LEFT JOIN billing b ON jr.job_id = b.job_id AND DATE(jr.period_start_time) = b.usage_date
         GROUP BY jr.job_id
-        HAVING COUNT(DISTINCT jr.run_id) >= 3
+        HAVING COUNT(DISTINCT jr.run_id) >= 3  -- Need multiple runs for pattern
     ),
+    -- CTE 5: Job names using SCD2 pattern
     job_names AS (
         SELECT job_id, name,
             ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) as rn
         FROM system.lakeflow.jobs
         WHERE delete_time IS NULL {workspace_clause}
     )
+    -- Main query: Find under-utilized jobs (< 1 DBU per hour average)
     SELECT
         ju.job_id,
         COALESCE(jn.name, CONCAT('job-', ju.job_id)) as job_name,
-        ju.avg_dbus_per_hour,
+        ju.avg_dbus_per_hour,  -- Proxy for cluster utilization
         ju.runs_analyzed
     FROM job_utilization ju
     LEFT JOIN job_names jn ON ju.job_id = jn.job_id AND jn.rn = 1
+    -- Threshold: < 1 DBU/hour suggests over-provisioning
     WHERE ju.avg_dbus_per_hour < 1.0
-    ORDER BY ju.avg_dbus_per_hour ASC
+    ORDER BY ju.avg_dbus_per_hour ASC  -- Most under-utilized first
     LIMIT 50
     """
 

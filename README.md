@@ -14,6 +14,7 @@ A production-ready operational monitoring dashboard for Databricks jobs, cluster
 - [Monitoring Jobs](#monitoring-jobs)
 - [Deployment](#deployment)
 - [Developer Guide](#developer-guide)
+- [Documentation](#documentation)
 - [Troubleshooting](#troubleshooting)
 - [Tech Stack](#tech-stack)
 
@@ -829,6 +830,34 @@ export const queryPresets = {
 | **Filters** |||
 | `/api/filters/presets` | GET/POST | List or create filter presets |
 | `/api/filters/presets/{id}` | PUT/DELETE | Update or delete preset |
+
+---
+
+## Documentation
+
+### Project Documentation
+
+| Document | Description |
+|----------|-------------|
+| [README.md](README.md) | Project overview, installation, and quick start |
+| [DEVELOPER.md](DEVELOPER.md) | Developer guide with local setup and coding patterns |
+| [CHANGELOG.md](CHANGELOG.md) | Version history and migration notes |
+
+### Detailed Guides
+
+| Guide | Description |
+|-------|-------------|
+| [User Guide](docs/USER_GUIDE.md) | End-user documentation with page-by-page walkthrough |
+| [Testing Guide](docs/TESTING_GUIDE.md) | Testing strategies, coverage targets, and CI/CD integration |
+| [Data Dictionary](docs/DATA_DICTIONARY.md) | Schema documentation for system tables and cache tables |
+| [Pipeline Documentation](docs/PIPELINE.md) | Data flow architecture, caching strategy, and orchestration |
+
+### Additional Resources
+
+| Resource | Description |
+|----------|-------------|
+| [Performance Recommendations](docs/PERFORMANCE_RECOMMENDATIONS.md) | Optimization techniques and benchmarks |
+| [Test Coverage Report](docs/TEST_COVERAGE_AND_PERFORMANCE.md) | Current test coverage and performance metrics |
 
 ---
 
