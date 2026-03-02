@@ -1,6 +1,6 @@
 # Databricks Job Monitor - User Guide
 
-**Version 1.3.2** | Last Updated: March 1, 2026
+**Version 1.3.2** | Last Updated: March 2, 2026
 
 ---
 
@@ -822,6 +822,19 @@ Data-heavy pages show loading indicators while fetching:
 |-------|------------|
 | Historical Loading | ![](screenshots/loading-state-historical.png) |
 | Job Health Loading | ![](screenshots/loading-state-job-health.png) |
+
+---
+
+## Related Documentation
+
+| Document | Description |
+|----------|-------------|
+| [README.md](../README.md) | Project overview and quick start |
+| [DEVELOPER.md](../DEVELOPER.md) | Developer guide for local setup |
+| [CHANGELOG.md](../CHANGELOG.md) | Version history and release notes |
+| [DATA_DICTIONARY.md](DATA_DICTIONARY.md) | Schema documentation for all tables |
+| [PIPELINE.md](PIPELINE.md) | Data flow architecture and caching |
+| [TESTING_GUIDE.md](TESTING_GUIDE.md) | Testing strategies and coverage |
 
 ---
 
