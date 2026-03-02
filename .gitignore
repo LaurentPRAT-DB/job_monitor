@@ -7,7 +7,8 @@ dist/
 build/
 node_modules/
 job_monitor/ui/tsconfig.tsbuildinfo
-coverage
+coverage/
+.coverage
 
 # Load test reports
 tests/reports/*.txt
