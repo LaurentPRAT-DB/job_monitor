@@ -10,20 +10,17 @@ env:
   - name: DATABRICKS_HOST
     valueFrom: workspace-host
   - name: WAREHOUSE_ID
-    description: "SQL warehouse ID for system table queries (Dev)"
-    value: "58d41113cb262dce"  # Dev workspace warehouse
+    description: "SQL warehouse ID for system table queries (E2 fe-lens warehouse)"
+    value: "06c1adfd3dbdacde"
   - name: LOG_LEVEL
     description: "Logging level for debugging"
-    value: "INFO"
+    value: "DEBUG"
   - name: CACHE_CATALOG
-    description: "Catalog for cache tables and filter presets"
-    value: "main"
+    description: "Catalog for cache tables (from config.yaml)"
+    value: "job_monitor"
   - name: CACHE_SCHEMA
-    description: "Schema for cache tables and filter presets"
-    value: "job_monitor_cache"
-  - name: USE_MOCK_DATA
-    description: "Enable mock data mode (Free Edition - no OBO support)"
-    value: "true"
+    description: "Schema for cache tables (from config.yaml)"
+    value: "cache"
 
 permissions:
   - user_name: "${DATABRICKS_USER}"
